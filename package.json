@@ -1,0 +1,107 @@
+{
+  "name": "my-re-hub",
+  "version": "1.0.0",
+  "private": true,
+  "main": "public/electron.js",
+  "homepage": "./",
+  "description": "Real Estate Hub — Monica Iskra's personal real estate platform",
+  "author": "Monica Iskra",
+  "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@supabase/supabase-js": "^2.105.4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^13.5.0",
+    "@xenova/transformers": "^2.17.2",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "heic2any": "^0.0.4",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-scripts": "5.0.1",
+    "recharts": "^3.8.1",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "concurrently --names \"APP,SERVER\" --prefix-colors \"cyan,yellow\" \"react-scripts start\" \"node server.js\"",
+    "server": "node server.js",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "electron": "NODE_ENV=development electron .",
+    "electron-dev": "concurrently --names \"REACT,SERVER,ELECTRON\" --prefix-colors \"cyan,yellow,magenta\" \"react-scripts start\" \"node server.js\" \"wait-on http://localhost:3000 && electron .\"",
+    "dist": "react-scripts build && electron-builder --win --x64",
+    "dist-portable": "react-scripts build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.monicaiskra.rehub",
+    "productName": "Real Estate Hub",
+    "copyright": "Monica Iskra Real Estate",
+    "directories": {
+      "output": "dist-app",
+      "buildResources": "public"
+    },
+    "files": [
+      "build/**/*",
+      "public/electron.js",
+      "server.js",
+      "node_modules/**/*",
+      "leads-inbox.json"
+    ],
+    "extraResources": [
+      {
+        "from": "server.js",
+        "to": "server.js"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/logo512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/logo512.png",
+      "uninstallerIcon": "public/logo512.png",
+      "installerHeaderIcon": "public/logo512.png",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Real Estate Hub"
+    }
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1",
+    "wait-on": "^9.0.10"
+  }
+}
