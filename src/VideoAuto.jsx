@@ -2259,6 +2259,61 @@ export default function VideoAuto({ setPage, toast }) {
     setRecording(null);
   };
 
+  // ─── Export / Import Hub data (sync between machines) ────────────────────
+  const importInputRef = useRef();
+
+  const exportHubData = () => {
+    const KEYS = [
+      'rehub_brand', 'va_presets',
+      'va_tpl', 'va_aspect', 'va_filter',
+      'va_transition', 'va_hookstyle', 'va_quality',
+      'va_cta', 'va_music',
+    ];
+    const data = {
+      _format: 're-hub-export',
+      _version: 1,
+      _exportedAt: new Date().toISOString(),
+      _exportedBy: brand?.name || 'Monica Iskra',
+      settings: {},
+    };
+    KEYS.forEach(k => {
+      const raw = localStorage.getItem(k);
+      if (raw !== null) {
+        try { data.settings[k] = JSON.parse(raw); }
+        catch { data.settings[k] = raw; }
+      }
+    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.download = `re-hub-${stamp}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast?.success?.('Hub data exported · copy this file to your other machine');
+  };
+
+  const importHubData = async (file) => {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (data._format !== 're-hub-export') {
+        toast?.error?.('Not a Hub export file');
+        return;
+      }
+      const keyCount = Object.keys(data.settings || {}).length;
+      if (!window.confirm(`Import ${keyCount} setting${keyCount===1?'':'s'} from ${data._exportedBy || 'unknown'} (${data._exportedAt?.slice(0,10) || 'unknown date'})?\n\nThis overwrites your current Brand Kit, Presets, and preferences. Recent Renders + clips are NOT affected.`)) return;
+      Object.entries(data.settings).forEach(([k, v]) => {
+        localStorage.setItem(k, JSON.stringify(v));
+      });
+      toast?.success?.(`Imported ${keyCount} settings — reloading…`);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      toast?.error?.(`Import failed: ${e.message}`);
+    }
+  };
+
   const generateHashtags = async () => {
     setHashtagsBusy(true);
     try {
@@ -2366,6 +2421,42 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
           fontSize:11.5, fontWeight:700, cursor:'pointer',
         }}>
           💾 Save current as preset
+        </button>
+
+        <div style={{width:1, height:18, background:'rgba(255,255,255,.08)', margin:'0 4px'}}/>
+
+        <button
+          onClick={exportHubData}
+          title="Download Brand Kit + Presets + preferences as a JSON file — copy to your other machine."
+          style={{
+            background:'rgba(6,182,212,.12)', border:'1px solid rgba(6,182,212,.35)',
+            color:'#67e8f9', borderRadius:6, padding:'5px 12px',
+            fontSize:11.5, fontWeight:700, cursor:'pointer',
+          }}>
+          ⬇ Export
+        </button>
+
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{display:'none'}}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            e.target.value = '';
+            importHubData(f);
+          }}
+        />
+        <button
+          onClick={() => importInputRef.current?.click()}
+          title="Restore Brand Kit + Presets + preferences from a Hub export JSON file."
+          style={{
+            background:'rgba(6,182,212,.12)', border:'1px solid rgba(6,182,212,.35)',
+            color:'#67e8f9', borderRadius:6, padding:'5px 12px',
+            fontSize:11.5, fontWeight:700, cursor:'pointer',
+          }}>
+          ⬆ Import
         </button>
       </div>
 
