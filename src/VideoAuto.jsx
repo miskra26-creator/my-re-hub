@@ -818,8 +818,9 @@ async function renderVideo({
       const totalScenes = Math.max(clips.length, Math.ceil(scenesDur / sceneDur));
       drawProgressBar(ctx, w, h, overallScene, totalScenes, overallT, effectiveAccent);
 
-      // Overlay PIP (talking-head)
-      if (overlayEl && overlayEl.videoWidth > 0) {
+      // Overlay PIP (talking-head) — only when the overlay actually has video frames
+      // (audio-only voiceovers have no videoWidth so the PIP is skipped automatically)
+      if (overlayEl && overlayEl.videoWidth > 0 && !overlay?.audioOnly) {
         drawOverlayPIP(ctx, overlayEl, w, h, overlay);
       }
 
@@ -827,6 +828,12 @@ async function renderVideo({
       if (overlay?.burnCaptions && overlay?.captions?.length && overlayEl) {
         const overlayTime = cur; // relative to scenes phase = overlay playback time
         drawBurnedCaption(ctx, overlay.captions, overlayTime, w, h, effectiveAccent, overlay.captionStyle || 'bold');
+      }
+
+      // Per-scene emoji sticker
+      const sceneStickerEmoji = clips[sceneIdx]?.stickerEmoji;
+      if (sceneStickerEmoji) {
+        drawSceneSticker(ctx, sceneStickerEmoji, clips[sceneIdx]?.stickerPos, sceneT, t, w, h);
       }
 
       // Brand watermark
@@ -1148,10 +1155,30 @@ export const CAPTION_STYLES = [
   { id:'gradient',name:'Gradient',     emoji:'🌈', desc:'Active word with vibrant gradient fill · pop look' },
 ];
 
+// Pack the words into lines so the total width of each line fits maxWidth.
+// Returns array of { words: [{ text, isActive }], width: pixels }.
+function wrapCaptionLines(ctx, items, spaceW, maxWidth) {
+  const lines = [];
+  let current = { words: [], width: 0 };
+  for (const it of items) {
+    const wW = ctx.measureText(it.text).width;
+    const addW = current.words.length === 0 ? wW : spaceW + wW;
+    if (current.words.length && current.width + addW > maxWidth) {
+      lines.push(current);
+      current = { words: [{ ...it, width: wW }], width: wW };
+    } else {
+      current.words.push({ ...it, width: wW });
+      current.width += addW;
+    }
+  }
+  if (current.words.length) lines.push(current);
+  return lines;
+}
+
 // TikTok-style burned-in captions. Highlights current word + shows ±1 neighbor.
+// Wraps to multiple lines if the 3-word window is too wide.
 function drawBurnedCaption(ctx, captions, t, canvasW, canvasH, accent, style='bold') {
   if (!captions || !captions.length) return;
-  // Find current word — the one whose [start, end+0.15s tail] covers t
   let curIdx = -1;
   for (let i = 0; i < captions.length; i++) {
     const c = captions[i];
@@ -1169,86 +1196,75 @@ function drawBurnedCaption(ctx, captions, t, canvasW, canvasH, accent, style='bo
   const window = captions.slice(start, end);
   if (!window.length) return;
 
-  const phrase = window.map(w => w.text.toUpperCase()).join(' ');
   const fontSize = Math.floor(canvasW * 0.072);
   ctx.font = `900 ${fontSize}px "DM Sans", system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  const cy = canvasH * 0.62;
-  const fullWidth = ctx.measureText(phrase).width;
-  let drawX = canvasW / 2 - fullWidth / 2;
   const spaceW = ctx.measureText(' ').width;
+  const maxLineWidth = canvasW * 0.88;
   const accentColor = accent || '#fbbf24';
+
+  // Build word items with active flag, then wrap
+  const items = window.map((w, i) => ({
+    text: w.text.toUpperCase(),
+    isActive: (start + i) === curIdx,
+  }));
+  const lines = wrapCaptionLines(ctx, items, spaceW, maxLineWidth);
+  const lineHeight = fontSize * 1.15;
+  const totalHeight = lines.length * lineHeight;
+  // Center the block vertically around 62% canvas height
+  const blockTopY = canvasH * 0.62 - totalHeight / 2 + lineHeight / 2;
 
   ctx.save();
 
-  if (style === 'box') {
-    // Accent-color box per word, white text, active word slightly larger
-    for (let i = 0; i < window.length; i++) {
-      const wText = window[i].text.toUpperCase();
-      const wW = ctx.measureText(wText).width;
-      const cx = drawX + wW / 2;
-      const isActive = (start + i) === curIdx;
-      const padX = wW * 0.18, padY = fontSize * 0.22;
-      ctx.fillStyle = isActive ? accentColor : 'rgba(0,0,0,0.7)';
-      ctx.fillRect(cx - wW/2 - padX, cy - fontSize/2 - padY, wW + padX*2, fontSize + padY*2);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(wText, cx, cy);
-      drawX += wW + spaceW;
-    }
+  // Stroke / shadow setup common to most styles
+  ctx.lineJoin = 'round';
+  if (style === 'bold' || style === 'gradient') {
+    ctx.lineWidth = Math.max(6, fontSize * 0.13);
+    ctx.strokeStyle = 'rgba(0,0,0,0.95)';
   } else if (style === 'shadow') {
-    // White text with soft drop shadow
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
     ctx.shadowBlur = fontSize * 0.18;
     ctx.shadowOffsetY = fontSize * 0.05;
-    for (let i = 0; i < window.length; i++) {
-      const wText = window[i].text.toUpperCase();
-      const wW = ctx.measureText(wText).width;
-      const cx = drawX + wW / 2;
-      const isActive = (start + i) === curIdx;
-      ctx.fillStyle = isActive ? accentColor : '#fff';
-      ctx.fillText(wText, cx, cy);
-      drawX += wW + spaceW;
-    }
-  } else if (style === 'gradient') {
-    // White with gradient fill on active word
-    ctx.lineWidth = Math.max(5, fontSize * 0.11);
-    ctx.strokeStyle = 'rgba(0,0,0,0.95)';
-    ctx.lineJoin = 'round';
-    for (let i = 0; i < window.length; i++) {
-      const wText = window[i].text.toUpperCase();
-      const wW = ctx.measureText(wText).width;
-      const cx = drawX + wW / 2;
-      const isActive = (start + i) === curIdx;
-      ctx.strokeText(wText, cx, cy);
-      if (isActive) {
-        const grad = ctx.createLinearGradient(cx - wW/2, cy - fontSize/2, cx + wW/2, cy + fontSize/2);
-        grad.addColorStop(0, accentColor);
-        grad.addColorStop(1, shadeColor(accentColor, 25));
-        ctx.fillStyle = grad;
-      } else {
-        ctx.fillStyle = '#fff';
-      }
-      ctx.fillText(wText, cx, cy);
-      drawX += wW + spaceW;
-    }
-  } else {
-    // Default 'bold': thick black outline + accent-colored active word
-    ctx.lineWidth = Math.max(6, fontSize * 0.13);
-    ctx.strokeStyle = 'rgba(0,0,0,0.95)';
-    ctx.lineJoin = 'round';
-    for (let i = 0; i < window.length; i++) {
-      const wText = window[i].text.toUpperCase();
-      const wW = ctx.measureText(wText).width;
-      const cx = drawX + wW / 2;
-      const isActive = (start + i) === curIdx;
-      ctx.strokeText(wText, cx, cy);
-      ctx.fillStyle = isActive ? accentColor : '#fff';
-      ctx.fillText(wText, cx, cy);
-      drawX += wW + spaceW;
-    }
   }
+
+  lines.forEach((line, lineIdx) => {
+    const cy = blockTopY + lineIdx * lineHeight;
+    let drawX = canvasW / 2 - line.width / 2;
+
+    for (let i = 0; i < line.words.length; i++) {
+      const word = line.words[i];
+      const wW = word.width;
+      const cx = drawX + wW / 2;
+      const isActive = word.isActive;
+
+      if (style === 'box') {
+        const padX = wW * 0.18, padY = fontSize * 0.22;
+        ctx.fillStyle = isActive ? accentColor : 'rgba(0,0,0,0.7)';
+        ctx.fillRect(cx - wW/2 - padX, cy - fontSize/2 - padY, wW + padX*2, fontSize + padY*2);
+        ctx.fillStyle = '#fff';
+      } else if (style === 'shadow') {
+        ctx.fillStyle = isActive ? accentColor : '#fff';
+      } else if (style === 'gradient') {
+        ctx.strokeText(word.text, cx, cy);
+        if (isActive) {
+          const grad = ctx.createLinearGradient(cx - wW/2, cy - fontSize/2, cx + wW/2, cy + fontSize/2);
+          grad.addColorStop(0, accentColor);
+          grad.addColorStop(1, shadeColor(accentColor, 25));
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle = '#fff';
+        }
+      } else {
+        // bold default
+        ctx.strokeText(word.text, cx, cy);
+        ctx.fillStyle = isActive ? accentColor : '#fff';
+      }
+      ctx.fillText(word.text, cx, cy);
+      drawX += wW + (i < line.words.length - 1 ? spaceW : 0);
+    }
+  });
+
   ctx.restore();
 }
 
@@ -1323,6 +1339,48 @@ function drawCTA(ctx, t, totalDur, canvasW, canvasH, cta, accent) {
   ctx.restore();
 }
 
+// Animated scene emoji sticker. Bounces in, then subtle pulse.
+function drawSceneSticker(ctx, emoji, position, sceneT, absoluteT, w, h) {
+  if (!emoji) return;
+  const positions = {
+    'center':       { x: 0.50, y: 0.45 },
+    'top-left':     { x: 0.18, y: 0.30 },
+    'top-right':    { x: 0.82, y: 0.30 },
+    'bottom-left':  { x: 0.18, y: 0.55 },
+    'bottom-right': { x: 0.82, y: 0.55 },
+  };
+  const pos = positions[position || 'top-right'];
+  const cx = w * pos.x;
+  const cy = h * pos.y;
+
+  // Animation: bounce-in (0→0.15) → settle (0.15→0.30) → idle pulse
+  let scale;
+  if (sceneT < 0.15) {
+    scale = (sceneT / 0.15) * 1.25;
+  } else if (sceneT < 0.30) {
+    scale = 1.25 - ((sceneT - 0.15) / 0.15) * 0.25;
+  } else {
+    scale = 1 + Math.sin(absoluteT * 4) * 0.06;
+  }
+
+  // Subtle rotation wobble
+  const rot = Math.sin(absoluteT * 2.5) * 0.06;
+
+  const fontSize = Math.floor(w * 0.14);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  ctx.scale(scale, scale);
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  ctx.font = `${fontSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 0, 0);
+  ctx.restore();
+}
+
 // Tiny brand logo overlay in a corner of every scene
 function drawWatermark(ctx, logoEl, canvasW, canvasH, pos) {
   if (!logoEl || !logoEl.naturalWidth) return;
@@ -1368,7 +1426,7 @@ function drawProgressBar(ctx, w, h, idx, total, sceneT, accent) {
 // ─── LIVE PREVIEW THUMBNAIL ──────────────────────────────────────────────────
 // Shows a static composition (scene 1 mid-frame) with all overlays so the user
 // sees what the video will look like before rendering.
-function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, overlay, transition='fade', hookStyle='card', hookText }) {
+function PreviewThumbnail({ clips, focusedClipId, fields, aspect, filter, tpl, brand, cta, overlay, transition='fade', hookStyle='card', hookText }) {
   const canvasRef = useRef();
   const [imgEl, setImgEl] = useState(null);
   const [logoEl, setLogoEl] = useState(null);
@@ -1379,16 +1437,20 @@ function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, over
   const rafRef = useRef(null);
   const lastTickRef = useRef(0);
 
-  // Load first clip as preview image (static thumbnail)
+  // Resolve which clip is currently focused for the static preview
+  const focusedClip = clips.find(c => c.id === focusedClipId) || clips.find(c => c.kind === 'image') || null;
+  const focusedIdx  = focusedClip ? clips.indexOf(focusedClip) : 0;
+
+  // Load the FOCUSED clip as the preview image (defaults to first if none focused)
   useEffect(() => {
-    const firstImage = clips.find(c => c.kind === 'image');
-    if (!firstImage) { setImgEl(null); return; }
+    const target = focusedClip && focusedClip.kind === 'image' ? focusedClip : clips.find(c => c.kind === 'image');
+    if (!target) { setImgEl(null); return; }
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => setImgEl(img);
     img.onerror = () => setImgEl(null);
-    img.src = firstImage.url;
-  }, [clips]);
+    img.src = target.url;
+  }, [clips, focusedClip]);
 
   // Load ALL clip images for the animated preview-play feature
   useEffect(() => {
@@ -1445,8 +1507,9 @@ function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, over
     ctx.fillRect(0, 0, w, h);
 
     if (imgEl) {
-      const filterId = clips[0]?.filterOverride || filter;
-      const filterCss = getFilterCss({ ...clips[0], autoFilterCss: clips[0]?.autoFilterCss }, filterId);
+      const targetClip = focusedClip || clips[0];
+      const filterId = targetClip?.filterOverride || filter;
+      const filterCss = getFilterCss({ ...(targetClip || {}), autoFilterCss: targetClip?.autoFilterCss }, filterId);
       ctx.filter = filterCss || 'none';
       drawCoverFit(ctx, imgEl, 0, 0, w, h, 1.08, 0.1, 0);
       ctx.filter = 'none';
@@ -1486,21 +1549,37 @@ function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, over
       });
     }
 
-    // Secondary at top (first non-primary filled field)
-    const secondaries = tpl?.fields?.slice(1).filter(f => fields[f.key]) || [];
-    if (secondaries.length) {
-      const fld = secondaries[0];
-      const text = labelize(fld, fields[fld.key]);
-      drawCard(ctx, [text], w/2, h*0.13, {
+    // Custom caption for the focused scene (overrides rotating secondary field)
+    const customCap = focusedClip?.customCaption?.trim();
+    if (customCap) {
+      drawCard(ctx, [customCap], w/2, h*0.13, {
         fontSize: Math.floor(w * 0.052), weight: 700,
         maxWidth: w * 0.85,
         bg: effectiveAccent || '#1a5aa0',
         pad: 14, radius: 10,
       });
+    } else {
+      const secondaries = tpl?.fields?.slice(1).filter(f => fields[f.key]) || [];
+      if (secondaries.length) {
+        const idx = focusedIdx % secondaries.length;
+        const fld = secondaries[idx];
+        const text = labelize(fld, fields[fld.key]);
+        drawCard(ctx, [text], w/2, h*0.13, {
+          fontSize: Math.floor(w * 0.052), weight: 700,
+          maxWidth: w * 0.85,
+          bg: effectiveAccent || '#1a5aa0',
+          pad: 14, radius: 10,
+        });
+      }
+    }
+
+    // Focused scene's emoji sticker
+    if (focusedClip?.stickerEmoji) {
+      drawSceneSticker(ctx, focusedClip.stickerEmoji, focusedClip.stickerPos, 0.5, 1.0, w, h);
     }
 
     // Overlay PIP placeholder
-    if (overlayEl) {
+    if (overlayEl && !overlay?.audioOnly) {
       drawOverlayPIP(ctx, overlayEl, w, h, overlay);
     }
 
@@ -1514,7 +1593,7 @@ function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, over
       // Always-visible preview (force visibility=1 by faking continuous)
       drawCTA(ctx, 0, 100, w, h, { ...cta, timing: 'continuous' }, effectiveAccent);
     }
-  }, [imgEl, logoEl, overlayEl, fields, aspect, filter, brand, cta, overlay, tpl, clips]);
+  }, [imgEl, logoEl, overlayEl, fields, aspect, filter, brand, cta, overlay, tpl, clips, focusedClipId, focusedClip, focusedIdx]);
 
   // Animated preview-play loop: cycle through scenes at faster pace, in the preview canvas.
   // No MediaRecorder, no audio — purely visual.
@@ -1640,7 +1719,13 @@ function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, over
         <div style={{
           fontSize:11, fontWeight:800, color:'#7eb8f7', letterSpacing:1.5,
           textTransform:'uppercase',
-        }}>👁️ Live Preview</div>
+        }}>
+          👁️ Live Preview {focusedClip && clips.length > 1 && (
+            <span style={{color:'#94a3b8', fontWeight:600, letterSpacing:0, textTransform:'none'}}>
+              · Scene {focusedIdx + 1}
+            </span>
+          )}
+        </div>
         {allImgs.length > 0 && (
           <button onClick={()=>setPlaying(p=>!p)}
             style={{
@@ -1662,7 +1747,9 @@ function PreviewThumbnail({ clips, fields, aspect, filter, tpl, brand, cta, over
         }}/>
       </div>
       <div style={{fontSize:10.5, color:'#64748b', marginTop:8, lineHeight:1.4}}>
-        {playing ? '▶ Animating — no captions/audio shown · just the visual layout' : 'Click ▶ Play to see all scenes animated · click again to freeze on scene 1'}
+        {playing
+          ? '▶ Animating — no captions/audio shown · just the visual layout'
+          : 'Click any clip thumbnail (below) to focus the preview on that scene · ▶ Play to animate · ✎ icon to edit a scene'}
       </div>
     </div>
   );
@@ -1692,6 +1779,7 @@ export default function VideoAuto({ setPage, toast }) {
   const musicRef = useRef();
   const [aiBusy, setAiBusy] = useState(false);
   const [editingClipId, setEditingClipId] = useState(null);
+  const [focusedClipId, setFocusedClipId] = useState(null);
   const [fubPickerOpen, setFubPickerOpen] = useState(false);
   const [fubSearch, setFubSearch] = useState('');
   const [fubFilter, setFubFilter] = useState('all');
@@ -1702,6 +1790,7 @@ export default function VideoAuto({ setPage, toast }) {
   const [presets, setPresets] = useLS('va_presets', []);
   const [recording, setRecording] = useState(null); // { stream, recorder, chunks, ts }
   const camPreviewRef = useRef();
+  const [scriptModal, setScriptModal] = useState(null); // { text, busy }
   const [transcoding, setTranscoding] = useState(false);
   const [recent, setRecent] = useIDB('va_recent_renders', []);
   const [massExporting, setMassExporting] = useState(false);
@@ -2201,32 +2290,35 @@ export default function VideoAuto({ setPage, toast }) {
     toast?.success?.(`Loaded "${p.name}"`);
   };
 
-  // Start recording from webcam + microphone.
-  const startWebcamRecording = async () => {
+  // Start recording from webcam + microphone (or audio only).
+  const startWebcamRecording = async (audioOnly = false) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1080 }, height: { ideal: 1920 }, facingMode: 'user' },
+        video: audioOnly ? false : { width: { ideal: 1080 }, height: { ideal: 1920 }, facingMode: 'user' },
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      if (camPreviewRef.current) {
+      if (camPreviewRef.current && !audioOnly) {
         camPreviewRef.current.srcObject = stream;
         camPreviewRef.current.play().catch(()=>{});
       }
-      const mime = ['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm']
-        .find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+      const mime = audioOnly
+        ? (['audio/webm;codecs=opus','audio/webm'].find(m => MediaRecorder.isTypeSupported(m)) || 'audio/webm')
+        : (['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm');
       const chunks = [];
-      const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+      const recorder = new MediaRecorder(stream, audioOnly
+        ? { mimeType: mime, audioBitsPerSecond: 128_000 }
+        : { mimeType: mime, videoBitsPerSecond: 4_000_000 });
       recorder.ondataavailable = e => e.data?.size && chunks.push(e.data);
       recorder.start(500);
-      setRecording({ stream, recorder, chunks, ts: Date.now(), mime });
+      setRecording({ stream, recorder, chunks, ts: Date.now(), mime, audioOnly });
     } catch (e) {
-      toast?.error?.(`Camera access failed: ${e.message}. Check browser permissions.`);
+      toast?.error?.(`${audioOnly ? 'Microphone' : 'Camera'} access failed: ${e.message}. Check browser permissions.`);
     }
   };
 
   const stopWebcamRecording = async () => {
     if (!recording) return;
-    const { stream, recorder, chunks, mime } = recording;
+    const { stream, recorder, chunks, mime, audioOnly } = recording;
     const done = new Promise(r => recorder.onstop = r);
     try { recorder.stop(); } catch {}
     await Promise.race([done, new Promise(r => setTimeout(r, 5000))]);
@@ -2239,16 +2331,50 @@ export default function VideoAuto({ setPage, toast }) {
       setRecording(null);
       return;
     }
-    const file = new File([blob], `selfie_${Date.now()}.webm`, { type: mime });
+    const ext = audioOnly ? 'webm' : 'webm';
+    const filename = audioOnly ? `voiceover_${Date.now()}.${ext}` : `selfie_${Date.now()}.${ext}`;
+    const file = new File([blob], filename, { type: mime });
     const url = URL.createObjectURL(file);
     setOverlay({
       url, file, name: file.name,
       position:'top-right', size:0.28, shape:'circle', volume:1.0,
-      autoClean: true, denoise: true, beauty: 'soft', burnCaptions: true,
+      autoClean: true, denoise: true, beauty: 'soft', burnCaptions: true, captionStyle: 'bold',
+      audioOnly: !!audioOnly,
       status: 'ready',
     });
     setRecording(null);
-    toast?.success?.(`Recorded ${(blob.size/1024/1024).toFixed(1)} MB · ready as overlay`);
+    toast?.success?.(audioOnly
+      ? `Recorded voiceover · ${(blob.size/1024).toFixed(0)} KB — captions will burn in automatically`
+      : `Recorded ${(blob.size/1024/1024).toFixed(1)} MB · ready as overlay`);
+  };
+
+  // Generate a voiceover script from template + fields via Claude.
+  const generateVoiceoverScript = async () => {
+    setScriptModal({ text: '', busy: true });
+    try {
+      const filledFields = Object.entries(fields).filter(([_,v]) => v).map(([k,v]) => `${k}: ${v}`).join(' · ');
+      const sceneCount = clips.length;
+      const targetSec = Math.max(15, Math.min(45, sceneCount * 3));
+      const prompt = `Write a ${targetSec}-second voiceover script for a ${tpl.name} real estate / personal brand video. The agent reads this aloud while recording themselves; their voice plays over ${sceneCount} photos cycling behind.
+
+Listing context: ${filledFields || '(no fields filled — be generic)'}
+
+Brand voice: ${brand?.name || 'Monica Iskra'}, real estate broker in Livonia / Metro Detroit, MI. Warm, confident, direct. Not salesy.
+
+Rules:
+- ${targetSec} seconds when spoken at a natural pace (~150 words per minute = ~${Math.round(targetSec * 2.5)} words total)
+- ONE paragraph, no headers, no scene labels, no stage directions
+- First 1.5 sec must be a strong HOOK (a question, a number, a curiosity loop)
+- End with a soft CTA (DM me, link in bio, etc.)
+- No emojis, no markdown, no quotes — just plain spoken text the agent reads aloud
+- Punchy sentences, conversational rhythm`;
+
+      const out = await callClaudeLocal(prompt, 'You write punchy, on-brand voiceover scripts for real estate agents.', 400);
+      setScriptModal({ text: out.trim(), busy: false });
+    } catch (e) {
+      setScriptModal({ text: '', busy: false, error: e.message });
+      toast?.error?.(`Script AI failed: ${e.message}`);
+    }
   };
 
   const cancelWebcamRecording = () => {
@@ -2736,27 +2862,61 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                   <div style={{fontSize:12, color:'#94a3b8'}}>Drop or click to upload video</div>
                   <div style={{fontSize:10, color:'#475569'}}>iPhone .mov works · auto-converts</div>
                 </button>
-                <button onClick={startWebcamRecording} style={{
+                <button onClick={() => startWebcamRecording(false)} style={{
                   background:'linear-gradient(135deg, rgba(239,68,68,.18), rgba(239,68,68,.08))',
                   border:'1px solid rgba(239,68,68,.35)',
                   color:'#fca5a5', borderRadius:10, padding:'12px',
                   fontSize:12.5, fontWeight:700, cursor:'pointer',
                   display:'flex',alignItems:'center',justifyContent:'center',gap:8,
                 }}>
-                  🎥 Record yourself right now
+                  🎥 Record yourself (face + voice)
+                </button>
+                <button onClick={() => startWebcamRecording(true)} style={{
+                  background:'linear-gradient(135deg, rgba(168,85,247,.18), rgba(168,85,247,.08))',
+                  border:'1px solid rgba(168,85,247,.35)',
+                  color:'#d8b4fe', borderRadius:10, padding:'12px',
+                  fontSize:12.5, fontWeight:700, cursor:'pointer',
+                  display:'flex',alignItems:'center',justifyContent:'center',gap:8,
+                }}>
+                  🎙️ Record voiceover (audio only — no face shown)
+                </button>
+                <button onClick={generateVoiceoverScript} style={{
+                  background:'rgba(168,85,247,.08)',
+                  border:'1px dashed rgba(168,85,247,.35)',
+                  color:'#c4b5fd', borderRadius:10, padding:'10px',
+                  fontSize:11.5, fontWeight:700, cursor:'pointer',
+                  display:'flex',alignItems:'center',justifyContent:'center',gap:6,
+                }}>
+                  ✨ Need help? Generate a script for me to read
                 </button>
               </div>
             ) : recording ? (
               <div style={{
                 position:'relative', borderRadius:10, overflow:'hidden',
-                background:'#000', aspectRatio:'9/16',
-                border:'1px solid rgba(239,68,68,.5)',
+                background: recording.audioOnly
+                  ? 'linear-gradient(135deg, #1a0a3e, #2d1456)'
+                  : '#000',
+                aspectRatio:'9/16',
+                border:`1px solid ${recording.audioOnly ? 'rgba(168,85,247,.6)' : 'rgba(239,68,68,.5)'}`,
+                display: recording.audioOnly ? 'flex' : 'block',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}>
-                <video ref={camPreviewRef} muted playsInline autoPlay
-                  style={{width:'100%',height:'100%',objectFit:'cover',display:'block',transform:'scaleX(-1)'}}/>
+                {!recording.audioOnly && (
+                  <video ref={camPreviewRef} muted playsInline autoPlay
+                    style={{width:'100%',height:'100%',objectFit:'cover',display:'block',transform:'scaleX(-1)'}}/>
+                )}
+                {recording.audioOnly && (
+                  <div style={{textAlign:'center', padding:'40px 20px'}}>
+                    <div style={{fontSize:64, opacity:.85, marginBottom:14, animation:'pulse 1.5s ease-in-out infinite'}}>🎙️</div>
+                    <div style={{fontSize:15, color:'#fff', fontWeight:700, marginBottom:6}}>Voiceover Recording</div>
+                    <div style={{fontSize:11.5, color:'#cbd5e1'}}>No video — just your voice. Photos will play behind it during render.</div>
+                  </div>
+                )}
                 <div style={{
                   position:'absolute', top:12, left:12,
-                  background:'rgba(239,68,68,.95)', color:'#fff',
+                  background: recording.audioOnly ? 'rgba(168,85,247,.95)' : 'rgba(239,68,68,.95)',
+                  color:'#fff',
                   padding:'4px 10px', borderRadius:6,
                   fontSize:11.5, fontWeight:800,
                   display:'flex',alignItems:'center',gap:6,
@@ -2776,7 +2936,10 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                   }}>Cancel</button>
                   <button onClick={stopWebcamRecording} style={{
                     flex:2, padding:'10px',
-                    background:'linear-gradient(135deg, #ef4444, #b91c1c)', color:'#fff',
+                    background: recording.audioOnly
+                      ? 'linear-gradient(135deg, #a855f7, #7c3aed)'
+                      : 'linear-gradient(135deg, #ef4444, #b91c1c)',
+                    color:'#fff',
                     border:'none', borderRadius:8,
                     fontSize:13, fontWeight:800, cursor:'pointer',
                   }}>⏹ Stop & Use</button>
@@ -2874,6 +3037,8 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                   </div>
                 )}
 
+                {!overlay.audioOnly && (
+                <>
                 <div>
                   <div style={{...S.fieldLabel, marginBottom:6}}>Position</div>
                   <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
@@ -2909,6 +3074,17 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                     onChange={e=>setOverlay(o=>({...o, size:parseFloat(e.target.value)}))}
                     style={{width:'100%'}}/>
                 </div>
+                </>
+                )}
+                {overlay.audioOnly && (
+                  <div style={{
+                    padding:'10px 12px', borderRadius:9,
+                    background:'rgba(168,85,247,.08)', border:'1px solid rgba(168,85,247,.3)',
+                    fontSize:11.5, color:'#d8b4fe', display:'flex', alignItems:'center', gap:8,
+                  }}>
+                    🎙️ <strong>Voiceover mode</strong> — no face shown on screen. Your photos play full-frame with captions burned in over your voice.
+                  </div>
+                )}
 
                 <div>
                   <div style={{...S.fieldLabel, marginBottom:6}}>Voice volume {Math.round((overlay.volume||1)*100)}%</div>
@@ -3009,32 +3185,34 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                   </div>
                 )}
 
-                <div>
-                  <div style={{...S.fieldLabel, marginBottom:6}}>💄 Beauty Mode (face smoothing + brightening)</div>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5}}>
-                    {[
-                      {id:'off',     label:'Off',    emoji:'⚪'},
-                      {id:'soft',    label:'Soft',   emoji:'🌸'},
-                      {id:'glow',    label:'Glow',   emoji:'✨'},
-                      {id:'studio',  label:'Studio', emoji:'💎'},
-                      {id:'matte',   label:'Matte',  emoji:'🎭'},
-                    ].map(b => (
-                      <button key={b.id}
-                        onClick={()=>setOverlay(o=>({...o, beauty:b.id}))}
-                        style={{
-                          ...S.chip,
-                          ...(overlay.beauty===b.id ? S.chipActive : {}),
-                          padding:'7px 4px', textAlign:'center', fontSize:11,
-                        }}>
-                        <div style={{fontSize:13}}>{b.emoji}</div>
-                        {b.label}
-                      </button>
-                    ))}
+                {!overlay.audioOnly && (
+                  <div>
+                    <div style={{...S.fieldLabel, marginBottom:6}}>💄 Beauty Mode (face smoothing + brightening)</div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5}}>
+                      {[
+                        {id:'off',     label:'Off',    emoji:'⚪'},
+                        {id:'soft',    label:'Soft',   emoji:'🌸'},
+                        {id:'glow',    label:'Glow',   emoji:'✨'},
+                        {id:'studio',  label:'Studio', emoji:'💎'},
+                        {id:'matte',   label:'Matte',  emoji:'🎭'},
+                      ].map(b => (
+                        <button key={b.id}
+                          onClick={()=>setOverlay(o=>({...o, beauty:b.id}))}
+                          style={{
+                            ...S.chip,
+                            ...(overlay.beauty===b.id ? S.chipActive : {}),
+                            padding:'7px 4px', textAlign:'center', fontSize:11,
+                          }}>
+                          <div style={{fontSize:13}}>{b.emoji}</div>
+                          {b.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{fontSize:10.5, color:'#64748b', marginTop:7, lineHeight:1.5}}>
+                      Soft & Glow add subtle smoothing + brightness. Studio = polished. Matte = cinematic.
+                    </div>
                   </div>
-                  <div style={{fontSize:10.5, color:'#64748b', marginTop:7, lineHeight:1.5}}>
-                    Soft & Glow add subtle smoothing + brightness. Studio = polished. Matte = cinematic.
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -3462,15 +3640,23 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
             {clips.length > 0 && (
               <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginTop:12}}>
                 {clips.map((c, i) => {
-                  const hasEdits = !!(c.customCaption || c.durationOverride || c.filterOverride);
+                  const hasEdits = !!(c.customCaption || c.durationOverride || c.filterOverride || c.stickerEmoji);
+                  const isFocused = focusedClipId === c.id;
                   return (
                   <div key={c.id} style={{
                     ...S.thumb,
                     border: c.status === 'failed' ? '1px solid #ef4444' :
                              c.status === 'converting' ? '1px solid #f59e0b' :
+                             isFocused ? '2px solid #7eb8f7' :
                              hasEdits ? '1px solid #a855f7' : S.thumb.border,
+                    boxShadow: isFocused ? '0 0 14px rgba(126,184,247,.4)' : 'none',
+                    transition: 'all .15s',
                   }}
-                  onClick={() => { if (c.status === 'ready' || !c.status) setEditingClipId(c.id); }}
+                  onClick={() => {
+                    if (c.status !== 'ready' && c.status) return;
+                    // Toggle focus on this clip — preview canvas will show this scene
+                    setFocusedClipId(prev => prev === c.id ? null : c.id);
+                  }}
                   >
                     {c.kind === 'video'
                       ? <video src={c.url} style={S.thumbImg} muted playsInline preload="metadata"/>
@@ -3501,6 +3687,7 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                     <div style={S.thumbActions} onClick={e=>e.stopPropagation()}>
                       <button onClick={() => moveClip(c.id, -1)} disabled={i===0} style={S.thumbBtn}>◀</button>
                       <button onClick={() => moveClip(c.id, +1)} disabled={i===clips.length-1} style={S.thumbBtn}>▶</button>
+                      <button onClick={() => setEditingClipId(c.id)} style={{...S.thumbBtn, color:'#d8b4fe'}}>✎</button>
                       <button onClick={() => removeClip(c.id)} style={{...S.thumbBtn, color:'#ef4444'}}>✕</button>
                     </div>
                   </div>
@@ -3512,6 +3699,7 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
 
           <PreviewThumbnail
             clips={readyClips}
+            focusedClipId={focusedClipId}
             fields={fields}
             aspect={aspect}
             filter={filter}
@@ -3574,6 +3762,72 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
             )}
             {log && <div style={S.log}>{log}</div>}
           </div>
+
+          {scriptModal && (
+            <div style={S.modalBackdrop} onClick={()=>setScriptModal(null)}>
+              <div style={{...S.modal, maxWidth:560}} onClick={e=>e.stopPropagation()}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                  <div style={{fontWeight:800,fontSize:16,color:'#f8fafc'}}>✨ Your Voiceover Script</div>
+                  <button onClick={()=>setScriptModal(null)} style={S.btnGhost}>✕ Close</button>
+                </div>
+
+                {scriptModal.busy ? (
+                  <div style={{padding:'40px 20px', textAlign:'center', color:'#94a3b8'}}>
+                    <div style={{fontSize:32, marginBottom:12}}>✨</div>
+                    <div style={{fontSize:13}}>Claude is writing your script…</div>
+                  </div>
+                ) : scriptModal.text ? (
+                  <>
+                    <div style={{
+                      background:'rgba(0,0,0,.4)', border:'1px solid rgba(168,85,247,.25)',
+                      borderRadius:10, padding:'18px 20px',
+                      fontSize:16, lineHeight:1.65, color:'#f1f5f9',
+                      fontFamily:'Georgia, "DM Serif Display", serif',
+                      whiteSpace:'pre-wrap',
+                    }}>
+                      {scriptModal.text}
+                    </div>
+                    <div style={{
+                      fontSize:11, color:'#64748b', marginTop:10, lineHeight:1.5,
+                      display:'flex', justifyContent:'space-between',
+                    }}>
+                      <span>~{scriptModal.text.split(/\s+/).length} words · ~{Math.round(scriptModal.text.split(/\s+/).length / 2.5)}s spoken</span>
+                      <button onClick={()=>{
+                        navigator.clipboard?.writeText(scriptModal.text);
+                        toast?.success?.('Script copied');
+                      }} style={{...S.chip, fontSize:11}}>📋 Copy</button>
+                    </div>
+
+                    <div style={{display:'flex', gap:8, marginTop:16}}>
+                      <button onClick={generateVoiceoverScript}
+                        style={{...S.btnGhost, flex:1}}>
+                        🔄 Regenerate
+                      </button>
+                      <button onClick={() => {
+                        setScriptModal(null);
+                        startWebcamRecording(true);
+                      }}
+                        style={{
+                          flex:2, padding:'10px',
+                          background:'linear-gradient(135deg, #a855f7, #7c3aed)',
+                          color:'#fff', border:'none', borderRadius:9,
+                          fontSize:13, fontWeight:800, cursor:'pointer',
+                        }}>
+                        🎙️ Start Recording (read this aloud)
+                      </button>
+                    </div>
+                    <div style={{fontSize:10.5, color:'#475569', marginTop:8, lineHeight:1.4, textAlign:'center'}}>
+                      Tip: keep this window open while you record — read the script naturally, like you're talking to a friend.
+                    </div>
+                  </>
+                ) : scriptModal.error ? (
+                  <div style={{color:'#ef4444', fontSize:13, padding:'20px'}}>
+                    Failed: {scriptModal.error}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
 
           {fubPickerOpen && (() => {
             const stages = Array.from(new Set((fubLeads || []).map(l => l.status).filter(Boolean)));
@@ -3815,10 +4069,59 @@ Output: ONE line, space-separated, # prefix, lowercase, no commentary, no quotes
                         </select>
                       </div>
 
+                      <div>
+                        <div style={S.fieldLabel}>Animated emoji sticker</div>
+                        <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:5,marginBottom:6}}>
+                          {['🔥','🏠','⭐','❤️','💰','✨','🎉','📈','🏆','💎','👀','🌟','💯','🚀','🎯'].map(e => (
+                            <button key={e}
+                              onClick={()=>update({ stickerEmoji: editing.stickerEmoji === e ? '' : e })}
+                              style={{
+                                background: editing.stickerEmoji === e ? 'rgba(168,85,247,.25)' : 'rgba(255,255,255,.04)',
+                                border: editing.stickerEmoji === e ? '1px solid rgba(168,85,247,.5)' : '1px solid rgba(255,255,255,.08)',
+                                borderRadius:6, padding:'4px 8px', fontSize:18, cursor:'pointer',
+                              }}>
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                        <input type="text"
+                          placeholder="Or paste any emoji"
+                          value={editing.stickerEmoji || ''}
+                          onChange={e=>update({ stickerEmoji: e.target.value.slice(0, 4) })}
+                          style={S.input}/>
+                        {editing.stickerEmoji && (
+                          <div style={{marginTop:8}}>
+                            <div style={{fontSize:10.5, color:'#94a3b8', marginBottom:4}}>Position</div>
+                            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5}}>
+                              {[
+                                {id:'top-left',label:'↖'},
+                                {id:'top-right',label:'↗'},
+                                {id:'center',label:'⊙'},
+                                {id:'bottom-left',label:'↙'},
+                                {id:'bottom-right',label:'↘'},
+                              ].map(p => (
+                                <button key={p.id}
+                                  onClick={()=>update({ stickerPos:p.id })}
+                                  style={{
+                                    ...S.chip,
+                                    ...((editing.stickerPos || 'top-right') === p.id ? S.chipActive : {}),
+                                    padding:'6px 4px', textAlign:'center', fontSize:13,
+                                  }}>
+                                  {p.label}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{fontSize:10.5, color:'#64748b', marginTop:6, lineHeight:1.4}}>
+                              Bounces in with the scene, then gently pulses + wobbles. Soft drop shadow for depth.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <div style={{display:'flex',gap:8,marginTop:6}}>
                         <button
                           onClick={()=>{
-                            update({ customCaption:'', durationOverride:null, filterOverride:null });
+                            update({ customCaption:'', durationOverride:null, filterOverride:null, stickerEmoji:'', stickerPos:null });
                             toast?.info?.('Tweaks cleared');
                           }}
                           style={{...S.btnGhost, flex:1}}>

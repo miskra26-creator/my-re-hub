@@ -33,3 +33,6 @@ Thumbs.db
 
 # lead inbox data (might contain real leads)
 leads-inbox.json
+
+# Claude Code launch config (per-machine)
+.claude/launch.json
