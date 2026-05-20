@@ -1,5 +1,5 @@
 {
-  "buildCommand": "react-scripts build",
+  "buildCommand": "craco build",
   "outputDirectory": "build",
   "rewrites": [
     { "source": "/api/fub/(.*)", "destination": "/api/fub/$1" },
