@@ -6216,23 +6216,36 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
   const [loading,setLoading] = useState(true);
   const [importing,setImporting] = useState({});
   const [selected,setSelected] = useState([]);
-  const [tab,setTab] = useState("inbox"); // inbox | setup
+  const [tab,setTab] = useState("inbox"); // inbox | setup | test
+  // eslint-disable-next-line no-unused-vars
   const [leads,setLeads] = useIDB("leads",[]);
-  const [serverUp,setServerUp] = useState(false);
-  const [ngrokUrl,setNgrokUrl] = useState("");
 
   const fetchInbox = useCallback(async()=>{
     try {
-      const r = await fetch("http://localhost:3001/api/inbox");
-      const d = await r.json();
-      setInbox(Array.isArray(d)?d:[]);
-      setServerUp(true);
-      setInboxCount(Array.isArray(d)?d.length:0);
-    } catch { setServerUp(false); }
+      const { data, error } = await supabase
+        .from("lead_inbox")
+        .select("*")
+        .order("received_at", { ascending: false });
+      if (error) throw error;
+      // Normalize column names — DB uses snake_case (received_at), UI uses camelCase
+      const rows = (data||[]).map(r => ({...r, receivedAt: r.received_at}));
+      setInbox(rows);
+      setInboxCount(rows.length);
+    } catch (e) {
+      console.warn("[lead_inbox] fetch failed:", e.message);
+    }
     finally { setLoading(false); }
   },[setInboxCount]);
 
-  useEffect(()=>{ fetchInbox(); const t=setInterval(fetchInbox,15000); return()=>clearInterval(t); },[fetchInbox]);
+  // Initial fetch + realtime subscription so new webhook arrivals appear instantly
+  useEffect(()=>{
+    fetchInbox();
+    const channel = supabase
+      .channel("lead_inbox_changes_"+Date.now())
+      .on("postgres_changes", {event:"*", schema:"public", table:"lead_inbox"}, ()=>fetchInbox())
+      .subscribe();
+    return ()=>{ try { supabase.removeChannel(channel); } catch {} };
+  },[fetchInbox]);
 
   const importLeads = useCallback(async(ids)=>{
     const toImport = inbox.filter(l=>ids.includes(l.id));
@@ -6280,15 +6293,15 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
       }
     } catch(e){}
 
-    // Remove from server inbox
-    await fetch("http://localhost:3001/api/inbox/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids})}).catch(()=>{});
+    // Remove from cloud inbox
+    try { await supabase.from("lead_inbox").delete().in("id", ids); } catch(e) { console.warn(e); }
     await fetchInbox();
     setSelected([]);
     toast.success(`${toImport.length} lead${toImport.length>1?"s":""} imported to Lead Tracker`);
   },[inbox,setLeads,fetchInbox,toast]);
 
   const dismiss = async(ids)=>{
-    await fetch("http://localhost:3001/api/inbox/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids})}).catch(()=>{});
+    try { await supabase.from("lead_inbox").delete().in("id", ids); } catch(e) { console.warn(e); }
     await fetchInbox();
     setSelected([]);
   };
@@ -6299,19 +6312,23 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
     </span>
   );
 
-  const WEBHOOK_BASE = `http://localhost:3001`;
+  // Use the deployed origin in prod (my-re-hub.vercel.app) — falls back to
+  // localhost when running the dev server.
+  const WEBHOOK_BASE = typeof window !== "undefined" ? window.location.origin : "https://my-re-hub.vercel.app";
 
   const SOURCES_SETUP = [
+    { name:"BoldTrail / kvCORE", logo:"🌐", how:"Email forwarding or API",
+      steps:["BoldTrail → Settings → Notifications: set your lead notification email","Create a Gmail filter: From contains 'boldtrail.com' OR 'kvcore.com' → Forward to your Cloudmailin/Zapier email","Cloudmailin/Zapier POSTs to /webhook/boldtrail","(Brokerage-paid API tier? Skip email — set the webhook URL directly in BoldTrail integrations)"] },
     { name:"Homes.com", logo:"🏠", how:"Email forwarding",
-      steps:["Log into Homes.com → Account Settings → Lead Notifications","Set your lead notification email to your Zapier email (see Zapier tab below)","In Zapier: Email Parser → Webhook POST to your ngrok URL + /webhook/email"] },
-    { name:"Zillow", logo:"🔵", how:"Webhook or email",
-      steps:["Go to Zillow Premier Agent → Settings → Lead Routing","Add webhook URL: YOUR_NGROK_URL/webhook/zillow","Or: forward lead emails via Zapier to YOUR_NGROK_URL/webhook/email"] },
+      steps:["Homes.com → Account Settings → Lead Notifications","Forward those emails to a Cloudmailin or Zapier email-parser address","That service POSTs to /webhook/email"] },
+    { name:"Zillow", logo:"🔵", how:"Email forwarding",
+      steps:["Zillow Premier Agent → Notification Settings","Forward Zillow lead emails to Cloudmailin/Zapier","POSTs to /webhook/email (auto-detects as Zillow)"] },
     { name:"Realtor.com", logo:"🔴", how:"Email forwarding",
-      steps:["Realtor.com → Account → Lead Settings → Notification Email","Use Zapier Email Parser to capture leads","Zapier action: POST to YOUR_NGROK_URL/webhook/email"] },
+      steps:["Realtor.com → Account → Lead Settings → Notification Email","Forward to your Cloudmailin/Zapier email","POSTs to /webhook/email (auto-detects as Realtor.com)"] },
     { name:"Facebook Lead Ads", logo:"📘", how:"Meta webhook",
-      steps:["Meta Business Suite → Instant Forms → Lead Webhook","Callback URL: YOUR_NGROK_URL/webhook/facebook-lead","Verify token: re_hub_fb_verify","Subscribe to: leadgen"] },
+      steps:["Meta Business Suite → Instant Forms → Lead Webhook","Callback URL: copy /webhook/facebook-lead URL below","Verify token: re_hub_fb_verify","Subscribe to: leadgen"] },
     { name:"Zapier (any source)", logo:"⚡", how:"Universal bridge",
-      steps:["In Zapier, create a Zap with your lead source as Trigger","Action: Webhooks by Zapier → POST","URL: YOUR_NGROK_URL/webhook/lead","Body: map name, email, phone, message fields"] },
+      steps:["Create a Zap with your lead source as Trigger","Action: Webhooks by Zapier → POST","URL: copy /webhook/lead below","Body: map name, email, phone, message fields"] },
   ];
 
   return (
@@ -6340,20 +6357,7 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
         ))}
       </div>
 
-      {/* SERVER STATUS */}
-      {!serverUp && (
-        <div className="glass-card" style={{marginBottom:16,padding:"14px 18px",borderColor:"rgba(239,68,68,.25)",background:"rgba(239,68,68,.07)"}}>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <AlertCircle size={16} color="#ef4444"/>
-            <div>
-              <div style={{fontWeight:800,color:"#f87171"}}>Lead Capture Server not running</div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>Restart the app — the server starts automatically with <code style={{background:"rgba(255,255,255,.08)",padding:"1px 5px",borderRadius:4}}>npm start</code></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {serverUp && tab==="inbox" && (
+      {tab==="inbox" && (
         <>
           {loading ? <div style={{textAlign:"center",padding:40}}><Spinner s={28}/></div>
           : inbox.length===0 ? (
@@ -6412,15 +6416,16 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
           <div className="glass-card" style={{padding:"18px 22px"}}>
             <div style={{fontWeight:800,color:"#fff",fontSize:15,marginBottom:8}}>Your Webhook URLs</div>
             <div style={{fontSize:12,color:"#94a3b8",marginBottom:14}}>
-              These URLs receive leads from your portals. To use them outside your computer, you need a public URL via <strong style={{color:"#7eb8f7"}}>ngrok</strong> (free). Run: <code style={{background:"rgba(255,255,255,.08)",padding:"2px 8px",borderRadius:4}}>npx ngrok http 3001</code> then replace <code style={{background:"rgba(255,255,255,.08)",padding:"2px 6px",borderRadius:4}}>localhost:3001</code> below.
+              These are your live public URLs. Plug them into Zapier, Cloudmailin, Meta Lead Ads, or any lead-source integration. They write directly to your cloud Lead Inbox — no laptop required.
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {[
-                ["Generic / Zapier",`${WEBHOOK_BASE}/webhook/lead`],
-                ["Email / Mailgun",`${WEBHOOK_BASE}/webhook/email`],
-                ["Zillow",`${WEBHOOK_BASE}/webhook/zillow`],
-                ["Realtor.com",`${WEBHOOK_BASE}/webhook/realtor`],
-                ["Facebook Lead Ads",`${WEBHOOK_BASE}/webhook/facebook-lead`],
+                ["Generic / Zapier",`${WEBHOOK_BASE}/api/webhook/lead`],
+                ["Email (any forwarder)",`${WEBHOOK_BASE}/api/webhook/email`],
+                ["BoldTrail / kvCORE",`${WEBHOOK_BASE}/api/webhook/boldtrail`],
+                ["Zillow",`${WEBHOOK_BASE}/api/webhook/zillow`],
+                ["Realtor.com",`${WEBHOOK_BASE}/api/webhook/realtor`],
+                ["Facebook Lead Ads",`${WEBHOOK_BASE}/api/webhook/facebook-lead`],
               ].map(([label,url])=>(
                 <div key={label} style={{display:"flex",gap:8,alignItems:"center",background:"rgba(255,255,255,.03)",borderRadius:8,padding:"8px 12px"}}>
                   <span style={{fontSize:12,fontWeight:700,color:"#7eb8f7",width:160,flexShrink:0}}>{label}</span>
@@ -6470,10 +6475,11 @@ const TestLeadForm = ({toast,onSent}) => {
     if(!f.name){toast.error("Enter a name");return;}
     setSending(true);
     try {
-      await fetch("http://localhost:3001/webhook/lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(f)});
+      const res = await fetch("/api/webhook/lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(f)});
+      if (!res.ok) throw new Error("Webhook returned " + res.status);
       toast.success("Test lead sent! Check the inbox.");
       onSent();
-    } catch { toast.error("Server not running — start the app via npm start"); }
+    } catch (e) { toast.error("Test failed: " + e.message); }
     finally { setSending(false); }
   };
   return (
@@ -6487,7 +6493,7 @@ const TestLeadForm = ({toast,onSent}) => {
       <div>
         <label style={{fontSize:11,fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Source</label>
         <select className="input" value={f.source} onChange={e=>setF(p=>({...p,source:e.target.value}))}>
-          {["Homes.com","Zillow","Realtor.com","Trulia","Facebook Lead Ads","Instagram","Webhook","Zapier"].map(s=><option key={s}>{s}</option>)}
+          {["BoldTrail","Homes.com","Zillow","Realtor.com","Trulia","Facebook Lead Ads","Instagram","Webhook","Zapier"].map(s=><option key={s}>{s}</option>)}
         </select>
       </div>
       <div>
@@ -6733,24 +6739,32 @@ export default function App() {
     return ()=>{ clearTimeout(t1); clearInterval(t2); };
   },[notify]);
 
-  // Poll lead capture server every 30s for new incoming leads
+  // Watch Supabase lead_inbox table — count + notify on new arrivals.
+  // Uses realtime subscription instead of polling, so new leads ping ~instantly.
   useEffect(() => {
-    const check = () => {
-      fetch("http://localhost:3001/api/inbox")
-        .then(r=>r.json())
-        .then(data=>{
-          const n=Array.isArray(data)?data.length:0;
-          if(n>inboxCount&&n>0){
-            success(`${n} new lead${n>1?"s":""} in your inbox!`);
-            notify(`🏠 New Lead${n>1?"s":""} Arrived`, `${n} new lead${n>1?"s":""} waiting in your inbox`, 'new-lead');
+    let mounted = true;
+    const fetchCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from("lead_inbox")
+          .select("*", { count: "exact", head: true });
+        if (error || !mounted) return;
+        const n = count || 0;
+        setInboxCount(prev => {
+          if (n > prev && prev > 0) {
+            success(`${n - prev} new lead${(n-prev)>1?"s":""} in your inbox!`);
+            notify(`🏠 New Lead${(n-prev)>1?"s":""} Arrived`, `${n - prev} new lead${(n-prev)>1?"s":""} waiting in your inbox`, 'new-lead');
           }
-          setInboxCount(n);
-        })
-        .catch(()=>{});
+          return n;
+        });
+      } catch {}
     };
-    check();
-    const t = setInterval(check,30000);
-    return ()=>clearInterval(t);
+    fetchCount();
+    const channel = supabase
+      .channel("inbox_count_watch_"+Date.now())
+      .on("postgres_changes", {event:"*", schema:"public", table:"lead_inbox"}, fetchCount)
+      .subscribe();
+    return ()=>{ mounted = false; try { supabase.removeChannel(channel); } catch {} };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
