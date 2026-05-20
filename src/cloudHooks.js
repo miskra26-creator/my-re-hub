@@ -181,13 +181,11 @@ export function useLS(key, defaultValue) {
       if (!mounted.current) return;
 
       if (cloudValue !== undefined && cloudValue !== null) {
-        const serialized = JSON.stringify(cloudValue);
-        const localSerialized = localStorage.getItem(key);
-        if (serialized !== localSerialized) {
-          latest.current = cloudValue;
-          setValue(cloudValue);
-          try { localStorage.setItem(key, serialized); } catch {}
-        }
+        // Trust cloud; don't stringify-compare (O(n) on large arrays).
+        // An extra setValue is much cheaper than two JSON.stringify on a 5000-lead array.
+        latest.current = cloudValue;
+        setValue(cloudValue);
+        try { localStorage.setItem(key, JSON.stringify(cloudValue)); } catch {}
       } else {
         // Cloud empty — upload local if we have it (migration)
         const localStr = localStorage.getItem(key);
@@ -257,11 +255,12 @@ export function useIDB(key, defaultValue) {
         const cloud = await cloudGet(key);
         if (cancelled) return;
         if (cloud !== undefined && cloud !== null) {
-          if (JSON.stringify(cloud) !== JSON.stringify(local)) {
-            latest.current = cloud;
-            setValue(cloud);
-            idbSet(key, cloud).catch(console.warn);
-          }
+          // Cloud is truth when present. Skip the stringify-compare (it was
+          // O(n) on both sides — punishing on 5000-lead arrays). An extra
+          // setValue is way cheaper than two JSON.stringify of a huge blob.
+          latest.current = cloud;
+          setValue(cloud);
+          idbSet(key, cloud).catch(console.warn);
         } else if (local !== null && local !== undefined) {
           cloudSet(key, local).catch(console.warn);
         }

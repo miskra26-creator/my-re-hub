@@ -26,6 +26,10 @@ create policy "Users can manage their own data"
   using  (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- Base table grants — required IN ADDITION to RLS policy. Without these,
+-- PostgREST returns 401 even though the policy would allow the action.
+grant select, insert, update, delete on public.user_data to authenticated;
+
 -- Updated_at trigger
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$
