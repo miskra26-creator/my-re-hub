@@ -346,6 +346,177 @@ const GlobalStyles = () => (
       animation: slideUp .3s ease;
     }
     @keyframes slideUp { from { opacity:0; transform: translateX(-50%) translateY(20px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+    /* ─────────────────────────────────────────────────────────────
+       Light Theme (.theme-light) — opt-in cream theme applied to
+       individual pages. Inspired by Compass / Sotheby's editorial
+       aesthetic. Cabinet Grotesk titles + Inter body.
+       ───────────────────────────────────────────────────────────── */
+    @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800,900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    .theme-light {
+      background: linear-gradient(180deg, #FAF6EE 0%, #F0E7D2 100%);
+      margin: -28px -32px;
+      padding: 32px 36px 60px;
+      min-height: 100vh;
+      position: relative;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .theme-light::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 50% 30% at 90% 0%, rgba(201,154,44,.10) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 25% at 0% 100%, rgba(26,90,160,.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .theme-light > * { position: relative; z-index: 1; }
+    .theme-light input,
+    .theme-light textarea,
+    .theme-light select,
+    .theme-light button { font-family: inherit; }
+
+    /* Typography — dark warm text on cream */
+    .theme-light, .theme-light div, .theme-light span,
+    .theme-light h1, .theme-light h2, .theme-light h3,
+    .theme-light p, .theme-light button, .theme-light label { color: #3F3528; }
+    .theme-light h1, .theme-light .page-title,
+    .theme-light [style*="DM Serif Display"] {
+      font-family: 'Cabinet Grotesk', 'Inter', sans-serif !important;
+      font-weight: 800 !important;
+      letter-spacing: -.025em !important;
+      color: #2C2418 !important;
+    }
+    .theme-light .page-title { font-size: 30px; letter-spacing: -.5px; }
+    .theme-light .page-sub { color: #8B7A5F !important; font-size: 13px; }
+
+    /* Back button */
+    .theme-light .btn-back {
+      background: rgba(255,255,255,.7) !important;
+      border: 1px solid rgba(26,90,160,.18) !important;
+      color: #2C2418 !important;
+    }
+    .theme-light .btn-back:hover { background: #fff !important; }
+
+    /* Cards — bright white with soft warm shadow */
+    .theme-light .glass-card,
+    .theme-light .stat-card {
+      background: #FFFFFF !important;
+      border: 1px solid rgba(26,90,160,.10) !important;
+      box-shadow: 0 2px 14px rgba(26,90,160,.06), 0 1px 3px rgba(0,0,0,.04) !important;
+      border-radius: 14px !important;
+      backdrop-filter: none !important;
+    }
+    .theme-light .stat-card .stat-label { color: #6B5D4B !important; font-weight: 700 !important; }
+    .theme-light .stat-card .stat-number { color: #2C2418 !important; }
+    .theme-light .stat-card .stat-icon { color: #C99A2C !important; }
+
+    /* Inputs */
+    .theme-light .input,
+    .theme-light .select {
+      background: #FFFFFF !important;
+      border: 1.5px solid rgba(26,90,160,.18) !important;
+      color: #2C2418 !important;
+      font-weight: 600 !important;
+    }
+    .theme-light .input::placeholder { color: #98A2B5 !important; opacity: 1 !important; }
+    .theme-light .input:focus,
+    .theme-light .select:focus {
+      border-color: #1A5AA0 !important;
+      box-shadow: 0 0 0 3px rgba(26,90,160,.15) !important;
+      outline: none !important;
+    }
+    .theme-light .label {
+      color: #6B5D4B !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      letter-spacing: .3px !important;
+      text-transform: uppercase !important;
+    }
+
+    /* Buttons */
+    .theme-light .btn-ghost {
+      background: rgba(255,255,255,.85) !important;
+      color: #2C2418 !important;
+      border: 1px solid rgba(26,90,160,.18) !important;
+      font-weight: 700 !important;
+    }
+    .theme-light .btn-ghost:hover { background: #fff !important; border-color: rgba(26,90,160,.35) !important; }
+    .theme-light .btn-blue {
+      background: linear-gradient(135deg,#1A5AA0,#2D7DD2) !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+      box-shadow: 0 3px 12px rgba(26,90,160,.32) !important;
+    }
+    .theme-light .btn-blue:hover { box-shadow: 0 6px 20px rgba(26,90,160,.45) !important; transform: translateY(-1px); }
+    .theme-light .btn-danger {
+      background: rgba(220,38,38,.08) !important;
+      color: #DC2626 !important;
+      border: 1px solid rgba(220,38,38,.22) !important;
+    }
+    .theme-light .btn-danger:hover { background: rgba(220,38,38,.15) !important; }
+
+    /* Badges — vibrant solid */
+    .theme-light .badge {
+      padding: 5px 11px !important;
+      border-radius: 99px !important;
+      font-size: 10.5px !important;
+      font-weight: 800 !important;
+      letter-spacing: .3px !important;
+      text-transform: uppercase !important;
+      color: #fff !important;
+    }
+    .theme-light .badge-red    { background: #DC2626 !important; }
+    .theme-light .badge-blue   { background: #1A5AA0 !important; }
+    .theme-light .badge-gold   { background: #C99A2C !important; }
+    .theme-light .badge-green  { background: #16A34A !important; }
+    .theme-light .badge-gray   { background: #6B7280 !important; }
+
+    /* Tabs */
+    .theme-light .tabs {
+      background: rgba(255,255,255,.5);
+      border: 1px solid rgba(63,53,40,.12);
+      border-radius: 12px;
+      padding: 3px;
+      display: inline-flex;
+      gap: 2px;
+    }
+    .theme-light .tab {
+      padding: 7px 14px;
+      border: none;
+      background: transparent;
+      color: #6B5D4B !important;
+      font-weight: 600;
+      font-size: 12.5px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .theme-light .tab:hover { background: rgba(255,255,255,.7); color: #2C2418 !important; }
+    .theme-light .tab.active {
+      background: #FFFFFF !important;
+      color: #2C2418 !important;
+      box-shadow: 0 1px 4px rgba(26,90,160,.12), 0 0 0 1px rgba(26,90,160,.10);
+      font-weight: 700;
+    }
+
+    /* Empty state */
+    .theme-light .empty-state { color: #8B7A5F !important; padding: 50px 24px !important; }
+    .theme-light .empty-state h3 { color: #2C2418 !important; font-size: 17px !important; }
+    .theme-light .empty-state p { color: #8B7A5F !important; }
+    .theme-light .empty-state svg { color: #C99A2C !important; opacity: .7; }
+
+    /* Force-override of common inline dark text */
+    .theme-light [style*="color:\"#fff\""],
+    .theme-light [style*="color:\"#ffffff\""],
+    .theme-light [style*="color:\"#f1f5f9\""] { color: #2C2418 !important; }
+    .theme-light [style*="color:\"#64748b\""],
+    .theme-light [style*="color:\"#94a3b8\""],
+    .theme-light [style*="color:\"#475569\""],
+    .theme-light [style*="color:\"#374151\""] { color: #6B5D4B !important; }
   `}</style>
 );
 
@@ -955,7 +1126,7 @@ const Dashboard = ({setPage,toast}) => {
   const greeting = hour<12?"Good morning":"Good afternoon";
 
   return (
-    <div className="page-content">
+    <div className="page-content theme-light">
       {/* Header */}
       <div style={{marginBottom:28,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
         <div>
@@ -5043,7 +5214,7 @@ const CommissionTracker = ({setPage, toast}) => {
   };
 
   return (
-    <div className="page-content">
+    <div className="page-content theme-light">
       <PageHeader title="Commission Tracker" sub={`${thisYear} income pipeline`} setPage={setPage} parent="dashboard"
         action={<button className="btn btn-blue" onClick={()=>{setShowForm(true);setEditId(null);}}><Plus size={13}/>Add Commission</button>}
       />
