@@ -442,8 +442,246 @@ const CALL_OUTCOMES = [
   {id:"callback",       label:"Requested Callback", color:"#a78bfa", followUpDays:1},
 ];
 
+// ─── BUILT-IN DRIP CAMPAIGNS ──────────────────────────────────────────────
+// Research-grounded cadences (Tom Ferry / Sierra 8x8 / Zillow 10-Day plan /
+// Brian Buffini 33-touch / FUB text-first playbook). Targets Metro Detroit
+// (Livonia, Plymouth, Northville, Novi, Canton — I-275 corridor, $350K+).
+//
+// Each step is typed:
+//   email — subject + body, queued to email_queue, auto-sent via Gmail
+//   text  — body only, creates a Text task with smsBody (one-tap Send button)
+//   call  — objective + talking-points, creates a Call task
+//
+// Placeholders: [name] / {firstName}, [area] / {neighborhood} /
+// {city/zip}, [address] / {propertyAddress}.
 const BUILT_IN_CAMPAIGNS = [
-  { id:"camp_new_lead", name:"New Lead Welcome", description:"5 emails over 14 days. Great for any fresh lead.",
+
+  // ── 1. Internet / IDX Website Lead (BoldTrail-generated) ────────────
+  { id:"camp_internet_idx", name:"Internet / IDX Website Lead", description:"14-day intensive for high-intent leads from your BoldTrail site. Text-first, drops to long-term nurture if no engagement.",
+    steps:[
+      {day:0, type:"text", body:"Hi [name], this is Monica Iskra with RE/MAX Classic — I just saw you looked at [address]. That one's in a strong [area] pocket. Are you actively touring, or earlier in your search? (Reply STOP to opt out.)",
+        why:"Speed-to-lead. Names property to prove human. Open-ended timeline question = response trigger."},
+      {day:0, type:"email", subject:"[address] — a few things I noticed", body:"Hi [name],\n\nQuick notes on [address] before you decide whether to tour:\n\n• I pulled a comp from the last 60 days — similar bed/bath count in [area] sold for ~5% over list, 14 DOM\n• Inventory in your price range is at 1.17 months (deep seller's market — be ready to move fast on the right one)\n• 3-4 active listings I'd put on your short list with this one (let me know and I'll send the addresses)\n\nWant a 10-min call this week to walk through your search? I have Tuesday or Thursday between 4-7pm open.\n\nMonica Iskra\nRE/MAX Classic\n(248) 000-0000",
+        why:"Demonstrates local expertise in 30 sec. Beats the generic 'Welcome!' autoresponder every other agent sends."},
+      {day:1, type:"call", objective:"Day-1 connection call", body:"Goal: 15-min discovery call this week. Use ALM script:\n• Appointment: \"Can we set up 15 min Thursday or Saturday?\"\n• Location: \"Just [area], or also Plymouth/Northville/Novi?\"\n• Motivation: \"What's driving the move — schools, space, downsizing?\"\n\nIf no answer: VM under 20 sec referencing the specific property. \"Hey [name], Monica with RE/MAX — just wanted to flag something on [address] for you. Call me at (248) 000-0000.\"",
+        why:"Day-1 call before lead goes cold; 78% of buyers hire first agent who connects."},
+      {day:2, type:"text", body:"Hey [name] — did the [address] listing answer what you were looking for, or were you hoping for something different (more space, different school district)?",
+        why:"Behavior-branched question pulls them into qualifying their own criteria."},
+      {day:4, type:"email", subject:"3 homes that fit better than [address]", body:"Hi [name],\n\nI've been keeping an eye out — here are 3 active listings in [area] worth a look, with my actual thoughts:\n\n1. [Listing A] — Nicer kitchen than [address] but on a busier street\n2. [Listing B] — Smaller lot but turnkey, no projects\n3. [Listing C] — Best value in the price band IMO, but it'll move fast\n\nWant me to set up showings for any of them this weekend? I can usually get in within 24 hours.\n\nMonica",
+        why:"Curated by a human outperforms saved-search autosends 4-to-1."},
+      {day:7, type:"text", body:"Quick one — what's your timeline looking like? Some clients want to be in by summer, others are 6+ months out. Just want to make sure I'm helpful at the right pace.",
+        why:"Explicit timeline qualifier. Sorts into 30/60/90/long-term buckets."},
+      {day:10, type:"call", objective:"Reason-to-call (new comp/listing)", body:"Open with a reason, not a check-in:\n\"Hey [name], I just previewed a home in your range I wanted to flag — wanted to text you the address before it hits the open public list. You free for 5 min?\"\n\nA reason-to-call beats a check-in call 3:1.",
+        why:"Reason-to-call beats a check-in call 3:1."},
+      {day:14, type:"email", subject:"[area] market snapshot — what $350K is getting right now", body:"Hi [name],\n\nQuick market read for [area] as of this month:\n\n📊 Median sale price: $317K (up 5.5% YoY)\n⏱  Days on market: 37\n💰 Sale-to-list ratio: 99.66% — sellers are getting nearly full price\n📦 Inventory: 1.17 months (deep seller's market)\n\nWhat this means for you: if you're in the $350K+ band, the well-priced homes are gone in 1-2 weekends. We want pre-approval locked AND a fast-tour habit.\n\nReply if you want me to send 3 just-listeds in your range this week.\n\nMonica",
+        why:"Value, not ask. Educates the slow-moving lead. If still no response by Day 14 → drop to Long-Term Nurture."},
+    ]
+  },
+
+  // ── 2. Realtor.com Lead ──────────────────────────────────────────────
+  { id:"camp_realtor_com", name:"Realtor.com Lead", description:"21-day intensive for Realtor.com / ReadyConnect leads. Beats the 2-3 other agents competing for the same lead via speed + differentiation.",
+    steps:[
+      {day:0, type:"text", body:"Hi [name], Monica here — RE/MAX Classic, [area]. Realtor.com just connected us. Quick question: are you still looking at [area], or has your search shifted? (Reply STOP to opt out.)",
+        why:"Beat the other 2-3 agents competing for this lead. Source acknowledgement = trust."},
+      {day:0, type:"call", objective:"Live transfer attempt", body:"Realtor.com leads expect a call. If no answer, ~15 sec VM:\n\"Hey [name], Monica from RE/MAX Classic — got your inquiry through Realtor.com and just wanted to make sure I'm useful to you. Call or text me at (248) 000-0000.\"\nDon't pitch — just confirm you got the inquiry.",
+        why:"Realtor.com leads expect a call; not calling = abdicating the lead."},
+      {day:0, type:"email", subject:"Following up on your Realtor.com search", body:"Hi [name],\n\nThanks for reaching out via Realtor.com. I'm Monica Iskra with RE/MAX Classic — born and raised on the I-275 corridor.\n\nBased on what you were searching, here are 5 active listings that match (sending separately if you want addresses).\n\nWant to grab 15 min on the phone? I have:\n• Tuesday 5pm\n• Saturday 11am\n\nReply with whichever works and I'll lock it in.\n\nMonica",
+        why:"Two-time-slot ask converts 2x better than 'let me know when works.'"},
+      {day:2, type:"text", body:"[name] — were any of the homes I sent worth a closer look, or should I tighten the criteria?",
+        why:"Forces a yes/no/refine response."},
+      {day:4, type:"email", subject:"What the Realtor.com listings don't show you", body:"Hi [name],\n\nQuick honest take: Realtor.com is a great starting point but it misses 3 things:\n\n1. Off-market and coming-soon inventory — agents see these days/weeks before they post\n2. School district nuance — the boundary maps online are wrong for ~15% of [area] streets\n3. Real market temperature — [area] is at 1.17 months of inventory right now, which means 'priced right' homes are gone fast\n\nIf you want me to flag coming-soons in your range, just reply YES.\n\nMonica",
+        why:"Differentiation: positions you as having info the portal doesn't."},
+      {day:7, type:"call", objective:"Reason-to-call (fresh listing)", body:"\"Hey [name], a home in your range hit the market this morning, wanted to make sure you saw it. Got 2 min?\"\n\nPattern interrupt at 1-week mark — when most agents quit.",
+        why:"Pattern interrupt at 1-week mark — when most agents quit."},
+      {day:10, type:"text", body:"Quick — are you working with another agent yet, or still scoping things out? No wrong answer, just want to know how I can help.",
+        why:"Direct, respectful. Surfaces hidden competitor agent or confirms exclusivity."},
+      {day:14, type:"email", subject:"[name], your [area] buyer cheat sheet", body:"Hi [name],\n\nQuick deliverable for you — the 1-page buyer cheat sheet I share with my clients:\n\n• 3 local mortgage brokers I trust (no kickbacks, just good people)\n• Average inspection cost: $400-$550 in [area]\n• School district boundary clarification map\n• Escalation clause primer — how to win in multi-offer\n\nReply if you want me to send the PDF.\n\nMonica",
+        why:"Tangible deliverable. Most agents never send anything useful."},
+      {day:21, type:"call", objective:"Honest re-qualification", body:"\"Hey [name] — I've been keeping you in the loop for a few weeks. Want to figure out if I'm still the right fit or if you've gone a different direction. No hard feelings either way — just want to be efficient with your time.\"\n\nCloses the loop or moves them to long-term nurture without bridge-burning.",
+        why:"Closes the loop or moves them to long-term nurture without bridge-burning."},
+    ]
+  },
+
+  // ── 3. Zillow Premier Agent Lead ─────────────────────────────────────
+  { id:"camp_zillow", name:"Zillow Premier Agent Lead", description:"10-day intensive — Zillow leads decay fastest. 5-min response = 78% win rate per Zillow's own data. Call-first cadence.",
+    steps:[
+      {day:0, type:"call", objective:"INSTANT live connect (Zillow Connect Now)", body:"If they hit Connect Now they're literally on their phone waiting.\nUse ALM script:\n• \"I see you looked at [address] on Zillow — are you ready to tour or earlier in your search?\"\n• \"Just [area], or also Plymouth/Northville/Novi?\"\n• \"What's driving the move?\"\n• \"Let's grab 15 min Thursday or Saturday — I can show you what's actually moving in your price range. Which works?\"\n\nZillow leads convert on action, not nurture. Decay is fastest of any source.",
+        why:"Zillow leads decay faster than any other source. 5-min response = 78% win rate."},
+      {day:0, type:"text", body:"Hi [name], this is Monica Iskra — I just got your note on [address] via Zillow. Calling you now, but if a text is easier — what's your timeline? (Reply STOP to opt out.)",
+        why:"Backstop the call. ~50% won't pick up a number they don't know."},
+      {day:0, type:"email", subject:"[address] — quick notes from a local agent", body:"Hi [name],\n\n4 specifics on [address]:\n• Property taxes: pulling the exact figure from the assessor for you\n• Condition: I'll know more once I preview it, but recent permits show [area] homes built that decade typically need [common items]\n• Neighborhood: this stretch of [area] tends to have [trait]\n• Recent comp: similar home in same submarket sold last month at [%] of list\n\n3 alternative listings worth a look — I'll send addresses if you want.\n\nCan I walk you through [address] this week? I have:\n• Wednesday after 5pm\n• Saturday 10am-2pm\n\nReply with what works.\n\nMonica",
+        why:"'Local agent' framing matters on Zillow — buyers don't know which agent they're being matched with."},
+      {day:1, type:"text", body:"Did you want me to set up a showing at [address] this weekend? I can get it booked tonight if so.",
+        why:"Direct close. Zillow leads convert on action, not nurture."},
+      {day:3, type:"call", objective:"Second call attempt with urgency", body:"\"Hey [name], didn't want you to miss this — that home at [address] is getting attention. Just wanted to give you a heads-up before it's gone. Call me at (248) 000-0000.\"\n\nUrgency cue is real in [area] (37 DOM, 99.66% of list).",
+        why:"Urgency cue is real in Livonia/area (37 DOM, 99.66% of list)."},
+      {day:5, type:"email", subject:"3 homes I'd show you instead of [address]", body:"Hi [name],\n\nIf [address] is gone, off the table, or just not quite right — here are 3 active listings I'd put in front of you instead:\n\n1. [Listing A] — Better value per sq ft, slightly older\n2. [Listing B] — Updated kitchen, same price band\n3. [Listing C] — Coming soon, getting it before public list\n\nWant the addresses + a Saturday showing route? Reply YES.\n\nMonica",
+        why:"If property is gone or wrong, pivot fast to inventory you do have."},
+      {day:7, type:"text", body:"[name] — are you still looking, or did something else come together? Either way I want to make sure you've got what you need.",
+        why:"Permission-to-leave language increases reply rate."},
+      {day:10, type:"call", objective:"Final intensive-phase call", body:"\"Hey [name], it's been 10 days since you reached out via Zillow. I want to either get you to a closing or out of my way — whichever serves you. Got 3 min for a real conversation about where you're at?\"\n\nPer Zillow's plan: 10 days is the decision point. If no engagement → mark as long-term nurture but keep on weekly search alerts.",
+        why:"Per Zillow's 10-Day Plan: this is the decision point."},
+    ]
+  },
+
+  // ── 4. Facebook / Instagram Lead Ad ──────────────────────────────────
+  { id:"camp_fb_lead", name:"Facebook / Instagram Lead Ad", description:"60-day low-pressure nurture for Meta ad leads. Most are 6-18 months out — don't pitch hard or they'll mark spam (which downranks your ads).",
+    steps:[
+      {day:0, type:"text", body:"Hi [name], Monica with RE/MAX Classic in [area]. You just grabbed the I-275 Corridor Home Value Guide — want me to text you the PDF link directly? (Reply STOP to opt out.)",
+        why:"Re-confirm consent + deliver the lead magnet. Don't pitch."},
+      {day:0, type:"email", subject:"Your I-275 Corridor guide is here", body:"Hi [name],\n\nHere's the guide you requested — attached as PDF (or use this link).\n\nIf you want me to run a free CMA on your specific home, just reply with the address. Takes me about 24 hours to do it properly with real comps.\n\nNo follow-up pressure — that's not how I work. But I'm here if you need me.\n\nMonica\nRE/MAX Classic",
+        why:"Promised value, delivered. Soft second ask, no pressure."},
+      {day:2, type:"text", body:"[name] — quick one: are you actually thinking about moving in the next 12 months, or just curious about the market? Either's a totally fine answer.",
+        why:"Honest qualifier separates the 10% who are real from the 90% who aren't. People appreciate not being pitched."},
+      {day:5, type:"email", subject:"What $350K, $450K, and $550K actually buys in [area] right now", body:"Hi [name],\n\nQuick market read — what each price band gets in [area] today:\n\n💰 $350K — 3BR/2BA, ~1,400 sq ft, built 1980s-90s, decent condition, smaller lot\n💰 $450K — 3-4BR/2.5BA, ~2,000 sq ft, updated kitchen/baths, half-acre\n💰 $550K — 4BR/3BA, ~2,500 sq ft, fully updated or newer construction, premium street\n\nWant 3 examples at your target price? Just reply with the number.\n\nMonica",
+        why:"Educational, no ask. Builds the 'knowledgeable local' file."},
+      {day:10, type:"text", body:"Saw a home this morning that reminded me you'd asked about [area]. Want me to send the link?",
+        why:"Reason-to-text with opt-in."},
+      {day:14, type:"email", subject:"[area] just hit 1.17 months of inventory — what that means for you", body:"Hi [name],\n\nQuick market update: [area] is at 1.17 months of housing inventory. For context, 6 months = balanced market. We're at 1/5th of that.\n\nWhat this means:\n• If you're buying — well-priced homes go in 1-2 weekends. Pre-approval + fast-tour habit are non-negotiable.\n• If you're selling — your home is probably worth more than you think. I'd happily run a free CMA.\n\nReply if you want me to run numbers for your address.\n\nMonica",
+        why:"Dual-audience hook — you don't know yet if they're buyer or seller."},
+      {day:21, type:"call", objective:"Soft check-in call", body:"\"Hey [name] — just checking in. Are you still in research mode or has this gotten more real? Don't want to pester you, just wanted a real human voice for a sec.\"\n\nDon't pitch. One call attempt at the 3-week mark separates active from cold.",
+        why:"One call attempt at the 3-week mark separates active from cold."},
+      {day:30, type:"email", subject:"Monthly Metro Detroit market snapshot", body:"Hi [name],\n\nThe monthly market read for Metro Detroit / I-275 corridor:\n\n📊 3 stats this month\n📍 3 just-listed in [area]\n🏆 1 client win story (selling above list in 8 days)\n\nReply if anything jumps out.\n\nMonica",
+        why:"Shifts them onto monthly newsletter rhythm."},
+      {day:45, type:"text", body:"Quick gut check — has anything changed on the home front since we connected? Job move, kids, anything? Life-stuff is usually what makes the timing real.",
+        why:"Life-change is the #1 trigger event. Asking opens the door."},
+      {day:60, type:"email", subject:"Are you still on the fence? Here's how I can help when you're ready", body:"Hi [name],\n\nFrank note: I won't keep pestering you. But if/when you're 60-90 days out from making a move, here's what we'd do together:\n\n1. 30-min strategy call — your timeline, your criteria, your numbers\n2. Pre-approval intro to a lender I trust\n3. A handpicked tour list — not the auto-MLS spam, real options\n4. Smooth offer + close\n\nWhen you're ready, here's my calendar link (or just text me).\n\nMonica\n(248) 000-0000",
+        why:"Bridge to long-term nurture without dropping them entirely. After Day 60 → Long-Term Nurture (Campaign 7)."},
+    ]
+  },
+
+  // ── 5. Open House Sign-In ────────────────────────────────────────────
+  { id:"camp_open_house", name:"Open House Sign-In", description:"14-day intensive for in-person open house attendees. Highest physical intent — same-day text is critical (7x lift if responded within 1 hour).",
+    steps:[
+      {day:0, type:"text", body:"Hi [name], Monica from the open house at [address] today. Thanks for stopping by — what did you think? (Reply STOP to opt out.)",
+        why:"Same-day-while-fresh. Specific property reference proves it's not a blast."},
+      {day:1, type:"email", subject:"Quick recap from [address]", body:"Hi [name],\n\nGreat meeting you yesterday at [address]! A few thoughts as you mull it over:\n\n3 similar active listings in [area]:\n• [Listing A]\n• [Listing B]\n• [Listing C]\n\n1 just-sold comp nearby:\n• [Comp address] — $X, sold in [N] days at [%] of list\n\nMy direct cell: (248) 000-0000. Text me with questions any time.\n\nMonica",
+        why:"Day-1 email outperforms day-3 by ~40%."},
+      {day:2, type:"call", objective:"Hot-lead call (reference specific conversation)", body:"For anyone who seemed serious in person:\n\"Hey [name], Monica — you mentioned [specific thing from open house conversation] yesterday. I actually have 2 homes that fit that perfectly. Want me to set up showings this weekend?\"\n\nPersonal-detail recall converts at >2x generic call.",
+        why:"Personal-detail recall converts at >2x generic call."},
+      {day:5, type:"email", subject:"Your [area] buyer briefing", body:"Hi [name],\n\nThought you'd find this useful — neighborhood report for [area]:\n\n📍 Recent sales (last 30 days): 8 closed, median $X\n🏫 School ratings: [area] schools rank in top 15% statewide\n💸 Property tax range: $X-Y per $1K of value\n🏠 Coming-soon inventory I'm watching: 4 homes in your range\n\nWant the specific addresses? Just reply.\n\nMonica",
+        why:"Position as info source, not seller."},
+      {day:7, type:"text", body:"[name] — were any of the homes I sent worth touring this weekend? Happy to set something up.",
+        why:"Direct showing close at 1-week mark."},
+      {day:10, type:"call", objective:"Re-engage call", body:"\"Hey [name], was the [address] home still on your list, or are you looking at others now? Got a couple new ones I'd want you to see.\"\n\nPattern interrupt before they go cold.",
+        why:"Pattern interrupt before they go cold."},
+      {day:14, type:"email", subject:"Free 15-min buyer strategy call", body:"Hi [name],\n\nNo-pressure offer: a free 15-min phone consult to map your search.\n\nI'll walk you through:\n• Current [area] inventory in your range\n• What you can realistically expect in this market\n• A clear plan for the next 30/60 days\n\nGrab a slot:\n• Tuesday 5pm\n• Saturday 11am\n\nReply with what works.\n\nMonica",
+        why:"Converts the warm-but-not-hot tier. If no engagement by Day 14 → Long-Term Nurture."},
+    ]
+  },
+
+  // ── 6. Sphere of Influence / Past Client (33-touch annual) ──────────
+  { id:"camp_soi", name:"Sphere / Past Client (Annual)", description:"Buffini-style 33-touch nurture. The highest-ROI campaign — past clients refer at ~25% when nurtured, 4% when ignored. 12 emails + handful of texts + call prompts over 1 year.",
+    steps:[
+      {day:0, type:"email", subject:"Metro Detroit market snapshot — month 1", body:"Hi [name],\n\nQuick monthly market read for your area:\n\n📊 3 stats\n📍 3 recent sales in your neighborhood\n💭 1 personal note\n\nHope you and the family are doing well!\n\nMonica",
+        why:"Stays top-of-mind without selling."},
+      {day:30, type:"email", subject:"Metro Detroit market snapshot — month 2", body:"Hi [name],\n\nMonth 2 market read for [area]:\n\n📊 3 stats this month\n📍 3 just-listeds I'm watching\n💭 Quick personal note\n\nReply if anything jumps out.\n\nMonica",
+        why:"Monthly cadence builds expected rhythm."},
+      {day:60, type:"text", body:"Hey [name] — just thinking about you. How's everything going? No agenda, just wanted to say hi.",
+        why:"Semi-annual personal check. Genuine relationship, not a pitch."},
+      {day:90, type:"email", subject:"Metro Detroit Q1 wrap + Q2 outlook", body:"Hi [name],\n\nQuarterly recap for [area]:\n• Q1 closed sales: [N]\n• Median price change: [%]\n• Inventory trend: [direction]\n• What I'm watching in Q2\n\nIf you know anyone thinking about buying or selling, I'd love an intro.\n\nMonica",
+        why:"Quarterly summary + soft referral ask."},
+      {day:120, type:"email", subject:"Metro Detroit market snapshot — month 4", body:"Hi [name],\n\nMonth 4 — quick check-in on [area]:\n\n📊 Stats\n📍 Just-listeds\n💭 Note\n\nHope all's well!\n\nMonica",
+        why:"Consistent monthly drumbeat."},
+      {day:150, type:"email", subject:"Your home's equity update", body:"Hi [name],\n\nI ran a quick CMA on your home — based on recent [area] sales, you're sitting on roughly $X in equity right now.\n\nFull breakdown attached. No ask — just thought you'd want to know.\n\nIf you're ever curious about a more detailed CMA (paint colors, comps, staging notes), I'm happy to do a walk-through.\n\nMonica",
+        why:"Plants the 'if you ever sell' seed without asking."},
+      {day:180, type:"call", objective:"6-month genuine check-in", body:"\"Hey [name] — no agenda, just wanted to actually hear your voice. How's everything going? How's the house treating you?\"\n\nGenuine relationship check, not a pitch. Reciprocity principle.",
+        why:"The genuine non-pitch call is what builds the referral relationship."},
+      {day:210, type:"email", subject:"Metro Detroit market snapshot — month 7", body:"Hi [name],\n\nMid-year market read for [area]:\n📊 What's changed in the last 6 months\n📍 Recent sales near you\n💭 Note\n\nMonica",
+        why:"Continued monthly rhythm."},
+      {day:240, type:"text", body:"Hey [name] — quick question. Do you know anyone thinking about buying or selling in the next year? I grow almost entirely through referrals from people like you. Even a name + heads-up helps.",
+        why:"Direct referral ask 2-3x per year, naturally woven. Be explicit."},
+      {day:270, type:"email", subject:"Metro Detroit market snapshot — month 9", body:"Hi [name],\n\nMonth 9 read. The market is shifting toward [direction]. What that means for homeowners like you: [insight].\n\nMonica",
+        why:"Educational positioning."},
+      {day:300, type:"email", subject:"Recent sales on your street", body:"Hi [name],\n\nHyper-local update — sales on or near your street in the last 90 days:\n• [Address] — $X\n• [Address] — $X\n• [Address] — $X\n\nYour neighborhood is [hot/balanced/cooling] right now. Reply if you want a sharper number for your specific home.\n\nMonica",
+        why:"Hyper-local data = highest open rate of any email type."},
+      {day:330, type:"email", subject:"Year-end Metro Detroit recap + next-year outlook", body:"Hi [name],\n\nAnnual wrap-up:\n• [area] median price: $X (up Y% YoY)\n• Avg DOM: [N]\n• Notable trends\n• What I'm watching next year\n\nIt's been a year since we last talked properties. As always — if you or anyone you know is thinking about moving, I'm here.\n\nHappy holidays,\nMonica",
+        why:"Annual recap = high-engagement content."},
+      {day:365, type:"call", objective:"Annual anniversary check-in", body:"\"Hey [name] — it's been a year! How's the house, how's the family? Any plans on the horizon I should know about?\"\n\nMost agents have forgotten this client exists. You haven't.",
+        why:"Anniversary calls are the single highest-response touchpoint."},
+    ]
+  },
+
+  // ── 7. Long-Term Nurture (6-12+ months out) ─────────────────────────
+  { id:"camp_long_term", name:"Long-Term Nurture (6-12mo)", description:"For leads who didn't convert from any other campaign. ~80% of conversions happen between touches 5-12. Monthly cadence, low pressure, high value. Median time to close = 11 months.",
+    steps:[
+      {day:30, type:"email", subject:"Metro Detroit market update", body:"Hi [name],\n\nMonthly market read for [area]:\n📊 3 stats (median price, DOM, inventory)\n📍 3 just-solds in your target area\n🆕 1 just-listed worth flagging\n\nMonica",
+        why:"Establishes monthly rhythm."},
+      {day:60, type:"text", body:"[name] — quick check-in. Anything change on your housing front since we last talked? No agenda, just curious.",
+        why:"Life-change trigger probe."},
+      {day:90, type:"email", subject:"What buyers/sellers got wrong about this market", body:"Hi [name],\n\nMarket myth I keep hearing: 'I'll wait for prices to drop.'\n\nReality in [area]: inventory is at 1.17 months. Until inventory hits 3-4 months, prices won't drop — they'll keep climbing slower. Waiting costs you ~$1,500-$2,000/month in lost equity at current rates.\n\nMy 2¢: if you'd move in the next 12 months anyway, waiting probably costs more than it saves.\n\nMonica",
+        why:"Positions as expert, not order-taker."},
+      {day:120, type:"text", body:"Saw a home hit the market in [area] that made me think of you. Want the link?",
+        why:"Reason-to-text with opt-in."},
+      {day:150, type:"email", subject:"Free home value report for your current home", body:"Hi [name],\n\nQuick offer: I can pull a free CMA on your current home in about 24 hours.\n\nWhy: even buyers usually have a home to sell, and knowing your equity number changes the math.\n\nReply with your address if you want it.\n\nMonica",
+        why:"Surfaces hidden seller leads inside your buyer database."},
+      {day:180, type:"call", objective:"6-month 'where are you at' call", body:"\"Hey [name] — been about 6 months. Honest question: should I keep sending updates, or has your situation changed and you'd rather I leave you alone? Either's totally fine.\"\n\nRe-qualifies and either re-engages or graceful exit.",
+        why:"Re-qualifies and either re-engages or graceful exit."},
+      {day:210, type:"email", subject:"5 things I'd do differently if I were buying in [area] today", body:"Hi [name],\n\nMy actual opinions (not a corporate listicle):\n\n1. Get pre-approved BEFORE you fall in love with a house. Heartbreak otherwise.\n2. Tour 3-5 homes the first weekend to calibrate. Not 1.\n3. The 'perfect' house doesn't exist. The 'right-now' house does.\n4. Inspect everything, but don't kill deals over $5K worth of cosmetics.\n5. Trust your gut on the neighborhood feel — data only tells half the story.\n\nMonica",
+        why:"Voice + opinion = memorability."},
+      {day:240, type:"text", body:"Quick — if you were going to move in the next 6 months, what'd be the #1 thing that'd push you to act?",
+        why:"Their answer = your roadmap to closing them."},
+      {day:270, type:"email", subject:"What your neighbors are selling for", body:"Hi [name],\n\nHyper-local — recent sales near you:\n• [Address] — $X, [N] DOM\n• [Address] — $X, [N] DOM\n• [Address] — $X, [N] DOM\n\nReply if you want me to run your specific home value.\n\nMonica",
+        why:"Hyper-local data = highest open rate of any email type."},
+      {day:300, type:"text", body:"Hey [name] — been a minute. Anything I can help with this fall? Just want to make sure I'm not letting you fall through the cracks.",
+        why:"Casual, human, low-pressure."},
+      {day:330, type:"email", subject:"Year-end Metro Detroit recap", body:"Hi [name],\n\nAnnual market wrap-up for [area]:\n• What happened\n• What's coming\n• What it means for you\n\nMonica",
+        why:"Annual report = high-engagement content."},
+      {day:365, type:"call", objective:"1-year anniversary call", body:"\"Hey [name] — you reached out to me a year ago. Wanted to see where you landed. Did you find a home? Still looking? Decided to wait?\"\n\nMost agents have forgotten this lead exists. You haven't.",
+        why:"Most agents have forgotten this lead exists. You haven't."},
+    ]
+  },
+
+  // ── 8. Seller Prospect (Home Valuation Request) ─────────────────────
+  { id:"camp_seller", name:"Seller Prospect Nurture", description:"35-day cadence for home-valuation requests and listing-alert signups. Triages curious vs considering vs ready-to-list, then pushes the right ones to a listing appointment.",
+    steps:[
+      {day:0, type:"text", body:"Hi [name], Monica Iskra here — RE/MAX Classic. I see you requested a home value for [address]. The instant estimate's a starting point, but I can pull real comps from the last 60 days if you want a sharper number. Want me to send those? (Reply STOP to opt out.)",
+        why:"Acknowledges the (often inaccurate) AVM, offers something better. Triage question gets a response."},
+      {day:0, type:"email", subject:"Your [address] home value — the real number", body:"Hi [name],\n\nQuick CMA on [address] — based on 3 recent comp sales within a half mile:\n\n• Comp A: [address] — $X, sold in [N] days\n• Comp B: [address] — $X, sold in [N] days\n• Comp C: [address] — $X, sold in [N] days\n\nMy honest range estimate for your home: $X-Y.\n\nWant a sharper number? Let me walk through in person for 20 min — I'll give you a real CMA.\n\nMonica",
+        why:"Range + comps = credibility. Single auto-number = robot."},
+      {day:2, type:"text", body:"[name] — are you exploring selling in the next few months, a year out, or just curious about the number? Any answer is totally fine.",
+        why:"Triages into ABC buckets (Ready / Considering / Curious)."},
+      {day:4, type:"email", subject:"What's selling in [area] right now", body:"Hi [name],\n\n5 active listings + 5 just-solds in [area]:\n\nACTIVE:\n• [Listing 1] / [Listing 2] / [Listing 3] / [Listing 4] / [Listing 5]\n\nJUST SOLD:\n• [Sale 1] / [Sale 2] / [Sale 3] / [Sale 4] / [Sale 5]\n\nFor context: [area] is at 99.66% sale-to-list ratio, 37 DOM. Sellers are getting nearly full price right now.\n\nMonica",
+        why:"Specific, local, data-driven. Differentiates from generic seller drip."},
+      {day:7, type:"call", objective:"Equity check call + listing appointment ask", body:"\"Hey [name], Monica — I sent over a CMA last week. I'd love to do an in-person walkthrough of your home — 20 minutes, no commitment, and I'll give you a real number plus 3 things you could do to add $15-30K to the sale price. When's good — Tuesday evening or Saturday morning?\"\n\nIn-person CMA appointment is the single best conversion mechanism for seller leads.",
+        why:"In-person CMA appointment is the single best conversion mechanism for seller leads."},
+      {day:10, type:"email", subject:"3 things that'd raise your home's value by $15-30K", body:"Hi [name],\n\nFrom 100+ home sales — the highest-ROI seller moves:\n\n1. Paint (interior, neutral) — $1,500 cost, $5-10K return\n2. Light landscaping + curb cleanup — $500-1,000 cost, $3-8K return\n3. Staging (or pseudo-staging) — $2,000 cost, $10-15K return\n\nDO NOT do: kitchen/bath remodels pre-sale. You'll spend $30K to gain $20K.\n\nWant the full 1-page seller prep guide? Just reply.\n\nMonica",
+        why:"Establishes expertise and seeds the listing conversation."},
+      {day:14, type:"text", body:"[name] — would it be helpful to walk through what your home would likely sell for and the timeline? No commitment, just a real number.",
+        why:"Soft appointment ask, second attempt."},
+      {day:21, type:"email", subject:"What your neighbors at [area] are listing for", body:"Hi [name],\n\nHyper-local — active listings near [address]:\n• [Address] — listed at $X (3BR/2BA, [N] sq ft)\n• [Address] — listed at $X (4BR/2.5BA, [N] sq ft)\n\nMy thoughts on positioning vs. these: [your unique value angle].\n\nMonica",
+        why:"Hyper-local FOMO. Sellers care most about their immediate block."},
+      {day:28, type:"call", objective:"Timeline decision call", body:"\"Hey [name] — have you decided on a timeline yet? If you're 6+ months out, I'll move you to monthly market updates. If you're 90 days, let's get the listing appointment on the calendar this week.\"\n\nClear branch point.",
+        why:"Clear branch point — graduates them to either listing-ready or nurture."},
+      {day:35, type:"email", subject:"Free seller readiness checklist", body:"Hi [name],\n\n1-page seller checklist attached:\n\n✓ Pre-list to-do (90/60/30 days out)\n✓ Expected timeline from list to close\n✓ What to expect at closing (line by line)\n✓ Tax implications quick-ref\n\nReply with any questions.\n\nMonica",
+        why:"Tangible asset. Most agents never deliver anything useful."},
+    ]
+  },
+
+  // ── 9. Just Listed / Just Sold (Sphere + Farm) ──────────────────────
+  { id:"camp_just_listed_sold", name:"Just Listed / Just Sold", description:"Triggered when you list or close a property. Targets sphere + 200-500 home geographic farm. Sub-campaign for Listed + Sub-campaign for Sold combined. Mix of digital + direct mail prompts.",
+    steps:[
+      {day:0, type:"email", subject:"Just listed — [address], [area]", body:"Hi [name],\n\nQuick heads-up — I just listed:\n\n📍 [address], [area]\n💰 $X\n🛏 [beds]BR / [baths]BA, [sqft] sq ft\n✨ Standout features: [feature 1] / [feature 2] / [feature 3]\n\nOpen house: Saturday 1-3pm.\n\nKnow anyone who'd love it? Send them my way.\n\nMonica",
+        why:"Same-day push to your sphere = 'agent in motion' signal."},
+      {day:0, type:"text", body:"Hey [name] — just listed a 3BR/2BA in [area] at $XYZ. Know anyone who'd love it? Link: [url]",
+        why:"Sphere referrals — the highest-converting lead type."},
+      {day:1, type:"call", objective:"DIRECT MAIL: Just Listed postcard (200-500 homes)", body:"Drop 'Just Listed' postcard to 200-500 homes around the property.\n\nInclude:\n• Photo of home\n• Price\n• Your name + photo + (248) 000-0000\n• QR code to 'What's your home worth?' form\n\nFarm postcards are about repetition — one postcard does nothing; the 4th generates the call.",
+        why:"Farm postcards are about repetition — one does nothing; the 4th generates the call."},
+      {day:3, type:"email", subject:"First open house this Saturday — [address]", body:"Hi [name],\n\nReminder: open house at [address] this Saturday, 1-3pm.\n\nQuick stats:\n• [beds]BR/[baths]BA, [sqft] sq ft, $X\n• Coffee + donuts\n\nStop by if you're around!\n\nMonica",
+        why:"Drives open house attendance from existing sphere."},
+      {day:5, type:"text", body:"Open house Saturday at [address] 1-3pm. Coffee + donuts. Stop by if you're around.",
+        why:"Casual invite tone = better turnout than 'official' invite."},
+      {day:7, type:"call", objective:"DIRECT MAIL: Just Sold postcard (geographic farm)", body:"After closing, send 'Just Sold' postcard to 200-500 homes around the property.\n\nInclude:\n• 'Sold in [N] days at [X%] of list'\n• 'Want to know what YOUR home would sell for?'\n• QR code to home value form\n\nSpecificity sells. The single highest-converting farm postcard format.",
+        why:"The single highest-converting farm postcard format."},
+      {day:8, type:"email", subject:"Another one in the books — [area] sold for $X", body:"Hi [name],\n\nQuick story: just closed on a home in [area]. Listed Tuesday, accepted offer by Saturday, closed in 28 days at 102% of list.\n\nIf you're curious what your home would sell for in this market, just reply.\n\nMonica",
+        why:"Social proof + soft seller-lead ask."},
+      {day:9, type:"text", body:"Just closed on a home in [area] — 28 days, 102% of list. Know anyone in that area thinking about selling? They're going to want to see this number.",
+        why:"Referral ask with hard data."},
+    ]
+  },
+
+  // ── Legacy generic campaigns (kept for backward compat) ──────────────
+  { id:"camp_new_lead", name:"(Legacy) New Lead Welcome", description:"5 emails over 14 days. Great for any fresh lead.",
     steps:[
       {day:0,  subject:"Great to connect, [name]!",             body:"Hi [name],\n\nI just wanted to reach out and say how excited I am to help you with your real estate goals! Whether you're buying, selling, or just exploring your options, I'm here to make the process as smooth as possible.\n\nA little about me — I'm Monica Iskra with RE/MAX Classic, and I specialize in the Livonia and surrounding areas. I know these neighborhoods inside and out.\n\nFeel free to reach out anytime with questions. I'm always just a call or text away.\n\nTalk soon,\nMonica\n(248) 000-0000"},
       {day:2,  subject:"How I can help you — Monica Iskra RE/MAX", body:"Hi [name],\n\nI wanted to follow up and share a little more about how I work.\n\nI provide:\n✅ Free home valuations for sellers\n✅ Custom home searches for buyers\n✅ Zero pressure — just expert guidance\n✅ Average days on market: 12 days\n\nWhatever your timeline, I'll work around YOUR schedule.\n\nAny questions? Just hit reply.\n\nBest,\nMonica"},
@@ -452,7 +690,7 @@ const BUILT_IN_CAMPAIGNS = [
       {day:14, subject:"Still here to help — Monica",             body:"Hi [name],\n\nI know life gets busy! Just wanted to check in and make sure you have everything you need.\n\nWhenever you're ready to take the next step — whether that's a showing, a home valuation, or just a conversation — I'm here.\n\nNo pressure, no rush. Just good old-fashioned personal service.\n\nLooking forward to working with you,\nMonica Iskra\nRE/MAX Classic\n(248) 000-0000"},
     ]
   },
-  { id:"camp_buyer", name:"New Buyer Drip (30 Day)", description:"8 emails guiding buyers from search to offer-ready.",
+  { id:"camp_buyer", name:"(Legacy) New Buyer Drip (30 Day)", description:"8 emails guiding buyers from search to offer-ready.",
     steps:[
       {day:0,  subject:"Welcome to your home search, [name]!",    body:"Hi [name],\n\nWelcome! I'm thrilled to help you find your perfect home. The buying process can feel overwhelming, but I'll guide you every step of the way.\n\nFirst things first — let's make sure you're set up for success:\n\n✅ Get pre-approved (I can refer you to a trusted local lender)\n✅ Tell me your must-haves vs. nice-to-haves\n✅ Set up auto-alerts for new listings\n\nReply with your top 3 must-haves and I'll start searching today!\n\nMonica"},
       {day:3,  subject:"The #1 thing buyers skip (and shouldn't)",  body:"Hi [name],\n\nHere's the truth: in this market, if you're not pre-approved, you WILL lose the home you love to someone who is.\n\nPre-approval is free, takes 20 minutes, and gives you:\n🏆 Negotiating power\n🏆 Confidence knowing your exact budget\n🏆 The ability to make an offer same-day\n\nI work with several great local lenders. Want me to send you their contact info?\n\nMonica"},
@@ -462,7 +700,7 @@ const BUILT_IN_CAMPAIGNS = [
       {day:30, subject:"30 days in — let's make sure your search is dialed in", body:"Hi [name],\n\nIt's been a month since we connected! I want to make sure I'm still sending you the right homes and that your search criteria hasn't changed.\n\nCan you do me a favor? Just reply with:\n- Still looking? Yes / No / Pausing\n- Anything changed about what you need?\n- Timeline update?\n\nI want to make sure I'm the most useful resource I can be for you!\n\nTalk soon,\nMonica"},
     ]
   },
-  { id:"camp_seller", name:"Seller Prospect Nurture", description:"6 emails converting a seller lead into a listing appointment.",
+  { id:"camp_seller_legacy", name:"(Legacy) Seller Prospect Nurture", description:"6 emails converting a seller lead into a listing appointment.",
     steps:[
       {day:0,  subject:"Your home's value in today's market",        body:"Hi [name],\n\nThank you for reaching out! I wanted to share some exciting news — it's still a great time to be a seller in our market.\n\nHere's what I'm seeing:\n📈 Low inventory = less competition for your home\n💰 Prices have held strong\n⏱ Well-priced homes are selling fast\n\nI'd love to put together a FREE Comparative Market Analysis (CMA) for your specific home. It takes me about 24 hours and you'll know exactly what your home is worth today.\n\nInterested? Just reply!\n\nMonica"},
       {day:3,  subject:"What makes homes sell for top dollar",        body:"Hi [name],\n\nEvery seller wants top dollar. Here's what the data shows about what actually moves the needle:\n\n🏠 First impressions — curb appeal and staging\n📸 Professional photos (I include this with every listing)\n💻 Maximum online exposure — Zillow, Realtor.com, Homes.com, MLS\n💬 Aggressive follow-up with every showing agent\n\nI include all of this in my listing package at no extra cost to you.\n\nWould you like to see my full marketing plan? I'll send it over!\n\nMonica"},
@@ -471,7 +709,7 @@ const BUILT_IN_CAMPAIGNS = [
       {day:21, subject:"Monica Iskra — still here to help",           body:"Hi [name],\n\nJust checking in! I know the decision to sell is a big one and there's never any rush.\n\nWhenever you're ready — whether that's next month or next year — I want to be your agent.\n\nIn the meantime, I'm always happy to answer questions about the market, your home's value, or the selling process.\n\nTalk soon,\nMonica Iskra\nRE/MAX Classic\n(248) 000-0000"},
     ]
   },
-  { id:"camp_past_client", name:"Past Client Touch", description:"Quarterly emails to stay top of mind and generate referrals.",
+  { id:"camp_past_client", name:"(Legacy) Past Client Touch", description:"Quarterly emails to stay top of mind and generate referrals.",
     steps:[
       {day:0,   subject:"Checking in — how's the home, [name]?",     body:"Hi [name],\n\nI hope you and your family are doing great! I was thinking about you and wanted to reach out.\n\nIt's been a while since we closed on your home and I'd love to hear how it's going. Have you settled in well? Made any improvements?\n\nAlso — your home's value has likely changed. Would you like me to pull a quick market update for your address? It's always good to know what your biggest asset is worth!\n\nTake care,\nMonica"},
       {day:30,  subject:"Your home value update — [name]",            body:"Hi [name],\n\nI put together a quick market update for homes in your area and wanted to share it with you.\n\nHere's what's happening:\n📊 Median sale price in your area: [price]\n📈 Change from last year: [+/-%]\n⏱ Average days on market: [X days]\n\nIf you're curious about your specific home's value, just reply and I'll run a full CMA for free.\n\nAnd if you know anyone thinking about buying or selling — I'm always grateful for referrals! 🙏\n\nMonica"},
