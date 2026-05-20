@@ -1525,10 +1525,22 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
 
     const start = new Date(enrollCampStart);
     const firstName = (lead.name || "").split(" ")[0] || "there";
+    const propertyAddr = lead.address || lead.area || "the home you were looking at";
+    const neighborhood = lead.area || "your area";
+    // Handles both [name] and {firstName} syntax variants used across campaigns
     const personalize = (s) => (s || "")
       .replace(/\[name\]/gi, firstName)
-      .replace(/\[area\]/gi, lead.area || "your area")
-      .replace(/\[address\]/gi, lead.address || lead.area || "");
+      .replace(/\[firstName\]/gi, firstName)
+      .replace(/\{firstName\}/gi, firstName)
+      .replace(/\[area\]/gi, neighborhood)
+      .replace(/\{area\}/gi, neighborhood)
+      .replace(/\[neighborhood\]/gi, neighborhood)
+      .replace(/\{neighborhood\}/gi, neighborhood)
+      .replace(/\[city\/zip\]/gi, neighborhood)
+      .replace(/\{city\/zip\}/gi, neighborhood)
+      .replace(/\[address\]/gi, propertyAddr)
+      .replace(/\[propertyAddress\]/gi, propertyAddr)
+      .replace(/\{propertyAddress\}/gi, propertyAddr);
 
     let emailCount = 0, textCount = 0, callCount = 0;
     const newEmails = [];
