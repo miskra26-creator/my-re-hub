@@ -1613,11 +1613,11 @@ Return STRICT JSON only (no markdown fences, no explanation):
   const daysFollowUp = followUp ? Math.ceil((new Date(followUp)-new Date())/(1000*60*60*24)) : null;
 
   return (
-    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
-      <div style={{flex:1,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}} onClick={onClose}/>
-      <div style={{width:520,background:"#070b18",borderLeft:"1px solid rgba(255,255,255,.08)",height:"100vh",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+    <div className="lt-detail" style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
+      <div className="lt-detail-backdrop" style={{flex:1,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)"}} onClick={onClose}/>
+      <div className="lt-detail-panel" style={{width:520,height:"100vh",overflowY:"auto",display:"flex",flexDirection:"column"}}>
         {/* Header */}
-        <div style={{padding:"20px 24px",borderBottom:"1px solid rgba(255,255,255,.07)",display:"flex",justifyContent:"space-between",alignItems:"flex-start",position:"sticky",top:0,background:"#070b18",zIndex:10}}>
+        <div className="lt-detail-header" style={{padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",position:"sticky",top:0,zIndex:10}}>
           <div>
             <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,fontWeight:900,color:"#fff"}}>{lead.name}</div>
             <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
@@ -2415,6 +2415,107 @@ const LeadTracker = ({setPage,toast}) => {
         .lead-tracker-v2 .lead-card div[style*="flexWrap"][style*="fontSize:12"] span {
           color: #6B5D4B !important;
         }
+
+        /* ─── Filter tabs (Status + Type) ─────────────────────────── */
+        .lead-tracker-v2 .tabs {
+          background: rgba(255,255,255,.5);
+          border: 1px solid rgba(63,53,40,.12);
+          border-radius: 12px;
+          padding: 3px;
+          display: inline-flex;
+          gap: 2px;
+        }
+        .lead-tracker-v2 .tab {
+          padding: 7px 14px;
+          border: none;
+          background: transparent;
+          color: #6B5D4B !important;
+          font-weight: 600;
+          font-size: 12.5px;
+          border-radius: 9px;
+          cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          transition: all .15s;
+        }
+        .lead-tracker-v2 .tab:hover {
+          background: rgba(255,255,255,.7);
+          color: #2C2418 !important;
+        }
+        .lead-tracker-v2 .tab.active {
+          background: #FFFFFF !important;
+          color: #2C2418 !important;
+          box-shadow: 0 1px 4px rgba(26,90,160,.12), 0 0 0 1px rgba(26,90,160,.10);
+          font-weight: 700;
+        }
+
+        /* ─── Bulk action bar (when leads are checkbox-selected) ──── */
+        .lead-tracker-v2 .lt-bulk-bar {
+          background: linear-gradient(135deg, #FFFFFF 0%, #FFF9EC 100%) !important;
+          border: 1px solid rgba(201,154,44,.35) !important;
+          box-shadow: 0 4px 16px rgba(201,154,44,.12), 0 1px 3px rgba(0,0,0,.04) !important;
+        }
+        .lead-tracker-v2 .lt-bulk-bar span { color: #2C2418 !important; }
+        .lead-tracker-v2 .lt-bulk-bar button { color: #2C2418 !important; }
+
+        /* ─── Add Lead / Edit Lead form text overrides ────────────── */
+        .lead-tracker-v2 .glass-card div[style*="color:\\"#f1f5f9\\""] {
+          color: #2C2418 !important;
+        }
+        .lead-tracker-v2 .glass-card .label { color: #6B5D4B !important; }
+
+        /* ─── ContactDetail drawer (slide-in lead detail panel) ───── */
+        .lead-tracker-v2 .lt-detail-panel {
+          background: linear-gradient(180deg, #FAF6EE 0%, #F2EAD8 100%) !important;
+          border-left: 1px solid rgba(63,53,40,.12) !important;
+          box-shadow: -10px 0 40px rgba(63,53,40,.15);
+        }
+        .lead-tracker-v2 .lt-detail-header {
+          background: rgba(250,246,238,.95) !important;
+          border-bottom: 1px solid rgba(63,53,40,.08) !important;
+          backdrop-filter: blur(8px);
+        }
+        .lead-tracker-v2 .lt-detail-panel div { color: #3F3528; }
+        .lead-tracker-v2 .lt-detail-panel [style*="color:\\"#fff\\""],
+        .lead-tracker-v2 .lt-detail-panel [style*="color:\\"#ffffff\\""],
+        .lead-tracker-v2 .lt-detail-panel [style*="color:\\"#f1f5f9\\""] {
+          color: #2C2418 !important;
+        }
+        .lead-tracker-v2 .lt-detail-panel [style*="DM Serif Display"] {
+          color: #2C2418 !important;
+          font-family: 'Cabinet Grotesk', 'Inter', sans-serif !important;
+          letter-spacing: -.02em !important;
+        }
+        /* Section dividers inside the drawer */
+        .lead-tracker-v2 .lt-detail-panel div[style*="border-bottom"][style*="rgba(255,255,255"],
+        .lead-tracker-v2 .lt-detail-panel div[style*="borderBottom"][style*="rgba(255,255,255"] {
+          border-bottom-color: rgba(63,53,40,.08) !important;
+        }
+        .lead-tracker-v2 .lt-detail-panel div[style*="border-top"][style*="rgba(255,255,255"],
+        .lead-tracker-v2 .lt-detail-panel div[style*="borderTop"][style*="rgba(255,255,255"] {
+          border-top-color: rgba(63,53,40,.08) !important;
+        }
+        /* Buttons inside the drawer keep their colors but text becomes legible */
+        .lead-tracker-v2 .lt-detail-panel .btn-ghost {
+          background: rgba(255,255,255,.85) !important;
+          color: #2C2418 !important;
+          border: 1px solid rgba(63,53,40,.15) !important;
+        }
+        .lead-tracker-v2 .lt-detail-panel .btn-blue { color: #fff !important; }
+        .lead-tracker-v2 .lt-detail-panel input,
+        .lead-tracker-v2 .lt-detail-panel textarea,
+        .lead-tracker-v2 .lt-detail-panel select {
+          background: #FFFFFF !important;
+          border: 1.5px solid rgba(26,90,160,.18) !important;
+          color: #2C2418 !important;
+        }
+        .lead-tracker-v2 .lt-detail-panel input::placeholder,
+        .lead-tracker-v2 .lt-detail-panel textarea::placeholder { color: #98A2B5 !important; }
+        /* Activity log timeline entries */
+        .lead-tracker-v2 .lt-detail-panel div[style*="rgba(255,255,255,.03)"],
+        .lead-tracker-v2 .lt-detail-panel div[style*="rgba(255,255,255,.04)"] {
+          background: rgba(255,255,255,.7) !important;
+          border: 1px solid rgba(63,53,40,.08) !important;
+        }
       `}</style>
       <PageHeader title="Lead Tracker" sub={`${leads.length} total leads`} setPage={setPage} parent="dashboard"
         action={<div style={{display:"flex",gap:8}}>
@@ -2497,8 +2598,8 @@ const LeadTracker = ({setPage,toast}) => {
 
       {/* Bulk select bar */}
       {selected.length>0&&(
-        <div style={{position:"sticky",top:8,zIndex:50,background:"#0d1421",border:"1px solid rgba(26,90,160,.4)",borderRadius:13,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",boxShadow:"0 4px 24px rgba(0,0,0,.5)"}}>
-          <span style={{fontSize:13,fontWeight:800,color:"#7eb8f7"}}>{selected.length} lead{selected.length>1?"s":""} selected</span>
+        <div className="lt-bulk-bar" style={{position:"sticky",top:8,zIndex:50,borderRadius:13,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:13,fontWeight:800}}>{selected.length} lead{selected.length>1?"s":""} selected</span>
           <div style={{display:"flex",gap:6,flex:1,flexWrap:"wrap"}}>
             {bulkPanel==="status"?(
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
