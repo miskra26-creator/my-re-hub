@@ -34,13 +34,15 @@ export async function pushToInbox(lead, rawPayload = {}) {
     type:    lead.type || 'Buyer',
     raw:     rawPayload,
   };
+  // Note: we do NOT use `Prefer: return=representation` because that triggers
+  // a follow-up SELECT, which is blocked by the auth-only SELECT policy for
+  // the anon role. The webhook doesn't need the returned row anyway.
   const res = await fetch(`${SUPABASE_URL}/rest/v1/lead_inbox`, {
     method: 'POST',
     headers: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=representation',
     },
     body: JSON.stringify(row),
   });
@@ -48,5 +50,5 @@ export async function pushToInbox(lead, rawPayload = {}) {
     const txt = await res.text();
     throw new Error(`Supabase insert failed (${res.status}): ${txt.slice(0, 300)}`);
   }
-  return res.json();
+  return row;
 }
