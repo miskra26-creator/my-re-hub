@@ -108,6 +108,7 @@
   "devDependencies": {
     "electron": "^42.0.1",
     "electron-builder": "^26.8.1",
+    "pg": "^8.21.0",
     "wait-on": "^9.0.10"
   }
 }
