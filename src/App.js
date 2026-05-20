@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { supabase } from './supabase';
 import { useLS, useIDB } from './cloudHooks';
 import VideoAuto from './VideoAuto';
@@ -2459,7 +2459,7 @@ const LeadTracker = ({setPage,toast}) => {
   // Quick call log
   const [callLogLead,setCallLogLead] = useState(null);
 
-  const allTags = [...new Set(leads.flatMap(l=>l.tags||[]))].sort();
+  const allTags = useMemo(() => [...new Set(leads.flatMap(l=>l.tags||[]))].sort(), [leads]);
 
   const BUILT_IN_LISTS = [
     {name:"Hot Prospects", filters:{status:"Hot Prospect",     type:"all",    tag:"all"}},
@@ -2561,14 +2561,28 @@ const LeadTracker = ({setPage,toast}) => {
 
 
   const today = new Date().toISOString().slice(0,10);
-  const filtered = leads.filter(l=>{
-    const matchStatus = filterStatus==="all"||l.status===filterStatus;
-    const matchType = filterType==="all"||l.type===filterType;
-    const matchTag = filterTag==="all"||(l.tags||[]).includes(filterTag);
-    const matchFollowUp = search!=="__followup__"||(l.followUp&&l.followUp<=today);
-    const matchSearch = search==="__followup__"||!search||l.name?.toLowerCase().includes(search.toLowerCase())||l.email?.toLowerCase().includes(search.toLowerCase())||l.area?.toLowerCase().includes(search.toLowerCase());
-    return matchStatus&&matchType&&matchTag&&matchFollowUp&&matchSearch;
-  });
+  // Memoize filtered list so form-keystroke re-renders don't re-walk all leads.
+  // For 5000+ FUB leads this is the difference between freeze and snappy.
+  const filtered = useMemo(() => {
+    const searchLower = search ? search.toLowerCase() : "";
+    return leads.filter(l=>{
+      const matchStatus = filterStatus==="all"||l.status===filterStatus;
+      const matchType = filterType==="all"||l.type===filterType;
+      const matchTag = filterTag==="all"||(l.tags||[]).includes(filterTag);
+      const matchFollowUp = search!=="__followup__"||(l.followUp&&l.followUp<=today);
+      const matchSearch = search==="__followup__"||!search||l.name?.toLowerCase().includes(searchLower)||l.email?.toLowerCase().includes(searchLower)||l.area?.toLowerCase().includes(searchLower);
+      return matchStatus&&matchType&&matchTag&&matchFollowUp&&matchSearch;
+    });
+  }, [leads, filterStatus, filterType, filterTag, search, today]);
+
+  // Memoize per-status counts so the filter-tab row doesn't re-walk leads
+  // 13 times on every keystroke
+  const statusCounts = useMemo(() => {
+    const counts = { all: leads.length };
+    LEAD_STATUSES.forEach(s => { counts[s] = 0; });
+    leads.forEach(l => { if (counts[l.status] !== undefined) counts[l.status]++; });
+    return counts;
+  }, [leads]);
 
   const save = () => {
     if(!form.name.trim()) return toast.error("Name is required");
@@ -2647,7 +2661,11 @@ const LeadTracker = ({setPage,toast}) => {
           position: relative;
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        .lead-tracker-v2 * { font-family: inherit; }
+        /* Only override the elements that reset font in their UA stylesheet */
+        .lead-tracker-v2 input,
+        .lead-tracker-v2 textarea,
+        .lead-tracker-v2 select,
+        .lead-tracker-v2 button { font-family: inherit; }
         .lead-tracker-v2 .page-title,
         .lead-tracker-v2 [style*="DM Serif Display"],
         .lead-tracker-v2 .empty-state h3 {
@@ -3028,7 +3046,7 @@ const LeadTracker = ({setPage,toast}) => {
         )}
         <div className="tabs" style={{width:"auto"}}>
           {["all",...LEAD_STATUSES].map(s=>(
-            <button key={s} className={`tab ${filterStatus===s?"active":""}`} onClick={()=>setFilterStatus(s)} style={{textTransform:"capitalize"}}>{s} ({leads.filter(l=>s==="all"||l.status===s).length})</button>
+            <button key={s} className={`tab ${filterStatus===s?"active":""}`} onClick={()=>setFilterStatus(s)} style={{textTransform:"capitalize"}}>{s} ({statusCounts[s]||0})</button>
           ))}
         </div>
         <div className="tabs" style={{width:"auto"}}>
