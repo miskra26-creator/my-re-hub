@@ -2,8 +2,7 @@
   "buildCommand": "craco build",
   "outputDirectory": "build",
   "rewrites": [
-    { "source": "/api/fub/(.*)", "destination": "/api/fub/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
