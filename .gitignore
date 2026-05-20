@@ -41,3 +41,4 @@ leads-inbox.json
 /tools/voice-clone-server/venv/
 /tools/voice-clone-server/__pycache__/
 /tools/voice-clone-server/*.pyc
+.vercel
