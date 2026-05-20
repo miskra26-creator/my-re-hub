@@ -85,7 +85,10 @@ async function cloudSet(key, value) {
 
 function cloudSubscribe(key, onChange) {
   if (!isCloudEnabled || !currentUserId) return () => {};
-  const channelName = `user_data_${currentUserId}_${key}`;
+  // Unique suffix so React StrictMode double-mount doesn't collide on the
+  // same channel name (Supabase forbids .on() after .subscribe() on a channel
+  // that already exists in its registry).
+  const channelName = `user_data_${currentUserId}_${key}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const channel = supabase
     .channel(channelName)
     .on(
