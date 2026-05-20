@@ -1469,6 +1469,12 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [showApplyPlan, setShowApplyPlan] = useState(false);
   const [applyPlanId, setApplyPlanId] = useState("");
   const [applyPlanStart, setApplyPlanStart] = useState(new Date().toISOString().slice(0,10));
+  // Drip campaign enrollment (queues emails into email_queue, fires via GmailSyncWorker)
+  const [emailQueue, setEmailQueue] = useLS("email_queue", []);
+  const [customCampaigns] = useLS("custom_campaigns", []);
+  const [showEnrollCamp, setShowEnrollCamp] = useState(false);
+  const [enrollCampId, setEnrollCampId] = useState("");
+  const [enrollCampStart, setEnrollCampStart] = useState(new Date().toISOString().slice(0,10));
   // AI Lead Responder — drafts a personalized email reply via Claude, sends via Gmail.
   const [aiDraft, setAiDraft] = useState(null); // null | {busy, subject, body, error, sending}
   const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "", phone: "", email: "" });
@@ -1498,6 +1504,44 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
     setTasks(p=>[...p,...newTasks]);
     setShowApplyPlan(false);
     toast.success(`${newTasks.length} tasks created from "${plan.name}"`);
+  };
+
+  // ── ENROLL IN DRIP CAMPAIGN ──────────────────────────────────────────────
+  // Queues all of a campaign's emails into email_queue with personalized
+  // subject/body and computed due dates. GmailSyncWorker auto-sends what's due.
+  const enrollInCampaign = () => {
+    if (!lead.email) return toast.error(`${lead.name} has no email — add one first`);
+    const allCamps = [...BUILT_IN_CAMPAIGNS, ...customCampaigns];
+    const camp = allCamps.find(c => c.id === enrollCampId);
+    if (!camp) return;
+    const start = new Date(enrollCampStart);
+    const firstName = (lead.name || "").split(" ")[0] || "there";
+    const entries = camp.steps.map((step, i) => {
+      const due = new Date(start); due.setDate(due.getDate() + step.day);
+      const body = (step.body || "")
+        .replace(/\[name\]/gi, firstName)
+        .replace(/\[area\]/gi, lead.area || "your area")
+        .replace(/\[address\]/gi, lead.address || lead.area || "");
+      return {
+        id: uid(),
+        leadId: lead.id, leadName: lead.name, leadEmail: lead.email,
+        campaignId: camp.id, campaignName: camp.name,
+        subject: (step.subject || "").replace(/\[name\]/gi, firstName),
+        body,
+        dueDate: due.toISOString().slice(0, 10),
+        stepIndex: i, sent: false, createdAt: now(),
+      };
+    });
+    setEmailQueue(p => [...p, ...entries]);
+    // Activity log
+    setActivities(p => [{
+      id: uid(), type: "campaign", direction: "outbound",
+      note: `📧 Enrolled in "${camp.name}" — ${entries.length} emails queued, starting ${enrollCampStart}`,
+      createdAt: now(),
+    }, ...p]);
+    setShowEnrollCamp(false);
+    setEnrollCampId("");
+    toast.success(`${entries.length} emails queued for ${lead.name} — "${camp.name}"`);
   };
 
   // ── AI LEAD RESPONDER ──────────────────────────────────────────────────────
@@ -1828,12 +1872,19 @@ Return STRICT JSON only (no markdown fences, no explanation):
 
           {tab==="tasks"&&(
             <div style={{paddingBottom:20}}>
-              {/* Apply Action Plan */}
-              <div style={{marginBottom:14}}>
-                {!showApplyPlan?(
-                  <button className="btn btn-ghost btn-sm" style={{width:"100%"}} onClick={()=>setShowApplyPlan(true)}><Zap size={12}/>Apply Action Plan</button>
-                ):(
-                  <div style={{background:"rgba(26,90,160,.1)",borderRadius:10,padding:"12px 14px",border:"1px solid rgba(26,90,160,.2)"}}>
+              {/* Apply Action Plan + Enroll in Drip Campaign — side by side */}
+              <div style={{display:"flex",gap:8,marginBottom:14}}>
+                {!showApplyPlan && !showEnrollCamp && (
+                  <>
+                    <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>setShowApplyPlan(true)}><Zap size={12}/>Apply Action Plan</button>
+                    <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{
+                      if(!lead.email){toast.error(`${lead.name} has no email — add one first`);return;}
+                      setShowEnrollCamp(true);
+                    }}><Mail size={12}/>Enroll in Drip Campaign</button>
+                  </>
+                )}
+                {showApplyPlan && (
+                  <div style={{background:"rgba(26,90,160,.1)",borderRadius:10,padding:"12px 14px",border:"1px solid rgba(26,90,160,.2)",flex:1}}>
                     <div style={{fontWeight:700,fontSize:13,color:"#7eb8f7",marginBottom:10}}>Apply Action Plan to {lead.name.split(" ")[0]}</div>
                     <div style={{display:"flex",flexDirection:"column",gap:8}}>
                       <select className="select" value={applyPlanId} onChange={e=>setApplyPlanId(e.target.value)}>
@@ -1856,7 +1907,62 @@ Return STRICT JSON only (no markdown fences, no explanation):
                     </div>
                   </div>
                 )}
+                {showEnrollCamp && (
+                  <div style={{background:"rgba(201,154,44,.10)",borderRadius:10,padding:"12px 14px",border:"1px solid rgba(201,154,44,.30)",flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#C99A2C",marginBottom:10}}>Enroll {lead.name.split(" ")[0]} in Drip Campaign</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <select className="select" value={enrollCampId} onChange={e=>setEnrollCampId(e.target.value)}>
+                        <option value="">Choose a campaign...</option>
+                        {[...BUILT_IN_CAMPAIGNS, ...customCampaigns].map(c => <option key={c.id} value={c.id}>{c.name} ({c.steps?.length||0} emails)</option>)}
+                      </select>
+                      <div>
+                        <div className="label">Start Date (first email goes out this day)</div>
+                        <input className="input" type="date" value={enrollCampStart} onChange={e=>setEnrollCampStart(e.target.value)}/>
+                      </div>
+                      {enrollCampId && (() => {
+                        const c = [...BUILT_IN_CAMPAIGNS,...customCampaigns].find(x=>x.id===enrollCampId);
+                        const last = c?.steps?.[c.steps.length-1];
+                        return (
+                          <div style={{fontSize:11,color:"#64748b"}}>
+                            Will queue {c?.steps?.length||0} email{c?.steps?.length===1?"":"s"} over {last?.day||0} day{last?.day===1?"":"s"}. Auto-sends via Gmail if Auto-Send is on (toggle in Email Campaigns).
+                          </div>
+                        );
+                      })()}
+                      <div style={{display:"flex",gap:8}}>
+                        <button className="btn btn-blue btn-sm" disabled={!enrollCampId} onClick={enrollInCampaign}><Mail size={12}/>Queue Emails</button>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>{setShowEnrollCamp(false);setEnrollCampId("");}}>Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Active campaigns this lead is enrolled in */}
+              {(() => {
+                const myCamps = emailQueue.filter(e => e.leadId === lead.id);
+                const grouped = {};
+                myCamps.forEach(e => { (grouped[e.campaignId] = grouped[e.campaignId] || {name:e.campaignName, total:0, sent:0, next:null}); grouped[e.campaignId].total++; if(e.sent) grouped[e.campaignId].sent++; else if(!grouped[e.campaignId].next || e.dueDate < grouped[e.campaignId].next) grouped[e.campaignId].next = e.dueDate; });
+                const list = Object.entries(grouped);
+                if (list.length === 0) return null;
+                return (
+                  <div style={{marginBottom:14,padding:"10px 14px",background:"rgba(201,154,44,.06)",border:"1px solid rgba(201,154,44,.2)",borderRadius:10}}>
+                    <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:"#C99A2C",marginBottom:8}}>Active Drip Campaigns</div>
+                    {list.map(([id,c]) => (
+                      <div key={id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"4px 0"}}>
+                        <div>
+                          <div style={{fontWeight:700}}>{c.name}</div>
+                          <div style={{fontSize:11,opacity:.7}}>{c.sent} sent · {c.total - c.sent} pending{c.next?` · next ${c.next}`:""}</div>
+                        </div>
+                        <button className="btn btn-ghost btn-xs" onClick={()=>{
+                          if(!window.confirm(`Stop the "${c.name}" drip for ${lead.name}? Pending emails will be removed.`)) return;
+                          setEmailQueue(p => p.filter(e => !(e.leadId === lead.id && e.campaignId === id && !e.sent)));
+                          toast.info("Stopped — pending emails removed");
+                        }}><X size={11}/>Stop</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Add Task */}
               <div style={{marginBottom:16,background:"rgba(255,255,255,.03)",borderRadius:10,padding:"12px 14px",border:"1px solid rgba(255,255,255,.06)"}}>
