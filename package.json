@@ -33,6 +33,8 @@
   "scripts": {
     "start": "concurrently --names \"APP,SERVER\" --prefix-colors \"cyan,yellow\" \"craco start\" \"node server.js\"",
     "server": "node server.js",
+    "sync": "git pull --rebase && npm install",
+    "save": "node scripts/save.js",
     "build": "craco build",
     "test": "craco test",
     "eject": "react-scripts eject",
