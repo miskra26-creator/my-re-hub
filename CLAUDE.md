@@ -1,0 +1,96 @@
+# Claude — Project Instructions for my-re-hub
+
+This file is read by Claude Code when this project is opened. Monica works on
+this codebase from **two machines** (laptop + office desktop) and switches
+between them frequently. You need to coordinate via the shared session log.
+
+## CRITICAL — Session lifecycle (do this every time)
+
+### At the START of every session:
+
+1. **Pull the latest code first:**
+   ```
+   npm run sync
+   ```
+   (Equivalent to `git pull --rebase && npm install` — gets whatever the other
+   machine's Claude pushed plus any new dependencies.)
+
+2. **Read `CLAUDE_NOTES.md`** in this repo root. That file has:
+   - What was last worked on
+   - What's currently in-flight (mid-implementation)
+   - What's queued for next
+   - Any gotchas / context the other machine's Claude left behind
+
+   Treat `CLAUDE_NOTES.md` as the source of truth for project state. It always
+   reflects what the OTHER machine's Claude did most recently. If Monica says
+   "back to work" without specifics, use `CLAUDE_NOTES.md` to figure out where
+   to pick up.
+
+### DURING the session:
+- Work normally.
+- If you make significant changes (new feature, refactor, bug fix), keep a
+  rolling list of what you did so you can summarize it at the end.
+
+### At the END of the session (or when Monica says "save" / "I'm switching machines"):
+
+1. **Update `CLAUDE_NOTES.md`** with:
+   - Date + machine you worked on (laptop vs desktop)
+   - What you accomplished this session (concise bullets)
+   - What's in-flight if anything stopped mid-stream
+   - Updated queued list
+   - Any new gotchas the other Claude should know about
+
+2. **Commit + push everything:**
+   ```
+   npm run save
+   ```
+   (Equivalent to `git add -A && git commit && git push`. The auto-sync script
+   on the laptop also runs this every 5 min, but explicit `npm run save` is
+   safer when stepping away.)
+
+3. Tell Monica it's saved + safe to switch machines.
+
+## Stack & infrastructure (don't re-discover these every session)
+
+- **App**: React (CRA + craco) frontend in `src/`. Express backend in `server.js`
+  (local) + Vercel serverless in `api/` (prod).
+- **Live URL**: `https://my-re-hub.vercel.app` — Vercel auto-deploys every push to `main`.
+- **GitHub repo**: `https://github.com/miskra26-creator/my-re-hub`
+- **Data storage**: `src/cloudHooks.js` exports `useLS` + `useIDB` — local-first
+  with Supabase sync when signed in. Same API as before, drop-in.
+- **Cloud DB**: Supabase project at `https://hastxrejqacppfgdldrm.supabase.co`.
+  Schema: single `user_data` table (id, user_id, key, value jsonb, updated_at).
+  RLS enforces per-user isolation. Schema is in `supabase-setup.sql`.
+- **Secrets** in `.env.local` (gitignored — recreate on each machine if missing):
+  - `FUB_API_KEY`, `REACT_APP_FUB_API_KEY` — Follow Up Boss
+  - `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_ANON_KEY` — Supabase
+  - `ANTHROPIC_API_KEY` (optional, for AI features)
+  - `ELEVENLABS_API_KEY` (optional, for AI voice)
+- **Vercel env vars**: same as `.env.local` minus the dev-only ones. Set via
+  `vercel env ls production` to verify. Vercel deploys from GitHub `main` branch.
+
+## Working principles for this project
+
+- **Monica is NOT a developer.** Don't ask her to run terminal commands unless
+  you must. Don't make her debug. When you can do something for her with
+  Bash/edits, just do it.
+- **Solo-user CRM ambition.** The goal is to replace Follow Up Boss ($69/mo).
+  Prioritize features that move toward that — lead capture, drip campaigns,
+  pipeline, tasks, reliability across devices.
+- **Don't break what works.** If you touch `cloudHooks.js`, `App.js`, or
+  `supabase.js`, test thoroughly. These power everything.
+- **Keep the auto-sync working.** The git config is `Monica Iskra <monica@teamiskrasells.com>`
+  globally. If commits start failing again, check `git config --global --list`.
+
+## Two-machine workflow gotchas (lessons learned the hard way)
+
+- **Don't run both Claudes simultaneously** on the same codebase. They'll
+  fight over the same files and you get merge headaches. One brain at a time.
+- **`.env.local` does NOT sync** (gitignored). Each machine has its own copy.
+  If a new env var is added, update both `.env.local` files AND Vercel env vars.
+- **Memory across Claudes**: each Claude has local memory at `~/.claude/`. That
+  doesn't sync between machines. `CLAUDE_NOTES.md` (in this repo) is the
+  manually-maintained bridge. Keep it current.
+- **Vercel auto-deploys** within ~2 min of any push to `main`. So a `npm run save`
+  on one machine puts the new code on the live URL automatically — you don't
+  need to redeploy manually.
