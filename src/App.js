@@ -1507,41 +1507,96 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   };
 
   // ── ENROLL IN DRIP CAMPAIGN ──────────────────────────────────────────────
-  // Queues all of a campaign's emails into email_queue with personalized
-  // subject/body and computed due dates. GmailSyncWorker auto-sends what's due.
+  // Multi-channel: campaign steps are typed (email | text | call). Each goes
+  // to a different destination:
+  //   • email → email_queue (GmailSyncWorker auto-sends what's due)
+  //   • text  → tasks (type="Text") so Monica gets a reminder + the SMS body
+  //             pre-written; she taps "Send" on mobile (sms: URL) or copies
+  //             on desktop. Twilio auto-send is a v2.
+  //   • call  → tasks (type="Call") with the talking-points in notes
   const enrollInCampaign = () => {
-    if (!lead.email) return toast.error(`${lead.name} has no email — add one first`);
     const allCamps = [...BUILT_IN_CAMPAIGNS, ...customCampaigns];
     const camp = allCamps.find(c => c.id === enrollCampId);
     if (!camp) return;
+    const hasEmailSteps = camp.steps.some(s => (s.type || "email") === "email");
+    const hasTextSteps  = camp.steps.some(s => s.type === "text");
+    if (hasEmailSteps && !lead.email) return toast.error(`${lead.name} has no email — add one or pick a text-only campaign`);
+    if (hasTextSteps && !lead.phone)  return toast.error(`${lead.name} has no phone — add one or pick an email-only campaign`);
+
     const start = new Date(enrollCampStart);
     const firstName = (lead.name || "").split(" ")[0] || "there";
-    const entries = camp.steps.map((step, i) => {
+    const personalize = (s) => (s || "")
+      .replace(/\[name\]/gi, firstName)
+      .replace(/\[area\]/gi, lead.area || "your area")
+      .replace(/\[address\]/gi, lead.address || lead.area || "");
+
+    let emailCount = 0, textCount = 0, callCount = 0;
+    const newEmails = [];
+    const newTasks = [];
+
+    camp.steps.forEach((step, i) => {
       const due = new Date(start); due.setDate(due.getDate() + step.day);
-      const body = (step.body || "")
-        .replace(/\[name\]/gi, firstName)
-        .replace(/\[area\]/gi, lead.area || "your area")
-        .replace(/\[address\]/gi, lead.address || lead.area || "");
-      return {
-        id: uid(),
-        leadId: lead.id, leadName: lead.name, leadEmail: lead.email,
-        campaignId: camp.id, campaignName: camp.name,
-        subject: (step.subject || "").replace(/\[name\]/gi, firstName),
-        body,
-        dueDate: due.toISOString().slice(0, 10),
-        stepIndex: i, sent: false, createdAt: now(),
-      };
+      const dueStr = due.toISOString().slice(0, 10);
+      const type = step.type || "email";
+
+      if (type === "email") {
+        newEmails.push({
+          id: uid(),
+          leadId: lead.id, leadName: lead.name, leadEmail: lead.email,
+          campaignId: camp.id, campaignName: camp.name,
+          subject: personalize(step.subject || ""),
+          body: personalize(step.body || ""),
+          dueDate: dueStr,
+          stepIndex: i, sent: false, createdAt: now(),
+        });
+        emailCount++;
+      } else if (type === "text") {
+        newTasks.push({
+          id: uid(),
+          title: `Text ${firstName} — ${camp.name} (step ${i+1})`,
+          type: "Text",
+          leadId: lead.id, leadName: lead.name,
+          dueDate: dueStr,
+          notes: personalize(step.body || ""),
+          smsBody: personalize(step.body || ""),
+          campaignId: camp.id, campaignName: camp.name,
+          stepIndex: i, completed: false, createdAt: now(),
+        });
+        textCount++;
+      } else if (type === "call") {
+        newTasks.push({
+          id: uid(),
+          title: `Call ${firstName} — ${step.objective || camp.name + ` (step ${i+1})`}`,
+          type: "Call",
+          leadId: lead.id, leadName: lead.name,
+          dueDate: dueStr,
+          notes: personalize(step.body || step.talkingPoints || ""),
+          campaignId: camp.id, campaignName: camp.name,
+          stepIndex: i, completed: false, createdAt: now(),
+        });
+        callCount++;
+      }
     });
-    setEmailQueue(p => [...p, ...entries]);
+
+    if (newEmails.length) setEmailQueue(p => [...p, ...newEmails]);
+    if (newTasks.length)  setTasks(p => [...p, ...newTasks]);
+
+    const parts = [];
+    if (emailCount) parts.push(`${emailCount} email${emailCount===1?"":"s"}`);
+    if (textCount)  parts.push(`${textCount} text${textCount===1?"":"s"}`);
+    if (callCount)  parts.push(`${callCount} call${callCount===1?"":"s"}`);
+    const summary = parts.join(" + ");
+
     // Activity log
     setActivities(p => [{
       id: uid(), type: "campaign", direction: "outbound",
-      note: `📧 Enrolled in "${camp.name}" — ${entries.length} emails queued, starting ${enrollCampStart}`,
+      note: `📋 Enrolled in "${camp.name}" — ${summary} queued, starting ${enrollCampStart}`,
       createdAt: now(),
     }, ...p]);
+
     setShowEnrollCamp(false);
     setEnrollCampId("");
-    toast.success(`${entries.length} emails queued for ${lead.name} — "${camp.name}"`);
+    toast.success(`${summary} queued for ${lead.name} — "${camp.name}"`);
   };
 
   // ── AI LEAD RESPONDER ──────────────────────────────────────────────────────
@@ -1913,23 +1968,34 @@ Return STRICT JSON only (no markdown fences, no explanation):
                     <div style={{display:"flex",flexDirection:"column",gap:8}}>
                       <select className="select" value={enrollCampId} onChange={e=>setEnrollCampId(e.target.value)}>
                         <option value="">Choose a campaign...</option>
-                        {[...BUILT_IN_CAMPAIGNS, ...customCampaigns].map(c => <option key={c.id} value={c.id}>{c.name} ({c.steps?.length||0} emails)</option>)}
+                        {[...BUILT_IN_CAMPAIGNS, ...customCampaigns].map(c => {
+                          const counts = (c.steps||[]).reduce((acc,s)=>{const t=s.type||"email";acc[t]=(acc[t]||0)+1;return acc;},{});
+                          const breakdown = [counts.email&&`${counts.email}✉`, counts.text&&`${counts.text}📱`, counts.call&&`${counts.call}📞`].filter(Boolean).join(" ");
+                          return <option key={c.id} value={c.id}>{c.name} — {breakdown}</option>;
+                        })}
                       </select>
                       <div>
-                        <div className="label">Start Date (first email goes out this day)</div>
+                        <div className="label">Start Date (first touch goes out this day)</div>
                         <input className="input" type="date" value={enrollCampStart} onChange={e=>setEnrollCampStart(e.target.value)}/>
                       </div>
                       {enrollCampId && (() => {
                         const c = [...BUILT_IN_CAMPAIGNS,...customCampaigns].find(x=>x.id===enrollCampId);
-                        const last = c?.steps?.[c.steps.length-1];
+                        if (!c) return null;
+                        const counts = (c.steps||[]).reduce((acc,s)=>{const t=s.type||"email";acc[t]=(acc[t]||0)+1;return acc;},{});
+                        const last = c.steps?.[c.steps.length-1];
+                        const parts = [];
+                        if (counts.email) parts.push(`${counts.email} email${counts.email===1?"":"s"}`);
+                        if (counts.text)  parts.push(`${counts.text} text${counts.text===1?"":"s"}`);
+                        if (counts.call)  parts.push(`${counts.call} call${counts.call===1?"":"s"}`);
                         return (
-                          <div style={{fontSize:11,color:"#64748b"}}>
-                            Will queue {c?.steps?.length||0} email{c?.steps?.length===1?"":"s"} over {last?.day||0} day{last?.day===1?"":"s"}. Auto-sends via Gmail if Auto-Send is on (toggle in Email Campaigns).
+                          <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>
+                            {c.description}<br/>
+                            <strong>{parts.join(" + ")}</strong> over {last?.day||0} day{last?.day===1?"":"s"}. Texts/calls become tasks (with one-tap Send button on mobile). Emails auto-send via Gmail if Auto-Send is on.
                           </div>
                         );
                       })()}
                       <div style={{display:"flex",gap:8}}>
-                        <button className="btn btn-blue btn-sm" disabled={!enrollCampId} onClick={enrollInCampaign}><Mail size={12}/>Queue Emails</button>
+                        <button className="btn btn-blue btn-sm" disabled={!enrollCampId} onClick={enrollInCampaign}><Mail size={12}/>Enroll & Queue</button>
                         <button className="btn btn-ghost btn-sm" onClick={()=>{setShowEnrollCamp(false);setEnrollCampId("");}}>Cancel</button>
                       </div>
                     </div>
@@ -1937,29 +2003,49 @@ Return STRICT JSON only (no markdown fences, no explanation):
                 )}
               </div>
 
-              {/* Active campaigns this lead is enrolled in */}
+              {/* Active campaigns this lead is enrolled in (emails + tasks combined) */}
               {(() => {
-                const myCamps = emailQueue.filter(e => e.leadId === lead.id);
                 const grouped = {};
-                myCamps.forEach(e => { (grouped[e.campaignId] = grouped[e.campaignId] || {name:e.campaignName, total:0, sent:0, next:null}); grouped[e.campaignId].total++; if(e.sent) grouped[e.campaignId].sent++; else if(!grouped[e.campaignId].next || e.dueDate < grouped[e.campaignId].next) grouped[e.campaignId].next = e.dueDate; });
+                emailQueue.filter(e => e.leadId === lead.id && e.campaignId).forEach(e => {
+                  const g = grouped[e.campaignId] = grouped[e.campaignId] || {name:e.campaignName, emailDone:0, emailPending:0, taskDone:0, taskPending:0, next:null};
+                  if (e.sent) g.emailDone++; else {
+                    g.emailPending++;
+                    if (!g.next || e.dueDate < g.next) g.next = e.dueDate;
+                  }
+                });
+                tasks.filter(t => t.leadId === lead.id && t.campaignId).forEach(t => {
+                  const g = grouped[t.campaignId] = grouped[t.campaignId] || {name:t.campaignName, emailDone:0, emailPending:0, taskDone:0, taskPending:0, next:null};
+                  if (t.completed) g.taskDone++; else {
+                    g.taskPending++;
+                    if (!g.next || t.dueDate < g.next) g.next = t.dueDate;
+                  }
+                });
                 const list = Object.entries(grouped);
                 if (list.length === 0) return null;
                 return (
                   <div style={{marginBottom:14,padding:"10px 14px",background:"rgba(201,154,44,.06)",border:"1px solid rgba(201,154,44,.2)",borderRadius:10}}>
                     <div style={{fontSize:11,fontWeight:800,letterSpacing:".5px",textTransform:"uppercase",color:"#C99A2C",marginBottom:8}}>Active Drip Campaigns</div>
-                    {list.map(([id,c]) => (
-                      <div key={id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"4px 0"}}>
-                        <div>
-                          <div style={{fontWeight:700}}>{c.name}</div>
-                          <div style={{fontSize:11,opacity:.7}}>{c.sent} sent · {c.total - c.sent} pending{c.next?` · next ${c.next}`:""}</div>
+                    {list.map(([id,c]) => {
+                      const done = c.emailDone + c.taskDone;
+                      const pending = c.emailPending + c.taskPending;
+                      const parts = [];
+                      if (c.emailDone || c.emailPending) parts.push(`✉ ${c.emailDone}/${c.emailDone + c.emailPending}`);
+                      if (c.taskDone || c.taskPending)   parts.push(`📱📞 ${c.taskDone}/${c.taskDone + c.taskPending}`);
+                      return (
+                        <div key={id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"4px 0"}}>
+                          <div>
+                            <div style={{fontWeight:700}}>{c.name}</div>
+                            <div style={{fontSize:11,opacity:.7}}>{parts.join(" · ")} · {pending} pending{c.next?` · next ${c.next}`:""}</div>
+                          </div>
+                          <button className="btn btn-ghost btn-xs" onClick={()=>{
+                            if(!window.confirm(`Stop the "${c.name}" drip for ${lead.name}? Pending emails and tasks will be removed.`)) return;
+                            setEmailQueue(p => p.filter(e => !(e.leadId === lead.id && e.campaignId === id && !e.sent)));
+                            setTasks(p => p.filter(t => !(t.leadId === lead.id && t.campaignId === id && !t.completed)));
+                            toast.info("Stopped — pending emails and tasks removed");
+                          }}><X size={11}/>Stop</button>
                         </div>
-                        <button className="btn btn-ghost btn-xs" onClick={()=>{
-                          if(!window.confirm(`Stop the "${c.name}" drip for ${lead.name}? Pending emails will be removed.`)) return;
-                          setEmailQueue(p => p.filter(e => !(e.leadId === lead.id && e.campaignId === id && !e.sent)));
-                          toast.info("Stopped — pending emails removed");
-                        }}><X size={11}/>Stop</button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })()}
@@ -5927,6 +6013,15 @@ const TaskManager = ({setPage,toast}) => {
                   </div>
                 </div>
                 <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  {!t.completed && t.smsBody && lead?.phone && (
+                    <button className="btn btn-ghost btn-xs" title="Open SMS pre-filled (and copy to clipboard)" onClick={()=>{
+                      const phone = (lead.phone||"").replace(/\D/g,"");
+                      const body = t.smsBody || t.notes || "";
+                      navigator.clipboard?.writeText(body).catch(()=>{});
+                      window.location.href = `sms:${phone}?body=${encodeURIComponent(body)}`;
+                      toast.info("SMS opened — text also copied to clipboard");
+                    }}>📱 Send</button>
+                  )}
                   {!t.completed&&<button className="btn btn-blue btn-xs" onClick={()=>complete(t.id)}><Check size={11}/>Done</button>}
                   <button style={{background:"none",border:"none",cursor:"pointer",color:"#374151",padding:4}} onClick={()=>del(t.id)}><Trash2 size={13}/></button>
                 </div>
