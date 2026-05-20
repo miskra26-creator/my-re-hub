@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { supabase } from './supabase';
 import { useLS, useIDB } from './cloudHooks';
+import { useLeadsCloud } from './useLeadsCloud';
 import VideoAuto from './VideoAuto';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
@@ -887,7 +888,7 @@ const PageHeader = ({title,sub,action,setPage,parent}) => (
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 const Dashboard = ({setPage,toast}) => {
   const [posts] = useLS("posts",[]);
-  const [leads] = useIDB("leads",[]);
+  const [leads] = useLeadsCloud();
   const [txs] = useLS("transactions",[]);
   const [commissions] = useLS("commissions",[]);
   const [showings] = useLS("showings",[]);
@@ -2436,7 +2437,7 @@ const QuickCallLog = ({lead, onClose, onSave, toast}) => {
 
 // ─── LEAD TRACKER ─────────────────────────────────────────────────────────────
 const LeadTracker = ({setPage,toast}) => {
-  const [leads,setLeads,leadsLoaded] = useIDB("leads",[]);
+  const [leads,setLeads,leadsLoaded] = useLeadsCloud();
   const [filterStatus,setFilterStatus] = useState("all");
   const [filterType,setFilterType] = useState("all");
   const [form,setForm] = useState({name:"",email:"",phone:"",type:"Buyer",status:"warm",budget:"",area:"",notes:""});
@@ -3755,7 +3756,7 @@ const CMATool = ({setPage,toast}) => {
 const Analytics = ({setPage,toast}) => {
   const [analytics,setAnalytics] = useLS("re_analytics",{});
   const [posts] = useLS("posts",[]);
-  const [leads] = useIDB("leads",[]);
+  const [leads] = useLeadsCloud();
   const [editing,setEditing] = useState(null);
   const [form,setForm] = useState({});
 
@@ -5142,7 +5143,7 @@ const Integrations = ({setPage,toast}) => {
   const upd = (section,field,val) => setSettings(p=>({...p,[section]:{...(p[section]||{}),[field]:val}}));
 
   const [fbSyncing,setFbSyncing] = useState(false);
-  const [leads,setLeads] = useIDB("leads",[]);
+  const [leads,setLeads] = useLeadsCloud();
 
   const importFBLeads = async () => {
     const meta = settings.meta || {};
@@ -5602,7 +5603,7 @@ async function gmailSendMessage(token, {to, subject, body, fromName}){
 //   2. DRIP AUTO-SEND — fire any queued campaign emails whose dueDate has arrived
 //      (only when gmail_autosend === 'on' in localStorage).
 const GmailSyncWorker = ({notify, toast}) => {
-  const [leads]=useIDB("leads",[]);
+  const [leads]=useLeadsCloud();
   useEffect(()=>{
     const autoSendDrips=async(token)=>{
       if (localStorage.getItem('gmail_autosend') !== 'on') return 0;
@@ -6092,7 +6093,7 @@ const STAGE_COLORS_MAP = {
 const BOARD_STAGES = ["Hot Prospect","Contact","Buyer","Seller","Casually Browsing","Nurture 3-6 Months","Nurture 1+ Year","Buy/Sell Nurture","Pending","Past Client","Closed"];
 
 const PipelineBoard = ({setPage,toast}) => {
-  const [leads,setLeads] = useIDB("leads",[]);
+  const [leads,setLeads] = useLeadsCloud();
   const [dragId,setDragId] = useState(null);
   const [dragOver,setDragOver] = useState(null);
   const [selectedLead,setSelectedLead] = useState(null);
@@ -6170,7 +6171,7 @@ const PipelineBoard = ({setPage,toast}) => {
 // ─── TASK MANAGER ─────────────────────────────────────────────────────────────
 const TaskManager = ({setPage,toast}) => {
   const [tasks,setTasks] = useLS("tasks",[]);
-  const [leads] = useIDB("leads",[]);
+  const [leads] = useLeadsCloud();
   const [tab,setTab] = useState("today");
   const [showAdd,setShowAdd] = useState(false);
   const [f,setF] = useState({title:"",type:"Call",leadId:"",dueDate:new Date().toISOString().slice(0,10),notes:""});
@@ -6319,7 +6320,7 @@ const TaskManager = ({setPage,toast}) => {
 const ActionPlans = ({setPage,toast}) => {
   const [customPlans,setCustomPlans] = useLS("action_plans",[]);
   const [tasks,setTasks] = useLS("tasks",[]);
-  const [leads] = useIDB("leads",[]);
+  const [leads] = useLeadsCloud();
   const [tab,setTab] = useState("plans");
   const [expanded,setExpanded] = useState(null);
   const [applyModal,setApplyModal] = useState(null);
@@ -6484,7 +6485,7 @@ const ActionPlans = ({setPage,toast}) => {
 const Campaigns = ({setPage,toast}) => {
   const [queue,setQueue] = useLS("email_queue",[]);
   const [customCamps,setCustomCamps] = useLS("custom_campaigns",[]);
-  const [leads] = useIDB("leads",[]);
+  const [leads] = useLeadsCloud();
   const [tab,setTab] = useState("campaigns");
   const [enrollModal,setEnrollModal] = useState(null);
   const [enrollSearch,setEnrollSearch] = useState("");
@@ -6800,7 +6801,7 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
   const [selected,setSelected] = useState([]);
   const [tab,setTab] = useState("inbox"); // inbox | setup | test
   // eslint-disable-next-line no-unused-vars
-  const [leads,setLeads] = useIDB("leads",[]);
+  const [leads,setLeads] = useLeadsCloud();
 
   const fetchInbox = useCallback(async()=>{
     try {
