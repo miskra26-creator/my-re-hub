@@ -13,16 +13,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'FUB_API_KEY not configured' });
   }
 
-  // Build the target URL
-  // req.query.path is an array like ['people'] or ['people', '123', 'notes']
-  const pathSegments = Array.isArray(req.query.path) ? req.query.path : [req.query.path];
-  const fubPath = pathSegments.join('/');
+  // Parse the URL directly to avoid relying on Vercel's req.query.path
+  // (which can be empty depending on how the route is invoked). Splits
+  // "/api/fub/people/123?limit=10" into path="people/123" + query="limit=10".
+  const rawUrl = req.url || '';
+  const [pathOnly, rawQuery = ''] = rawUrl.split('?');
+  const fubPath = pathOnly.replace(/^\/api\/fub\/?/, '');
 
-  // Forward query string (minus the 'path' param itself)
-  const query = { ...req.query };
-  delete query.path;
-  const qs = new URLSearchParams(query).toString();
-  const targetUrl = `https://api.followupboss.com/v1/${fubPath}${qs ? '?' + qs : ''}`;
+  if (!fubPath) {
+    return res.status(400).json({ error: 'Missing FUB path. Use e.g. /api/fub/people' });
+  }
+
+  const targetUrl = `https://api.followupboss.com/v1/${fubPath}${rawQuery ? '?' + rawQuery : ''}`;
 
   try {
     const fetchOptions = {
