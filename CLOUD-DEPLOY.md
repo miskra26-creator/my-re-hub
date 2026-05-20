@@ -75,6 +75,7 @@
    | `REACT_APP_SUPABASE_URL` | (your Supabase URL from Step 1) |
    | `REACT_APP_SUPABASE_ANON_KEY` | (your anon key from Step 1) |
    | `FUB_API_KEY` | (your FUB API key) |
+   | `ANTHROPIC_API_KEY` | (your Anthropic key from console.anthropic.com — required for ALL AI features) |
 6. Click **"Deploy"**
 7. Wait ~2 minutes
 8. Vercel gives you a URL like: `re-hub-monica.vercel.app`

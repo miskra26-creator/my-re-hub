@@ -36,3 +36,8 @@ leads-inbox.json
 
 # Claude Code launch config (per-machine)
 .claude/launch.json
+
+# Local voice clone server — Python venv + cached models (~3-4 GB, per-machine)
+/tools/voice-clone-server/venv/
+/tools/voice-clone-server/__pycache__/
+/tools/voice-clone-server/*.pyc

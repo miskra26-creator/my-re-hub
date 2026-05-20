@@ -7,8 +7,10 @@ import { useLS, useIDB } from './cloudHooks';
 import { cleanAudio, transcodeWebMtoMP4, trimVideo } from './audioCleaner';
 
 // Local copy of callClaude — same behavior as the one in App.js.
+// Goes through /api/claude/messages (Express in dev, Vercel function in prod)
+// which injects ANTHROPIC_API_KEY server-side.
 const callClaudeLocal = async (prompt, sys = '', tokens = 1500) => {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+  const r = await fetch('/api/claude/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

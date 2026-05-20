@@ -2,6 +2,12 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from './supabase';
 import { useLS, useIDB } from './cloudHooks';
 import VideoAuto from './VideoAuto';
+import AIStudio from './AIStudio';
+import AdComposer from './AdComposer';
+import GoogleBusiness from './GoogleBusiness';
+import ViralStudio from './ViralStudio';
+import InfluencerWatch from './InfluencerWatch';
+import Finances from './Finances';
 import {
   Sparkles, MessageSquare, Video, Film, Calendar, FolderOpen, Heart,
   Share2, CalendarDays, BarChart3, Search, RefreshCw, Layout, FlaskConical,
@@ -476,10 +482,14 @@ const BUILT_IN_CAMPAIGNS = [
 ];
 
 const NAV = [
+  { id:"ad-composer",         label:"Lead Generation",     icon:Sparkles },
   { section:"CREATE" },
   { id:"listing-writer",      label:"AI Listing Writer",    icon:FileText },
   { id:"social-studio",       label:"Social Caption Studio",icon:MessageSquare },
   { id:"video-studio",        label:"Auto Video Maker",     icon:Video },
+  { id:"ai-studio",           label:"AI Studio",            icon:Wand2 },
+  { id:"viral-studio",        label:"Viral Studio",         icon:TrendingUp },
+  { id:"influencer-watch",    label:"Influencer Watch",    icon:Users },
   { id:"video-script",        label:"Video Script Writer",  icon:Film },
   { id:"market-report",       label:"Market Report Builder",icon:BarChart3 },
   { section:"GROW" },
@@ -493,12 +503,14 @@ const NAV = [
   { id:"soi-manager",         label:"SOI Manager",         icon:Heart },
   { id:"transactions",        label:"Transaction Manager", icon:Key },
   { id:"commissions",         label:"Commission Tracker",  icon:DollarSign },
+  { id:"finances",            label:"Finances",            icon:Briefcase },
   { section:"LISTINGS" },
   { id:"listing-tracker",     label:"Listing Tracker",     icon:Home },
   { id:"realcomp-mls",        label:"Realcomp MLS",        icon:Building },
   { section:"CONTENT" },
   { id:"scheduler",           label:"Content Scheduler",   icon:Calendar },
   { id:"social-connect",      label:"Social Connect",      icon:Share2 },
+  { id:"google-business",     label:"Google Business",     icon:Globe },
   { id:"media-library",       label:"Media Library",       icon:FolderOpen },
   { id:"showing-calendar",    label:"Showing Calendar",    icon:CalendarDays },
   { id:"client-templates",    label:"Client Templates",    icon:Heart },
@@ -548,7 +560,7 @@ const idbSet = (key, val) => new Promise(resolve => {
 // useLS and useIDB are imported from cloudHooks.js (Supabase-backed)
 
 const callClaude = async (prompt, sys="", tokens=1500) => {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await fetch("/api/claude/messages", {
     method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:tokens, ...(sys?{system:sys}:{}), messages:[{role:"user",content:prompt}] })
   });
@@ -646,6 +658,7 @@ const Dashboard = ({setPage,toast}) => {
   const [profile] = useLS("re_profile",{name:"Monica Iskra"});
   const [goals] = useLS("commission_goals",{target:""});
   const [tasks,setTasks] = useLS("tasks",[]);
+  const [adCampaigns] = useLS("ad_campaigns",[]);
 
   const now2 = new Date();
   const thisYear = now2.getFullYear();
@@ -666,6 +679,23 @@ const Dashboard = ({setPage,toast}) => {
   const weekActivity = prospecting.filter(p=>new Date(p.date)>=thisWeekStart);
   const weekCalls = weekActivity.reduce((s,p)=>s+(Number(p.calls)||0),0);
   const weekAppts = weekActivity.reduce((s,p)=>s+(Number(p.appointments)||0),0);
+
+  // Lead Generation stats
+  const totalCampaigns = adCampaigns.length;
+  const draftCampaigns = adCampaigns.filter(c=>c.status==="draft").length;
+  const launchedCampaigns = adCampaigns.filter(c=>c.status==="launched").length;
+  const thisMonthLeads = leads.filter(l=>{
+    const d = new Date(l.createdAt || l.receivedAt || 0);
+    return d.getFullYear()===thisYear && d.getMonth()===thisMonth;
+  });
+  const adSourceLeads = thisMonthLeads.filter(l=>{
+    const src = (l.source||"").toLowerCase();
+    return src.includes("facebook") || src.includes("instagram") || src.includes("meta");
+  }).length;
+  const totalMonthBudget = adCampaigns
+    .filter(c=>c.status==="launched")
+    .reduce((s,c)=>s+(Number(c.budget?.totalSpend)||0),0);
+  const costPerLead = adSourceLeads > 0 ? Math.round(totalMonthBudget / adSourceLeads) : null;
 
   // Funnel
   const funnelStages = [
@@ -711,7 +741,7 @@ const Dashboard = ({setPage,toast}) => {
       </div>
 
       {/* KPI Row */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:24}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:16}}>
         {[
           {label:"GCI Received",val:`$${Math.round(gciReceived).toLocaleString()}`,sub:`+$${Math.round(gciPipeline).toLocaleString()} pipeline`,icon:DollarSign,cls:"stat-card-3",page:"commissions"},
           {label:"Active Leads",val:hotLeads,sub:`${pendingLeads} pending`,icon:UserCheck,cls:"stat-card-1",page:"lead-tracker"},
@@ -726,6 +756,56 @@ const Dashboard = ({setPage,toast}) => {
             <div className="stat-icon"><s.icon size={36}/></div>
           </div>
         ))}
+      </div>
+
+      {/* Lead Generation featured card */}
+      <div
+        className="glass-card"
+        style={{
+          marginBottom:24,
+          padding:20,
+          background:'linear-gradient(135deg, rgba(16,185,129,.10), rgba(126,184,247,.06))',
+          borderColor:'rgba(16,185,129,.25)',
+          cursor:'pointer'
+        }}
+        onClick={()=>setPage("ad-composer")}
+      >
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:240}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <Sparkles size={20} color="#10b981"/>
+              <div style={{fontFamily:"'DM Serif Display',serif",fontSize:20,fontWeight:900,color:"#fff"}}>Lead Generation</div>
+            </div>
+            <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>
+              AI-built Facebook & Instagram ad campaigns. Launch, manage, and track your lead-gen ads from one place.
+            </div>
+          </div>
+          <button className="btn btn-blue" onClick={(e)=>{e.stopPropagation();setPage("ad-composer");}}>
+            <Sparkles size={13}/> {totalCampaigns===0?"Build your first campaign":"Manage campaigns"}
+          </button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginTop:18,paddingTop:16,borderTop:"1px solid rgba(255,255,255,.06)"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:2}}>Total Campaigns</div>
+            <div style={{fontSize:24,fontWeight:900,color:"#fff",fontFamily:"'DM Serif Display',serif"}}>{totalCampaigns}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>{draftCampaigns} draft · {launchedCampaigns} live</div>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:2}}>Leads This Month</div>
+            <div style={{fontSize:24,fontWeight:900,color:"#10b981",fontFamily:"'DM Serif Display',serif"}}>{adSourceLeads}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>from FB/IG ads</div>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:2}}>Ad Spend</div>
+            <div style={{fontSize:24,fontWeight:900,color:"#fff",fontFamily:"'DM Serif Display',serif"}}>${totalMonthBudget||0}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>budgeted this month</div>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".5px",marginBottom:2}}>Cost / Lead</div>
+            <div style={{fontSize:24,fontWeight:900,color:"#a78bfa",fontFamily:"'DM Serif Display',serif"}}>{costPerLead?`$${costPerLead}`:"—"}</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>{costPerLead?"actual":"need launched campaign"}</div>
+          </div>
+        </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:16,marginBottom:16}}>
@@ -1389,6 +1469,10 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [showApplyPlan, setShowApplyPlan] = useState(false);
   const [applyPlanId, setApplyPlanId] = useState("");
   const [applyPlanStart, setApplyPlanStart] = useState(new Date().toISOString().slice(0,10));
+  // AI Lead Responder — drafts a personalized email reply via Claude, sends via Gmail.
+  const [aiDraft, setAiDraft] = useState(null); // null | {busy, subject, body, error, sending}
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "", phone: "", email: "" });
+  const [agentVoice] = useLS("agent_voice", "");
 
   const leadTasks = tasks.filter(t=>t.leadId===lead.id).sort((a,b)=>a.completed-b.completed||a.dueDate>b.dueDate?1:-1);
   const openTasks = leadTasks.filter(t=>!t.completed);
@@ -1414,6 +1498,101 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
     setTasks(p=>[...p,...newTasks]);
     setShowApplyPlan(false);
     toast.success(`${newTasks.length} tasks created from "${plan.name}"`);
+  };
+
+  // ── AI LEAD RESPONDER ──────────────────────────────────────────────────────
+  // Draft a personalized email reply for this lead via Claude.
+  const draftAIResponse = async () => {
+    if (!lead.email) return toast.error(`${lead.name} has no email address — add one first`);
+    setAiDraft({ busy: true, subject: "", body: "", error: null, sending: false });
+    try {
+      const firstName = (lead.name || "").split(" ")[0] || "there";
+      const recentActivities = activities.slice(0, 5).map(a => `- ${a.type}: ${a.note}`).join("\n");
+      const sys = `You are a senior real estate agent's assistant writing the first email reply to a NEW LEAD. The agent is ${profile.name || "Monica Iskra"}${profile.brokerage ? ` at ${profile.brokerage}` : ""}. ${agentVoice ? `Brand voice: ${agentVoice}.` : "Warm, direct, helpful, never pushy or salesy."} Write to a single specific person; never start with generic openers like "Thank you for your interest" — be human.`;
+      const prompt = `Draft an email response to this lead.
+
+LEAD DETAILS:
+- Name: ${lead.name}
+- Email: ${lead.email}
+- Source: ${lead.source || "unknown"}
+- Type: ${lead.type || "—"}
+- Status: ${lead.status || "—"}
+- Area: ${lead.area || "—"}
+- Budget: ${lead.budget ? `$${Number(lead.budget).toLocaleString()}` : "—"}
+- Property they inquired about: ${lead.address || "—"}
+- Their message/notes: ${lead.notes || "(none)"}
+${recentActivities ? `- Recent activity log:\n${recentActivities}` : ""}
+
+WRITE:
+- A short, specific subject line (under 60 chars; NOT "RE: your inquiry")
+- A 4-6 sentence body in plain text, no markdown, no signoff variations beyond "${profile.name?.split(" ")[0] || "Monica"}":
+  - Open by addressing ${firstName} by first name
+  - Reference SPECIFICALLY what they inquired about (address/area/source if known)
+  - Provide ONE piece of immediate value (a market insight, a question that helps qualify them, a confirmation you'll send listings, etc.)
+  - One soft CTA: ask their best time for a 10-min call, or offer to send 3 hand-picked listings
+  - Sign with "${profile.name?.split(" ")[0] || "Monica"}"
+
+Return STRICT JSON only (no markdown fences, no explanation):
+{
+  "subject": "...",
+  "body": "..."
+}`;
+
+      const r = await fetch("/api/claude/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 800,
+          system: sys,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error.message || "AI proxy error");
+      const text = (d.content?.[0]?.text || "").trim();
+      const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+      const parsed = JSON.parse(jsonText);
+      setAiDraft({ busy: false, subject: parsed.subject || "", body: parsed.body || "", error: null, sending: false });
+    } catch (e) {
+      console.error("[AI draft]", e);
+      setAiDraft({ busy: false, subject: "", body: "", error: e.message, sending: false });
+      toast.error(`AI draft failed: ${e.message}`);
+    }
+  };
+
+  const sendAIDraft = async () => {
+    if (!aiDraft || !aiDraft.subject || !aiDraft.body) return;
+    const token = localStorage.getItem("gmail_token");
+    const expiry = parseInt(localStorage.getItem("gmail_token_expiry") || "0");
+    if (!token || Date.now() > expiry) {
+      return toast.error("Connect Gmail in Settings first (Settings → Integrations → Gmail).");
+    }
+    setAiDraft(d => ({ ...d, sending: true }));
+    try {
+      const msgId = await gmailSendMessage(token, {
+        to: lead.email,
+        subject: aiDraft.subject,
+        body: aiDraft.body,
+        fromName: profile.name || "",
+      });
+      // Log activity on the lead's timeline
+      const entry = {
+        id: uid(),
+        type: "gmail",
+        direction: "outbound",
+        subject: aiDraft.subject,
+        note: `📤 Sent AI-drafted reply: "${aiDraft.subject}"`,
+        gmailId: msgId,
+        createdAt: now(),
+      };
+      setActivities(p => [entry, ...p]);
+      setAiDraft(null);
+      toast.success("AI reply sent via Gmail — activity logged");
+    } catch (e) {
+      setAiDraft(d => ({ ...d, sending: false, error: e.message }));
+      toast.error(`Send failed: ${e.message}`);
+    }
   };
 
   const logActivity = () => {
@@ -1512,6 +1691,64 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
               </div>
             )}
           </div>
+
+          {/* AI Lead Responder */}
+          {lead.email && (
+            <div style={{padding:"12px 0",borderBottom:"1px solid rgba(255,255,255,.06)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 14px",borderRadius:10,background:"linear-gradient(135deg, rgba(167,139,250,.10), rgba(126,184,247,.06))",border:"1px solid rgba(167,139,250,.25)"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                    <Sparkles size={14} color="#a78bfa"/>
+                    <span style={{fontSize:13,fontWeight:800,color:"#fff"}}>AI Lead Responder</span>
+                  </div>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>Draft a personalized email reply based on this lead's source, status, and notes — send via Gmail in one click.</div>
+                </div>
+                <button className="btn btn-blue btn-sm" disabled={aiDraft?.busy} onClick={draftAIResponse}>
+                  {aiDraft?.busy ? <><Spinner s={11}/>Drafting…</> : <><Wand2 size={11}/>Draft AI Reply</>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* AI Draft Modal */}
+          {aiDraft && !aiDraft.busy && (
+            <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>!aiDraft.sending && setAiDraft(null)}>
+              <div style={{background:"#0d1117",borderRadius:16,padding:"22px 24px",maxWidth:580,width:"92%",maxHeight:"90vh",overflowY:"auto",border:"1px solid rgba(255,255,255,.1)"}} onClick={e=>e.stopPropagation()}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <Sparkles size={16} color="#a78bfa"/>
+                    <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>AI-drafted reply to {lead.name}</span>
+                  </div>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>!aiDraft.sending && setAiDraft(null)}><X size={14}/></button>
+                </div>
+                {aiDraft.error && (
+                  <div style={{padding:"10px 12px",background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.25)",borderRadius:8,marginBottom:12,fontSize:12,color:"#f87171"}}>⚠ {aiDraft.error}</div>
+                )}
+                <div style={{marginBottom:12}}>
+                  <div className="label" style={{marginBottom:5}}>To</div>
+                  <div style={{fontSize:13,color:"#cbd5e1",padding:"8px 10px",background:"rgba(255,255,255,.03)",borderRadius:8,fontFamily:"monospace"}}>{lead.email}</div>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <div className="label" style={{marginBottom:5}}>Subject</div>
+                  <input className="input" value={aiDraft.subject} onChange={e=>setAiDraft(d=>({...d,subject:e.target.value}))} disabled={aiDraft.sending}/>
+                </div>
+                <div style={{marginBottom:14}}>
+                  <div className="label" style={{marginBottom:5}}>Body <span style={{fontWeight:500,color:"#475569"}}>(edit anything that doesn't sound like you)</span></div>
+                  <textarea className="textarea" style={{minHeight:220,fontFamily:"'DM Sans',sans-serif"}} value={aiDraft.body} onChange={e=>setAiDraft(d=>({...d,body:e.target.value}))} disabled={aiDraft.sending}/>
+                </div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button className="btn btn-blue" disabled={aiDraft.sending||!aiDraft.subject||!aiDraft.body} onClick={sendAIDraft} style={{flex:1,minWidth:140}}>
+                    {aiDraft.sending ? <><Spinner s={12}/>Sending…</> : <><Send size={12}/>Send via Gmail</>}
+                  </button>
+                  <button className="btn btn-ghost" disabled={aiDraft.sending} onClick={draftAIResponse}><RefreshCw size={12}/>Re-draft</button>
+                  <button className="btn btn-ghost" disabled={aiDraft.sending} onClick={()=>setAiDraft(null)}>Cancel</button>
+                </div>
+                <div style={{fontSize:11,color:"#64748b",marginTop:10,lineHeight:1.5}}>
+                  Sends from your Gmail account. Reply goes back to your inbox where the existing Gmail sync logs it on this contact automatically.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tags */}
           <div style={{padding:"12px 0",borderBottom:"1px solid rgba(255,255,255,.06)"}}>
@@ -1757,7 +1994,7 @@ const QuickCallLog = ({lead, onClose, onSave, toast}) => {
 
 // ─── LEAD TRACKER ─────────────────────────────────────────────────────────────
 const LeadTracker = ({setPage,toast}) => {
-  const [leads,setLeads] = useIDB("leads",[]);
+  const [leads,setLeads,leadsLoaded] = useIDB("leads",[]);
   const [filterStatus,setFilterStatus] = useState("all");
   const [filterType,setFilterType] = useState("all");
   const [form,setForm] = useState({name:"",email:"",phone:"",type:"Buyer",status:"warm",budget:"",area:"",notes:""});
@@ -1810,9 +2047,21 @@ const LeadTracker = ({setPage,toast}) => {
   const syncFUB = async (silent=false) => {
     setSyncing(true);
     try {
+      // Pull the FUB key the user entered on the Integrations page so the
+      // proxy can attach it as the Authorization header. Falls back to the
+      // build-time env var if present.
+      const fubKey = (JSON.parse(localStorage.getItem("integrations")||"{}")?.fub?.apiKey)
+                  || process.env.REACT_APP_FUB_API_KEY
+                  || "";
+      if(!fubKey) {
+        if(!silent) toast.error("No FUB API key — add it in Integrations → Follow Up Boss");
+        setSyncing(false);
+        return;
+      }
+      const fetchOpts = { headers: { "x-fub-key": fubKey } };
       let all = [], next = "/api/fub/people?limit=100";
       while(next) {
-        const res = await fetch(next);
+        const res = await fetch(next, fetchOpts);
         if(!res.ok) {
           const errText = await res.text();
           throw new Error(`FUB ${res.status}: ${errText.slice(0,200)}`);
@@ -1847,6 +2096,26 @@ const LeadTracker = ({setPage,toast}) => {
     }
     setSyncing(false);
   };
+
+  // Auto-sync FUB on mount, every 10 min, and when the tab regains focus.
+  // Silent (no toast) — runs in background. Debounced to once per minute so
+  // bouncing between sidebar pages doesn't hammer the API.
+  useEffect(() => {
+    let lastFireAt = 0;
+    const maybeSync = () => {
+      if (Date.now() - lastFireAt < 60000) return;
+      lastFireAt = Date.now();
+      syncFUB(true);
+    };
+    maybeSync();
+    const interval = setInterval(maybeSync, 10 * 60 * 1000);
+    window.addEventListener('focus', maybeSync);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', maybeSync);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   const today = new Date().toISOString().slice(0,10);
@@ -1923,11 +2192,234 @@ const LeadTracker = ({setPage,toast}) => {
   };
 
   return (
-    <div className="page-content">
+    <div className="page-content lead-tracker-v2">
+      <style>{`
+        @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800,900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        .lead-tracker-v2 {
+          background: linear-gradient(180deg, #FAF6EE 0%, #F0E7D2 100%);
+          margin: -28px -32px;
+          padding: 32px 36px 60px;
+          min-height: 100vh;
+          position: relative;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .lead-tracker-v2 * { font-family: inherit; }
+        .lead-tracker-v2 .page-title,
+        .lead-tracker-v2 [style*="DM Serif Display"],
+        .lead-tracker-v2 .empty-state h3 {
+          font-family: 'Cabinet Grotesk', 'Inter', sans-serif !important;
+          font-weight: 800 !important;
+          letter-spacing: -.025em !important;
+        }
+
+        /* Smart-list label + pills */
+        .lead-tracker-v2 .lt-smart-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: #6B5D4B;
+          text-transform: uppercase;
+          letter-spacing: 1.2px;
+          margin-right: 6px;
+        }
+        .lead-tracker-v2 .lt-smart-pill {
+          padding: 6px 14px;
+          border-radius: 99px;
+          font-size: 12.5px;
+          font-weight: 600;
+          cursor: pointer;
+          border: 1px solid rgba(63,53,40,.15);
+          background: #FFFFFF;
+          color: #2C2418;
+          transition: all .15s;
+          font-family: 'Inter', sans-serif;
+        }
+        .lead-tracker-v2 .lt-smart-pill:hover {
+          background: #FFF9EC;
+          border-color: #C99A2C;
+          color: #2C2418;
+          transform: translateY(-1px);
+        }
+        .lead-tracker-v2 .lt-smart-pill-dashed {
+          background: transparent;
+          border: 1px dashed rgba(63,53,40,.3);
+          color: #6B5D4B;
+        }
+        .lead-tracker-v2 .lt-smart-pill-dashed:hover {
+          background: rgba(255,255,255,.5);
+          color: #2C2418;
+        }
+        .lead-tracker-v2 .lt-smart-x {
+          margin-left: 6px;
+          opacity: .5;
+          font-size: 14px;
+        }
+        .lead-tracker-v2 .lt-smart-x:hover { opacity: 1; color: #DC2626; }
+
+        .lead-tracker-v2::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(ellipse 50% 30% at 90% 0%, rgba(201,154,44,.10) 0%, transparent 60%),
+            radial-gradient(ellipse 40% 25% at 0% 100%, rgba(26,90,160,.06) 0%, transparent 60%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .lead-tracker-v2 > * { position: relative; z-index: 1; }
+
+        /* Typography reset — make most text dark on light bg */
+        .lead-tracker-v2, .lead-tracker-v2 div, .lead-tracker-v2 span,
+        .lead-tracker-v2 h1, .lead-tracker-v2 h2, .lead-tracker-v2 h3,
+        .lead-tracker-v2 p, .lead-tracker-v2 button, .lead-tracker-v2 label {
+          color: #3F3528;
+        }
+
+        /* Page header text overrides */
+        .lead-tracker-v2 .page-title { color: #2C2418 !important; font-size: 30px; letter-spacing: -.5px; }
+        .lead-tracker-v2 .page-sub { color: #8B7A5F !important; font-size: 13px; }
+        .lead-tracker-v2 .btn-back {
+          background: rgba(255,255,255,.7) !important;
+          border: 1px solid rgba(26,90,160,.18) !important;
+          color: #2C2418 !important;
+        }
+        .lead-tracker-v2 .btn-back:hover { background: #fff !important; }
+
+        /* Cards — cream paper with soft warm shadow */
+        .lead-tracker-v2 .glass-card,
+        .lead-tracker-v2 .lead-card {
+          background: #FFFFFF !important;
+          border: 1px solid rgba(26,90,160,.10) !important;
+          box-shadow: 0 2px 14px rgba(26,90,160,.06), 0 1px 3px rgba(0,0,0,.04) !important;
+          border-radius: 14px !important;
+          backdrop-filter: none !important;
+          padding: 18px 20px;
+        }
+        .lead-tracker-v2 .lead-card { padding: 16px 20px; transition: transform .15s, box-shadow .15s; }
+        .lead-tracker-v2 .lead-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 24px rgba(26,90,160,.14), 0 2px 6px rgba(0,0,0,.06) !important;
+        }
+        .lead-tracker-v2 .lead-card.lead-status-hot { border-left: 4px solid #DC2626 !important; }
+        .lead-tracker-v2 .lead-card.lead-status-warm { border-left: 4px solid #1A5AA0 !important; }
+        .lead-tracker-v2 .lead-card.lead-status-cold { border-left: 4px solid #D97706 !important; }
+        .lead-tracker-v2 .lead-card.lead-status-closed { border-left: 4px solid #16A34A !important; }
+
+        /* Lead name (the DM Serif inline style is dark grey on dark bg) — force dark text */
+        .lead-tracker-v2 .lead-card [style*="DM Serif Display"] {
+          color: #2C2418 !important;
+          font-size: 18px !important;
+        }
+
+        /* Status badges — vibrant solid pills */
+        .lead-tracker-v2 .badge {
+          padding: 5px 11px !important;
+          border-radius: 99px !important;
+          font-size: 10.5px !important;
+          font-weight: 800 !important;
+          letter-spacing: .3px !important;
+          text-transform: uppercase !important;
+          color: #fff !important;
+          display: inline-flex;
+          align-items: center;
+          line-height: 1;
+        }
+        .lead-tracker-v2 .badge-red { background: #DC2626 !important; }
+        .lead-tracker-v2 .badge-blue { background: #1A5AA0 !important; }
+        .lead-tracker-v2 .badge-gold { background: #C99A2C !important; }
+        .lead-tracker-v2 .badge-green { background: #16A34A !important; }
+        .lead-tracker-v2 .badge-gray { background: #6B7280 !important; }
+
+        /* Inputs / selects — bright white on cream */
+        .lead-tracker-v2 .input,
+        .lead-tracker-v2 .select {
+          background: #FFFFFF !important;
+          border: 1.5px solid rgba(26,90,160,.18) !important;
+          color: #2C2418 !important;
+          font-weight: 600 !important;
+        }
+        .lead-tracker-v2 .input::placeholder { color: #98A2B5 !important; opacity: 1 !important; }
+        .lead-tracker-v2 .input:focus,
+        .lead-tracker-v2 .select:focus {
+          border-color: #1A5AA0 !important;
+          box-shadow: 0 0 0 3px rgba(26,90,160,.15) !important;
+          outline: none !important;
+        }
+        .lead-tracker-v2 .label {
+          color: #6B5D4B !important;
+          font-weight: 700 !important;
+          font-size: 11px !important;
+          letter-spacing: .3px !important;
+          text-transform: uppercase !important;
+        }
+
+        /* Buttons */
+        .lead-tracker-v2 .btn-ghost {
+          background: rgba(255,255,255,.85) !important;
+          color: #2C2418 !important;
+          border: 1px solid rgba(26,90,160,.18) !important;
+          font-weight: 700 !important;
+        }
+        .lead-tracker-v2 .btn-ghost:hover { background: #fff !important; border-color: rgba(26,90,160,.35) !important; }
+        .lead-tracker-v2 .btn-blue {
+          background: linear-gradient(135deg,#1A5AA0,#2D7DD2) !important;
+          color: #fff !important;
+          font-weight: 700 !important;
+          box-shadow: 0 3px 12px rgba(26,90,160,.32) !important;
+        }
+        .lead-tracker-v2 .btn-blue:hover { box-shadow: 0 6px 20px rgba(26,90,160,.45) !important; transform: translateY(-1px); }
+        .lead-tracker-v2 .btn-danger {
+          background: rgba(220,38,38,.08) !important;
+          color: #DC2626 !important;
+          border: 1px solid rgba(220,38,38,.22) !important;
+        }
+        .lead-tracker-v2 .btn-danger:hover { background: rgba(220,38,38,.15) !important; }
+
+        /* Empty state */
+        .lead-tracker-v2 .empty-state { color: #8B7A5F !important; padding: 50px 24px !important; }
+        .lead-tracker-v2 .empty-state h3 { color: #2C2418 !important; font-size: 17px !important; }
+        .lead-tracker-v2 .empty-state p { color: #8B7A5F !important; }
+        .lead-tracker-v2 .empty-state svg { color: #C99A2C !important; opacity: .7; }
+
+        /* Smart-list pill buttons (inline-styled) — apply via attribute is fragile,
+           so we target buttons with rounded-pill geometry via known wrappers */
+        .lead-tracker-v2 button[style*="borderRadius"][style*="99"] {
+          background: rgba(255,255,255,.85) !important;
+          color: #2C2418 !important;
+          border: 1px solid rgba(26,90,160,.18) !important;
+          font-weight: 700 !important;
+        }
+
+        /* Tag pills inside lead cards */
+        .lead-tracker-v2 .lead-card div[style*="rgba(26,90,160,.15)"] {
+          background: rgba(26,90,160,.10) !important;
+          color: #1A5AA0 !important;
+        }
+
+        /* Checkbox accent */
+        .lead-tracker-v2 input[type="checkbox"] { accent-color: #1A5AA0; }
+
+        /* Secondary text (FUB badge, last synced, meta lines) */
+        .lead-tracker-v2 [style*="color:\\"#64748b\\""],
+        .lead-tracker-v2 [style*="color:\\"#94a3b8\\""],
+        .lead-tracker-v2 [style*="color:\\"#475569\\""],
+        .lead-tracker-v2 [style*="color:\\"#374151\\""] {
+          color: #8B7A5F !important;
+        }
+
+        /* Lead card meta row (email/phone/budget/area) */
+        .lead-tracker-v2 .lead-card div[style*="flexWrap"][style*="fontSize:12"] {
+          color: #6B5D4B !important;
+        }
+        .lead-tracker-v2 .lead-card div[style*="flexWrap"][style*="fontSize:12"] span {
+          color: #6B5D4B !important;
+        }
+      `}</style>
       <PageHeader title="Lead Tracker" sub={`${leads.length} total leads`} setPage={setPage} parent="dashboard"
         action={<div style={{display:"flex",gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={()=>syncFUB(false)} disabled={syncing}><RefreshCw size={12} style={syncing?{animation:"spin 1s linear infinite"}:{}}/>{syncing?"Syncing…":"Sync FUB"}</button>
-          {lastSync&&!syncing&&<span style={{fontSize:11,color:"#64748b",alignSelf:"center"}}>Last synced {Math.round((Date.now()-lastSync)/60000)}m ago</span>}
+          {lastSync&&!syncing&&<span style={{fontSize:11,color:"#8B7A5F",alignSelf:"center"}}>Last synced {Math.round((Date.now()-lastSync)/60000)}m ago</span>}
           <button className="btn btn-blue" onClick={()=>{setShowForm(true);setEditId(null);setForm({name:"",email:"",phone:"",type:"Buyer",status:"warm",budget:"",area:"",notes:""});}}><Plus size={13}/>Add Lead</button>
         </div>}
       />
@@ -1963,13 +2455,12 @@ const LeadTracker = ({setPage,toast}) => {
       {/* Smart Lists */}
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          <span style={{fontSize:11,fontWeight:800,color:"#475569",textTransform:"uppercase",letterSpacing:".5px",marginRight:4}}>Smart Lists:</span>
+          <span className="lt-smart-label">Smart Lists</span>
           {[...BUILT_IN_LISTS,...smartLists].map(list=>(
-            <button key={list.name} onClick={()=>applyList(list)}
-              style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"1px solid rgba(26,90,160,.3)",background:"rgba(26,90,160,.12)",color:"#7eb8f7"}}>
+            <button key={list.name} onClick={()=>applyList(list)} className="lt-smart-pill">
               {list.name}
               {!BUILT_IN_LISTS.find(b=>b.name===list.name)&&(
-                <span onClick={e=>{e.stopPropagation();setSmartLists(p=>p.filter(s=>s.id!==list.id));}} style={{marginLeft:6,opacity:.6}}>×</span>
+                <span onClick={e=>{e.stopPropagation();setSmartLists(p=>p.filter(s=>s.id!==list.id));}} className="lt-smart-x">×</span>
               )}
             </button>
           ))}
@@ -1979,7 +2470,7 @@ const LeadTracker = ({setPage,toast}) => {
                 <button className="btn btn-blue btn-xs" onClick={saveList}>Save</button>
                 <button className="btn btn-ghost btn-xs" onClick={()=>setShowSaveList(false)}>Cancel</button>
               </div>
-            : <button onClick={()=>setShowSaveList(true)} style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"1px dashed rgba(255,255,255,.15)",background:"transparent",color:"#475569"}}>+ Save Current</button>
+            : <button onClick={()=>setShowSaveList(true)} className="lt-smart-pill lt-smart-pill-dashed">+ Save Current</button>
           }
         </div>
       </div>
@@ -2058,7 +2549,11 @@ const LeadTracker = ({setPage,toast}) => {
         </div>
       )}
 
-      {filtered.length===0
+      {!leadsLoaded
+        ? <div className="glass-card" style={{padding:"40px 20px",textAlign:"center",color:"#475569"}}><Spinner s={22}/><div style={{marginTop:10,fontSize:13}}>Loading your leads…</div></div>
+        : (leadsLoaded && leads.length===0 && syncing)
+          ? <div className="glass-card" style={{padding:"40px 20px",textAlign:"center",color:"#475569"}}><Spinner s={22}/><div style={{marginTop:10,fontSize:13}}>Syncing from Follow Up Boss…</div></div>
+        : filtered.length===0
         ? <div className="glass-card"><EmptyState icon={UserCheck} title="No leads found" desc="Add leads or adjust your filters"/></div>
         : <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {filtered.map(l=>(
@@ -2124,8 +2619,23 @@ const LeadTracker = ({setPage,toast}) => {
 const ContentScheduler = ({setPage,toast}) => {
   const [posts,setPosts] = useLS("posts",[]);
   const [statusTab,setStatusTab] = useState("all");
-  const [form,setForm] = useState({platforms:["instagram"],caption:"",scheduledAt:"",status:"scheduled",propertyAddress:""});
+  const [form,setForm] = useState({platforms:["instagram"],caption:"",scheduledAt:"",status:"scheduled",propertyAddress:"",mediaUrl:"",mediaType:"image"});
   const [editId,setEditId] = useState(null);
+  const [postingId,setPostingId] = useState(null);
+  const [integrations] = useLS("integrations", {});
+  const meta = integrations.meta || {};
+  const metaReady = !!(meta.accessToken && meta.pageId);
+
+  // The background worker writes to localStorage directly when scheduled posts fire.
+  // Refresh state when it dispatches the update event.
+  useEffect(() => {
+    const refresh = () => {
+      try { setPosts(JSON.parse(localStorage.getItem('posts') || '[]')); } catch {}
+    };
+    window.addEventListener('posts-updated', refresh);
+    return () => window.removeEventListener('posts-updated', refresh);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const togglePl = pl => setForm(f=>({...f,platforms:f.platforms.includes(pl)?f.platforms.filter(x=>x!==pl):[...f.platforms,pl]}));
   const filtered = posts.filter(p=>statusTab==="all"||p.status===statusTab);
@@ -2133,6 +2643,9 @@ const ContentScheduler = ({setPage,toast}) => {
   const save = () => {
     if(!form.caption.trim()) return toast.error("Caption is required");
     if(!form.platforms.length) return toast.error("Select at least one platform");
+    if(form.platforms.includes("instagram") && !form.mediaUrl) {
+      return toast.error("Instagram requires an image or video URL");
+    }
     if(editId){
       setPosts(p=>p.map(x=>x.id===editId?{...x,...form}:x));
       toast.success("Post updated!"); setEditId(null);
@@ -2140,11 +2653,42 @@ const ContentScheduler = ({setPage,toast}) => {
       setPosts(p=>[...form.platforms.map(pl=>({id:uid(),...form,platform:pl,createdAt:now()})),...p]);
       toast.success(`${form.platforms.length} post(s) scheduled!`);
     }
-    setForm({platforms:["instagram"],caption:"",scheduledAt:"",status:"scheduled",propertyAddress:""});
+    setForm({platforms:["instagram"],caption:"",scheduledAt:"",status:"scheduled",propertyAddress:"",mediaUrl:"",mediaType:"image"});
   };
 
   const del = id => { setPosts(p=>p.filter(x=>x.id!==id)); toast.success("Deleted"); };
   const markPublished = id => { setPosts(p=>p.map(x=>x.id===id?{...x,status:"published",publishedAt:now()}:x)); toast.success("Marked published!"); };
+
+  // Fire a single post immediately, regardless of its scheduledAt.
+  const postNow = async (p) => {
+    if (!metaReady) { toast.error("Connect Facebook in Integrations first"); return; }
+    setPostingId(p.id);
+    try {
+      const platforms = p.platforms || (p.platform ? [p.platform] : []);
+      const { results } = await publishPostToMeta({
+        caption: p.caption, platforms, mediaUrl: p.mediaUrl, mediaType: p.mediaType,
+      }, meta);
+      const ok = results.filter(r => r.ok);
+      const errs = results.filter(r => !r.ok);
+      setPosts(prev => prev.map(x => x.id === p.id ? {
+        ...x,
+        status: ok.length > 0 ? "published" : "failed",
+        publishedAt: ok.length > 0 ? now() : x.publishedAt,
+        postResults: results,
+        postError: errs.length ? errs.map(e=>`${e.platform}: ${e.error}`).join(' · ') : undefined,
+        messageIds: ok.length ? ok.reduce((a,r)=>({...a, [r.platform]: r.messageId}), {}) : x.messageIds,
+      } : x));
+      if (ok.length > 0) toast.success(`Posted to ${ok.map(r=>r.platform).join(', ')}`);
+      if (errs.length > 0) toast.error(errs.map(e=>`${e.platform}: ${e.error}`).join(' · '));
+    } catch (e) {
+      toast.error(`Post failed: ${e.message}`);
+    } finally {
+      setPostingId(null);
+    }
+  };
+
+  // Surface what's coming up so she knows the worker will fire them.
+  const dueSoon = posts.filter(p => p.status === 'scheduled' && p.scheduledAt && new Date(p.scheduledAt).getTime() <= Date.now() + 60*60*1000);
 
   return (
     <div className="page-content">
@@ -2166,6 +2710,18 @@ const ContentScheduler = ({setPage,toast}) => {
               {form.platforms[0]&&<CharCount text={form.caption} limit={Math.min(...form.platforms.map(p=>LIMITS[p]||9999))}/>}
             </div>
             <div className="grid-2">
+              <div>
+                <div className="label">Media URL <span style={{fontWeight:500,color:"#475569"}}>{form.platforms.includes("instagram")?"(required for IG)":"(optional)"}</span></div>
+                <input className="input" placeholder="https://… public image or video URL" value={form.mediaUrl} onChange={e=>setForm(f=>({...f,mediaUrl:e.target.value}))}/>
+              </div>
+              <div><div className="label">Media Type</div>
+                <select className="select" value={form.mediaType} onChange={e=>setForm(f=>({...f,mediaType:e.target.value}))}>
+                  <option value="image">Image / Photo</option>
+                  <option value="video">Video / Reel</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid-2">
               <div><div className="label">Schedule Date & Time</div><input className="input" type="datetime-local" value={form.scheduledAt} onChange={e=>setForm(f=>({...f,scheduledAt:e.target.value}))}/></div>
               <div><div className="label">Status</div>
                 <select className="select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
@@ -2182,35 +2738,65 @@ const ContentScheduler = ({setPage,toast}) => {
         </div>
 
         <div>
+          {/* Auto-publish status banner */}
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",marginBottom:14,borderRadius:10,background:metaReady?"rgba(16,185,129,.08)":"rgba(239,68,68,.08)",border:`1px solid ${metaReady?"rgba(16,185,129,.2)":"rgba(239,68,68,.2)"}`,flexWrap:"wrap"}}>
+            {metaReady ? (
+              <>
+                <span style={{fontSize:18}}>🟢</span>
+                <span style={{fontSize:13,fontWeight:700,color:"#fff"}}>Auto-publish ON</span>
+                <span style={{fontSize:12,color:"#94a3b8"}}>Scheduled posts fire every minute while this app is open. {dueSoon.length>0?`${dueSoon.length} due in next hour.`:""}</span>
+              </>
+            ) : (
+              <>
+                <span style={{fontSize:18}}>⚠️</span>
+                <span style={{fontSize:13,fontWeight:700,color:"#fff"}}>Facebook not connected</span>
+                <button className="btn btn-ghost btn-xs" onClick={()=>setPage("integrations")}>Connect →</button>
+              </>
+            )}
+          </div>
+
           <div className="tabs" style={{marginBottom:12,width:"fit-content"}}>
-            {["all","scheduled","published","draft"].map(t=>(
+            {["all","scheduled","published","draft","failed"].map(t=>(
               <button key={t} className={`tab ${statusTab===t?"active":""}`} onClick={()=>setStatusTab(t)} style={{textTransform:"capitalize"}}>{t} ({posts.filter(p=>t==="all"||p.status===t).length})</button>
             ))}
           </div>
           {filtered.length===0
             ? <div className="glass-card"><EmptyState icon={Calendar} title="No posts found" desc="Create your first scheduled post"/></div>
-            : filtered.map(p=>(
-              <div key={p.id} className="glass-card" style={{marginBottom:10,padding:14}}>
+            : filtered.map(p=>{
+              const isDue = p.status==="scheduled" && p.scheduledAt && new Date(p.scheduledAt).getTime() <= Date.now();
+              return (
+              <div key={p.id} className="glass-card" style={{marginBottom:10,padding:14,borderLeft:p.status==="failed"?"3px solid #f87171":isDue?"3px solid #f59e0b":"3px solid transparent"}}>
                 <div className="flex-between">
                   <div style={{flex:1,minWidth:0}}>
                     {p.propertyAddress&&<div style={{fontSize:12,fontWeight:700,color:"#1a5aa0",marginBottom:5}}>📍 {p.propertyAddress}</div>}
-                    <div style={{display:"flex",gap:6,marginBottom:7,flexWrap:"wrap"}}>
+                    <div style={{display:"flex",gap:6,marginBottom:7,flexWrap:"wrap",alignItems:"center"}}>
                       <PTag p={p.platform||p.platforms?.[0]}/>
-                      <span className={`badge ${p.status==="published"?"badge-green":p.status==="scheduled"?"badge-blue":"badge-gray"}`}>{p.status}</span>
+                      <span className={`badge ${p.status==="published"?"badge-green":p.status==="scheduled"?"badge-blue":p.status==="failed"?"badge-red":"badge-gray"}`}>
+                        {p._publishing?"⏳ posting…":p.status}
+                      </span>
+                      {isDue && p.status==="scheduled" && !p._publishing && <span style={{fontSize:10,fontWeight:800,color:"#f59e0b"}}>FIRING NEXT TICK</span>}
+                      {p.mediaUrl && <span style={{fontSize:10,color:"#64748b"}}>{p.mediaType==="video"?"🎬":"🖼"} media</span>}
                     </div>
                     <div style={{fontSize:13,color:"#94a3b8",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{p.caption}</div>
                     {p.scheduledAt&&<div style={{fontSize:11,color:"#374151",marginTop:5}}>⏰ {fmtT(p.scheduledAt)}</div>}
+                    {p.publishedAt&&p.status==="published"&&<div style={{fontSize:11,color:"#10b981",marginTop:3}}>✅ Posted {fmtT(p.publishedAt)}</div>}
+                    {p.postError&&<div style={{fontSize:11,color:"#f87171",marginTop:5,padding:"6px 8px",background:"rgba(239,68,68,.08)",borderRadius:6}}>⚠ {p.postError}</div>}
                   </div>
                   <div style={{display:"flex",gap:5,marginLeft:12,flexShrink:0,flexDirection:"column",alignItems:"flex-end"}}>
+                    {(p.status==="scheduled"||p.status==="draft"||p.status==="failed")&&metaReady&&(
+                      <button className="btn btn-blue btn-xs" disabled={postingId===p.id} onClick={()=>postNow(p)}>
+                        {postingId===p.id?<><Spinner s={10}/>Posting…</>:<><Send size={11}/>Post Now</>}
+                      </button>
+                    )}
                     {p.status==="draft"&&<button className="btn btn-ghost btn-xs" onClick={()=>markPublished(p.id)}><Check size={11}/>Mark Published</button>}
                     <div style={{display:"flex",gap:4}}>
-                      <button className="btn btn-ghost btn-icon btn-xs" onClick={()=>{setEditId(p.id);setForm({...p,platforms:p.platforms||[p.platform]});}}><Edit3 size={12}/></button>
+                      <button className="btn btn-ghost btn-icon btn-xs" onClick={()=>{setEditId(p.id);setForm({...p,platforms:p.platforms||[p.platform],mediaUrl:p.mediaUrl||"",mediaType:p.mediaType||"image"});}}><Edit3 size={12}/></button>
                       <button className="btn btn-danger btn-icon btn-xs" onClick={()=>del(p.id)}><Trash2 size={12}/></button>
                     </div>
                   </div>
                 </div>
               </div>
-            ))
+            );})
           }
         </div>
       </div>
@@ -3579,7 +4165,7 @@ const ListingTracker = ({setPage, toast}) => {
 const SocialConnect = ({setPage, toast}) => {
   const [settings] = useLS("integrations", {});
   const [stats, setStats] = useLS("social_stats", {});
-  const [post, setPost] = useState({caption:"", platforms:["facebook","instagram"]});
+  const [post, setPost] = useState({caption:"", platforms:["facebook","instagram"], mediaUrl:"", mediaType:"image"});
   const [posting, setPosting] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [tab, setTab] = useState("overview");
@@ -3612,36 +4198,20 @@ const SocialConnect = ({setPage, toast}) => {
     if(!hasMetaToken) return toast.error("Add your Facebook token in Integrations first");
     if(!post.caption.trim()) return toast.error("Write a caption first");
     setPosting(true);
-    const results = [];
     try {
-      if(post.platforms.includes("facebook")) {
-        const res = await fetch(`https://graph.facebook.com/v19.0/${meta.pageId}/feed`, {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ message: post.caption, access_token: meta.accessToken })
-        });
-        const d = await res.json();
-        if(d.error) results.push(`Facebook: ${d.error.message}`);
-        else results.push("Facebook: posted!");
-      }
-      if(post.platforms.includes("instagram") && meta.igAccountId) {
-        const cr = await fetch(`https://graph.facebook.com/v19.0/${meta.igAccountId}/media`, {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ caption: post.caption, media_type:"TEXT", access_token: meta.accessToken })
-        });
-        const cd = await cr.json();
-        if(cd.error) results.push(`Instagram: ${cd.error.message}`);
-        else {
-          const pr = await fetch(`https://graph.facebook.com/v19.0/${meta.igAccountId}/media_publish`, {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({ creation_id: cd.id, access_token: meta.accessToken })
-          });
-          const pd = await pr.json();
-          if(pd.error) results.push(`Instagram: ${pd.error.message}`);
-          else results.push("Instagram: posted!");
-        }
-      }
-      toast.success(results.join(" · "));
-      setPost(p => ({...p, caption:""}));
+      const { results } = await publishPostToMeta({
+        caption: post.caption,
+        platforms: post.platforms,
+        mediaUrl: post.mediaUrl,
+        mediaType: post.mediaType,
+      }, meta);
+      const summary = results.map(r => r.ok ? `${r.platform}: posted!` : `${r.platform}: ${r.error}`).join(" · ");
+      const anyOk = results.some(r => r.ok);
+      const anyErr = results.some(r => !r.ok);
+      if (anyOk && !anyErr) toast.success(summary);
+      else if (anyOk && anyErr) toast.info(summary);
+      else toast.error(summary || "Nothing was posted");
+      if (anyOk) setPost(p => ({...p, caption:"", mediaUrl:""}));
     } catch(e) { toast.error(`Post failed: ${e.message}`); }
     setPosting(false);
   };
@@ -3713,6 +4283,24 @@ const SocialConnect = ({setPage, toast}) => {
           </div>
           <div className="label" style={{marginBottom:8}}>Caption</div>
           <textarea className="textarea" style={{minHeight:140}} placeholder="Write your post..." value={post.caption} onChange={e=>setPost(p=>({...p,caption:e.target.value}))}/>
+
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10,marginTop:14}}>
+            <div>
+              <div className="label" style={{marginBottom:6}}>Media URL <span style={{fontWeight:500,color:"#475569"}}>{post.platforms.includes("instagram")?"(required for IG)":"(optional)"}</span></div>
+              <input className="input" placeholder="https://… public image or video URL" value={post.mediaUrl} onChange={e=>setPost(p=>({...p,mediaUrl:e.target.value}))}/>
+            </div>
+            <div>
+              <div className="label" style={{marginBottom:6}}>Media Type</div>
+              <select className="select" value={post.mediaType} onChange={e=>setPost(p=>({...p,mediaType:e.target.value}))}>
+                <option value="image">Image / Photo</option>
+                <option value="video">Video / Reel</option>
+              </select>
+            </div>
+          </div>
+          {post.platforms.includes("instagram") && !post.mediaUrl && (
+            <div style={{fontSize:11,color:"#f59e0b",marginTop:8}}>⚠ Instagram requires a public image or video URL — text-only posts aren't supported by Meta's API.</div>
+          )}
+
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
             <span style={{fontSize:12,color:"#475569"}}>{post.caption.length} characters</span>
             <button className="btn btn-blue" onClick={postToMeta} disabled={posting||!hasMetaToken}><Send size={13}/>{posting?"Posting…":"Post Now"}</button>
@@ -4276,7 +4864,7 @@ async function gmailRequestToken(clientId){
     try{
       const tc=window.google.accounts.oauth2.initTokenClient({
         client_id:clientId,
-        scope:'https://www.googleapis.com/auth/gmail.readonly',
+        scope:'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
         callback:r=>r.error?reject(new Error(r.error)):resolve(r),
       });
       tc.requestAccessToken({prompt:''});
@@ -4307,10 +4895,195 @@ function gmailExtractEmail(str){
   return m?m[1].toLowerCase().trim():str.toLowerCase().trim();
 }
 
+// Encode any string as base64url (Gmail API requires this, not standard base64).
+function gmailB64url(str){
+  return btoa(unescape(encodeURIComponent(str)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+// RFC 2047 encode the Subject so emojis / accents survive transit.
+function gmailEncodeSubject(subject){
+  // eslint-disable-next-line no-control-regex
+  return /[^\x00-\x7F]/.test(subject)
+    ? `=?UTF-8?B?${gmailB64url(subject)}?=`
+    : subject;
+}
+
+// ─── META (Facebook + Instagram) PUBLISHER ──────────────────────────────────
+// Single source of truth for posting to FB Page + IG Business. Used by both
+// the manual "Post Now" UI and the background ScheduledPostsWorker.
+//
+// post: { caption, platforms: ['facebook','instagram'], mediaUrl?, mediaType? }
+//   mediaType: 'image' | 'video' (default 'image' if mediaUrl present)
+// meta: { accessToken, pageId, igAccountId }
+//
+// Returns: { results: [{platform, ok, messageId?, error?}] }
+// Never throws — errors are returned per-platform.
+async function publishPostToMeta(post, meta) {
+  const results = [];
+  const hasMedia = !!post.mediaUrl;
+  const mediaType = post.mediaType || 'image';
+
+  // ── Facebook ─────────────────────────────────────────────────────────────
+  if (post.platforms?.includes('facebook') && meta.pageId && meta.accessToken) {
+    try {
+      let endpoint, body;
+      if (hasMedia && mediaType === 'video') {
+        endpoint = `https://graph.facebook.com/v19.0/${meta.pageId}/videos`;
+        body = { file_url: post.mediaUrl, description: post.caption, access_token: meta.accessToken };
+      } else if (hasMedia) {
+        endpoint = `https://graph.facebook.com/v19.0/${meta.pageId}/photos`;
+        body = { url: post.mediaUrl, caption: post.caption, access_token: meta.accessToken };
+      } else {
+        endpoint = `https://graph.facebook.com/v19.0/${meta.pageId}/feed`;
+        body = { message: post.caption, access_token: meta.accessToken };
+      }
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (d.error) results.push({platform:'facebook', ok:false, error:d.error.message});
+      else results.push({platform:'facebook', ok:true, messageId: d.id || d.post_id});
+    } catch (e) {
+      results.push({platform:'facebook', ok:false, error:e.message});
+    }
+  }
+
+  // ── Instagram (requires media — IG has no text-only posts) ───────────────
+  if (post.platforms?.includes('instagram') && meta.igAccountId && meta.accessToken) {
+    if (!hasMedia) {
+      results.push({platform:'instagram', ok:false, error:'Instagram requires an image or video URL — add one in the post form'});
+    } else {
+      try {
+        // Step 1: create the media container
+        const createBody = mediaType === 'video'
+          ? { media_type: 'REELS', video_url: post.mediaUrl, caption: post.caption, access_token: meta.accessToken }
+          : { image_url: post.mediaUrl, caption: post.caption, access_token: meta.accessToken };
+        const cr = await fetch(`https://graph.facebook.com/v19.0/${meta.igAccountId}/media`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(createBody),
+        });
+        const cd = await cr.json();
+        if (cd.error) { results.push({platform:'instagram', ok:false, error:cd.error.message}); }
+        else {
+          // Step 2: video uploads need a few seconds to process — poll until FINISHED
+          if (mediaType === 'video') {
+            for (let i = 0; i < 12; i++) {
+              await new Promise(r => setTimeout(r, 5000));
+              const sr = await fetch(`https://graph.facebook.com/v19.0/${cd.id}?fields=status_code&access_token=${meta.accessToken}`);
+              const sd = await sr.json();
+              if (sd.status_code === 'FINISHED') break;
+              if (sd.status_code === 'ERROR') throw new Error('Instagram failed to process the video');
+            }
+          }
+          // Step 3: publish
+          const pr = await fetch(`https://graph.facebook.com/v19.0/${meta.igAccountId}/media_publish`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ creation_id: cd.id, access_token: meta.accessToken }),
+          });
+          const pd = await pr.json();
+          if (pd.error) results.push({platform:'instagram', ok:false, error:pd.error.message});
+          else results.push({platform:'instagram', ok:true, messageId: pd.id});
+        }
+      } catch (e) {
+        results.push({platform:'instagram', ok:false, error:e.message});
+      }
+    }
+  }
+
+  return { results };
+}
+
+// Send an email through the authenticated Gmail account.
+// Returns the Gmail message ID on success; throws on failure.
+async function gmailSendMessage(token, {to, subject, body, fromName}){
+  const headers = [
+    `To: ${to}`,
+    `Subject: ${gmailEncodeSubject(subject)}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 7bit',
+  ];
+  if (fromName) headers.unshift(`From: ${fromName}`); // Gmail still enforces actual From = auth account
+  const raw = gmailB64url(headers.join('\r\n') + '\r\n\r\n' + body);
+  const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({raw}),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(()=>({}));
+    throw new Error(err.error?.message || `Gmail send failed: ${r.status}`);
+  }
+  return (await r.json()).id;
+}
+
 // ─── GMAIL SYNC WORKER (background, renders nothing) ─────────────────────────
+// Two passes each tick:
+//   1. INBOUND sync — log new received/sent Gmail messages to contact timelines
+//   2. DRIP AUTO-SEND — fire any queued campaign emails whose dueDate has arrived
+//      (only when gmail_autosend === 'on' in localStorage).
 const GmailSyncWorker = ({notify, toast}) => {
   const [leads]=useIDB("leads",[]);
   useEffect(()=>{
+    const autoSendDrips=async(token)=>{
+      if (localStorage.getItem('gmail_autosend') !== 'on') return 0;
+      const queue = JSON.parse(localStorage.getItem('email_queue')||'[]');
+      const todayStr = new Date().toISOString().slice(0,10);
+      const due = queue.filter(e => !e.sent && e.dueDate <= todayStr && e.leadEmail);
+      if (!due.length) return 0;
+      const profile = JSON.parse(localStorage.getItem('re_profile')||'{}');
+      const fromName = profile.name ? `${profile.name} <me>` : '';
+      let sent = 0;
+      for (const entry of due) {
+        try {
+          const msgId = await gmailSendMessage(token, {
+            to: entry.leadEmail,
+            subject: entry.subject,
+            body: entry.body,
+            fromName,
+          });
+          // Re-read queue (Campaigns page may have mutated it) and mark this entry sent.
+          const fresh = JSON.parse(localStorage.getItem('email_queue')||'[]');
+          const updated = fresh.map(e => e.id === entry.id
+            ? {...e, sent:true, sentAt: new Date().toISOString(), sentMethod:'gmail-auto', gmailMessageId: msgId}
+            : e);
+          localStorage.setItem('email_queue', JSON.stringify(updated));
+          // Drop a note on the lead's activity timeline.
+          const actKey = `activities_${entry.leadId}`;
+          const existing = JSON.parse(localStorage.getItem(actKey)||'[]');
+          existing.unshift({
+            id: uid(), type: 'gmail', direction: 'outbound',
+            subject: entry.subject,
+            note: `📤 Auto-sent "${entry.campaignName}" email: "${entry.subject}"`,
+            gmailId: msgId,
+            createdAt: new Date().toISOString(),
+          });
+          localStorage.setItem(actKey, JSON.stringify(existing));
+          sent++;
+        } catch (err) {
+          console.warn(`Drip send failed for ${entry.leadEmail}:`, err.message);
+          // Mark with an error so the Campaigns UI can surface it without retrying forever.
+          const fresh = JSON.parse(localStorage.getItem('email_queue')||'[]');
+          const updated = fresh.map(e => e.id === entry.id
+            ? {...e, sendError: err.message, sendErrorAt: new Date().toISOString()}
+            : e);
+          localStorage.setItem('email_queue', JSON.stringify(updated));
+        }
+      }
+      if (sent > 0) {
+        window.dispatchEvent(new CustomEvent('email-queue-updated'));
+        toast.success(`📤 Auto-sent ${sent} drip email${sent>1?'s':''} via Gmail`);
+        notify('📤 Drips sent', `${sent} campaign email${sent>1?'s':''} went out automatically`, 'drip-auto');
+      }
+      return sent;
+    };
+
     const doSync=async()=>{
       const token=localStorage.getItem('gmail_token');
       const expiry=parseInt(localStorage.getItem('gmail_token_expiry')||'0');
@@ -4350,6 +5123,8 @@ const GmailSyncWorker = ({notify, toast}) => {
           toast.info(`📧 ${logged} email${logged>1?'s':''} logged from Gmail`);
           notify('📧 Gmail Sync',`${logged} email${logged>1?'s':''} logged on contact timelines`,'gmail-sync');
         }
+        // After inbound sync, check the drip queue and fire anything that's due.
+        await autoSendDrips(token);
       }catch(e){ console.warn('Gmail sync:',e.message); }
     };
     doSync();
@@ -4359,6 +5134,86 @@ const GmailSyncWorker = ({notify, toast}) => {
     return()=>{ clearInterval(interval); window.removeEventListener('gmail-sync-now',handler); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[leads]);
+  return null;
+};
+
+// ─── SCHEDULED POSTS WORKER (background, renders nothing) ───────────────────
+// Polls the posts queue every 60 seconds. For each post whose scheduledAt has
+// passed and is still status==='scheduled', tries to publish via Meta APIs.
+// Updates the post in place with the result, then dispatches 'posts-updated'
+// so any open Content Scheduler page re-renders.
+const ScheduledPostsWorker = ({notify, toast}) => {
+  useEffect(() => {
+    let running = false;
+    const tick = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const integrations = JSON.parse(localStorage.getItem('integrations') || '{}');
+        const meta = integrations.meta || {};
+        if (!meta.accessToken || !meta.pageId) { running = false; return; }
+        const posts = JSON.parse(localStorage.getItem('posts') || '[]');
+        const nowMs = Date.now();
+        const due = posts.filter(p =>
+          p.status === 'scheduled' &&
+          p.scheduledAt &&
+          new Date(p.scheduledAt).getTime() <= nowMs &&
+          !p._publishing
+        );
+        if (!due.length) { running = false; return; }
+        let published = 0, failed = 0;
+        for (const p of due) {
+          // Re-read fresh and mark as publishing to prevent any double-fire.
+          {
+            const fresh = JSON.parse(localStorage.getItem('posts') || '[]');
+            const updated = fresh.map(x => x.id === p.id ? {...x, _publishing:true} : x);
+            localStorage.setItem('posts', JSON.stringify(updated));
+          }
+          // ContentScheduler stores ONE post per platform (it explodes platforms on save),
+          // so each scheduled record only targets one platform via p.platform.
+          const platforms = p.platforms || (p.platform ? [p.platform] : []);
+          const { results } = await publishPostToMeta({
+            caption: p.caption,
+            platforms,
+            mediaUrl: p.mediaUrl,
+            mediaType: p.mediaType,
+          }, meta);
+          const allOk = results.length > 0 && results.every(r => r.ok);
+          const errs = results.filter(r => !r.ok);
+          const ok   = results.filter(r => r.ok);
+          const fresh = JSON.parse(localStorage.getItem('posts') || '[]');
+          const updated = fresh.map(x => x.id === p.id ? {
+            ...x,
+            _publishing: false,
+            status: allOk ? 'published' : (ok.length > 0 ? 'published' : 'failed'),
+            publishedAt: ok.length > 0 ? new Date().toISOString() : x.publishedAt,
+            postResults: results,
+            postError: errs.length ? errs.map(e=>`${e.platform}: ${e.error}`).join(' · ') : undefined,
+            messageIds: ok.length ? ok.reduce((a,r)=>({...a, [r.platform]: r.messageId}), {}) : x.messageIds,
+          } : x);
+          localStorage.setItem('posts', JSON.stringify(updated));
+          if (allOk) published++; else failed++;
+        }
+        window.dispatchEvent(new CustomEvent('posts-updated'));
+        if (published > 0) {
+          toast.success(`📣 Published ${published} scheduled post${published>1?'s':''}`);
+          notify('📣 Posts Published', `${published} scheduled post${published>1?'s':''} went live`, 'posts-published');
+        }
+        if (failed > 0) {
+          toast.error(`⚠ ${failed} scheduled post${failed>1?'s':''} failed — check Content Scheduler`);
+        }
+      } catch (e) {
+        console.warn('Scheduled post worker error:', e.message);
+      } finally {
+        running = false;
+      }
+    };
+    tick();
+    const id = setInterval(tick, 60 * 1000);
+    const handler = () => tick();
+    window.addEventListener('posts-fire-now', handler);
+    return () => { clearInterval(id); window.removeEventListener('posts-fire-now', handler); };
+  }, [notify, toast]);
   return null;
 };
 
@@ -5055,6 +5910,70 @@ const Campaigns = ({setPage,toast}) => {
   const [enrollDate,setEnrollDate] = useState(new Date().toISOString().slice(0,10));
   const [previewCamp,setPreviewCamp] = useState(null);
   const [previewStep,setPreviewStep] = useState(0);
+  const [sendingBatch,setSendingBatch] = useState(false);
+
+  // Gmail connection / auto-send status — re-read whenever the worker updates.
+  const [gmailReady,setGmailReady] = useState(()=>{
+    const tok=localStorage.getItem('gmail_token');
+    const exp=parseInt(localStorage.getItem('gmail_token_expiry')||'0');
+    return !!tok && Date.now()<exp;
+  });
+  const [autoSend,setAutoSend] = useState(()=>localStorage.getItem('gmail_autosend')==='on');
+
+  // The background worker writes to localStorage directly — refresh state on its event.
+  useEffect(()=>{
+    const refresh = () => {
+      try { setQueue(JSON.parse(localStorage.getItem('email_queue')||'[]')); } catch {}
+      const tok=localStorage.getItem('gmail_token');
+      const exp=parseInt(localStorage.getItem('gmail_token_expiry')||'0');
+      setGmailReady(!!tok && Date.now()<exp);
+      setAutoSend(localStorage.getItem('gmail_autosend')==='on');
+    };
+    window.addEventListener('email-queue-updated', refresh);
+    return ()=>window.removeEventListener('email-queue-updated', refresh);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const toggleAutoSend = () => {
+    const next = !autoSend;
+    localStorage.setItem('gmail_autosend', next ? 'on' : 'off');
+    setAutoSend(next);
+    if (next && !gmailReady) toast.error('Connect Gmail in Settings first');
+    else if (next) {
+      toast.success('Auto-send ON — due drips will fire from your Gmail');
+      window.dispatchEvent(new CustomEvent('gmail-sync-now'));
+    } else toast.info('Auto-send OFF — drips stay in queue for manual send');
+  };
+
+  const sendAllDueNow = async () => {
+    if (!gmailReady) return toast.error('Connect Gmail in Settings first');
+    const token = localStorage.getItem('gmail_token');
+    const todayStr = new Date().toISOString().slice(0,10);
+    const due = queue.filter(e => !e.sent && e.dueDate <= todayStr && e.leadEmail);
+    if (!due.length) return toast.info('Nothing due to send');
+    setSendingBatch(true);
+    const profile = JSON.parse(localStorage.getItem('re_profile')||'{}');
+    const fromName = profile.name ? `${profile.name} <me>` : '';
+    let ok=0, fail=0;
+    for (const entry of due) {
+      try {
+        const msgId = await gmailSendMessage(token, {to:entry.leadEmail, subject:entry.subject, body:entry.body, fromName});
+        setQueue(p => p.map(e => e.id===entry.id ? {...e, sent:true, sentAt:now(), sentMethod:'gmail-batch', gmailMessageId:msgId} : e));
+        // Activity log
+        const actKey = `activities_${entry.leadId}`;
+        const existing = JSON.parse(localStorage.getItem(actKey)||'[]');
+        existing.unshift({id:uid(), type:'gmail', direction:'outbound', subject:entry.subject, note:`📤 Sent "${entry.campaignName}" email: "${entry.subject}"`, gmailId:msgId, createdAt:now()});
+        localStorage.setItem(actKey, JSON.stringify(existing));
+        ok++;
+      } catch (err) {
+        setQueue(p => p.map(e => e.id===entry.id ? {...e, sendError:err.message, sendErrorAt:now()} : e));
+        fail++;
+      }
+    }
+    setSendingBatch(false);
+    if (ok>0) toast.success(`Sent ${ok} email${ok>1?'s':''} via Gmail`);
+    if (fail>0) toast.error(`${fail} failed — check the queue for details`);
+  };
 
   const allCamps = [...BUILT_IN_CAMPAIGNS,...customCamps];
   const todayStr = new Date().toISOString().slice(0,10);
@@ -5164,6 +6083,27 @@ const Campaigns = ({setPage,toast}) => {
 
       {tab==="queue"&&(
         <div>
+          {/* Auto-send control bar */}
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",marginBottom:14,borderRadius:12,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)"}}>
+            <div style={{flex:1,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              {gmailReady ? (
+                <span style={{fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:8,background:"rgba(16,185,129,.15)",color:"#10b981"}}>✓ Gmail connected</span>
+              ) : (
+                <span style={{fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:8,background:"rgba(239,68,68,.15)",color:"#f87171",cursor:"pointer"}} onClick={()=>setPage("settings")}>✗ Gmail not connected — set up in Settings</span>
+              )}
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"#cbd5e1"}}>
+                <Toggle checked={autoSend} onChange={toggleAutoSend}/>
+                <span style={{fontWeight:700}}>Auto-send drips via Gmail</span>
+                {autoSend && gmailReady && <span style={{fontSize:11,fontWeight:800,color:"#10b981"}}>🟢 ON</span>}
+              </label>
+            </div>
+            {gmailReady && dueToday.length>0 && (
+              <button className="btn btn-blue btn-sm" disabled={sendingBatch} onClick={sendAllDueNow}>
+                {sendingBatch ? <><Spinner s={12}/>Sending…</> : <><Mail size={12}/>Send All Due Now ({dueToday.length})</>}
+              </button>
+            )}
+          </div>
+
           {pendingQueue.length===0?(
             <div className="glass-card"><EmptyState icon={Mail} title="Queue is empty" desc="Enroll a lead in a campaign to start sending emails"/></div>
           ):(
@@ -5171,8 +6111,9 @@ const Campaigns = ({setPage,toast}) => {
               {pendingQueue.map(entry=>{
                 const isOverdue = entry.dueDate<todayStr;
                 const isToday = entry.dueDate===todayStr;
+                const hasErr = !!entry.sendError;
                 return (
-                  <div key={entry.id} style={{padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,.03)",border:`1px solid rgba(255,255,255,.07)`,borderLeft:`3px solid ${isOverdue||isToday?"#ef4444":"#475569"}`}}>
+                  <div key={entry.id} style={{padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,.03)",border:`1px solid rgba(255,255,255,.07)`,borderLeft:`3px solid ${hasErr?"#f59e0b":(isOverdue||isToday)?"#ef4444":"#475569"}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:4}}>
@@ -5181,9 +6122,11 @@ const Campaigns = ({setPage,toast}) => {
                           <span style={{fontSize:11,fontWeight:800,color:isOverdue||isToday?"#f87171":"#475569"}}>
                             {isOverdue?"OVERDUE":isToday?"TODAY":new Date(entry.dueDate+"T12:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}
                           </span>
+                          {hasErr && <span style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:6,background:"rgba(245,158,11,.15)",color:"#f59e0b"}}>SEND FAILED</span>}
                         </div>
                         <div style={{fontSize:13,fontWeight:600,color:"#cbd5e1",marginBottom:2}}>📧 {entry.subject}</div>
                         <div style={{fontSize:11,color:"#475569"}}>To: {entry.leadEmail}</div>
+                        {hasErr && <div style={{fontSize:11,color:"#f59e0b",marginTop:4}}>⚠ {entry.sendError}</div>}
                       </div>
                       <div style={{display:"flex",gap:6,flexShrink:0}}>
                         <a href={mailtoLink(entry)} target="_blank" rel="noreferrer"
@@ -5818,12 +6761,16 @@ export default function App() {
     "listing-writer":     <ListingWriter {...props}/>,
     "social-studio":      <SocialStudio {...props}/>,
     "video-studio":       <VideoAuto {...props}/>,
+    "ai-studio":          <AIStudio {...props}/>,
+    "viral-studio":       <ViralStudio {...props}/>,
+    "influencer-watch":   <InfluencerWatch {...props}/>,
     "video-script":       <VideoStudio {...props}/>,
     "market-report":      <MarketReport {...props}/>,
     scheduler:            <ContentScheduler {...props}/>,
     "media-library":      <MediaLibrary {...props}/>,
     "client-templates":   <ClientTemplates {...props}/>,
     "showing-calendar":   <ShowingCalendar {...props}/>,
+    "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
     "pipeline":           <PipelineBoard {...props}/>,
     "tasks":              <TaskManager {...props}/>,
@@ -5834,9 +6781,11 @@ export default function App() {
     "soi-manager":        <SOIManager {...props}/>,
     "transactions":       <TransactionManager {...props}/>,
     "commissions":        <CommissionTracker {...props}/>,
+    "finances":           <Finances {...props}/>,
     "listing-tracker":    <ListingTracker {...props}/>,
     "realcomp-mls":       <RealcompMLS {...props}/>,
     "social-connect":     <SocialConnect {...props}/>,
+    "google-business":    <GoogleBusiness {...props}/>,
     integrations:         <Integrations {...props}/>,
     analytics:            <Analytics {...props}/>,
     "market-analyzer":    <MarketAnalyzer {...props}/>,
@@ -5890,6 +6839,7 @@ export default function App() {
         </div>
       </div>
       <GmailSyncWorker notify={notify} toast={toast}/>
+      <ScheduledPostsWorker notify={notify} toast={toast}/>
       <Toast toasts={toasts} remove={remove}/>
 
       {/* PWA Install Banner */}

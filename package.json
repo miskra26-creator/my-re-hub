@@ -7,8 +7,12 @@
   "description": "Real Estate Hub — Monica Iskra's personal real estate platform",
   "author": "Monica Iskra",
   "dependencies": {
+    "@craco/craco": "^7.1.0",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@gradio/client": "^2.2.0",
+    "@imgly/background-removal": "^1.7.0",
+    "@mediapipe/tasks-vision": "^0.10.35",
     "@supabase/supabase-js": "^2.105.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -27,15 +31,15 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "concurrently --names \"APP,SERVER\" --prefix-colors \"cyan,yellow\" \"react-scripts start\" \"node server.js\"",
+    "start": "concurrently --names \"APP,SERVER\" --prefix-colors \"cyan,yellow\" \"craco start\" \"node server.js\"",
     "server": "node server.js",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "build": "craco build",
+    "test": "craco test",
     "eject": "react-scripts eject",
     "electron": "NODE_ENV=development electron .",
-    "electron-dev": "concurrently --names \"REACT,SERVER,ELECTRON\" --prefix-colors \"cyan,yellow,magenta\" \"react-scripts start\" \"node server.js\" \"wait-on http://localhost:3000 && electron .\"",
-    "dist": "react-scripts build && electron-builder --win --x64",
-    "dist-portable": "react-scripts build && electron-builder --win portable"
+    "electron-dev": "concurrently --names \"REACT,SERVER,ELECTRON\" --prefix-colors \"cyan,yellow,magenta\" \"craco start\" \"node server.js\" \"wait-on http://localhost:3000 && electron .\"",
+    "dist": "craco build && electron-builder --win --x64",
+    "dist-portable": "craco build && electron-builder --win portable"
   },
   "build": {
     "appId": "com.monicaiskra.rehub",
