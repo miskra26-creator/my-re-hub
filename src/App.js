@@ -2458,6 +2458,9 @@ const LeadTracker = ({setPage,toast}) => {
   const [customPlans] = useLS("action_plans",[]);
   // Quick call log
   const [callLogLead,setCallLogLead] = useState(null);
+  // Limit rendered leads to keep the page snappy with large FUB sync (5k+ leads).
+  // Reset when filter/search changes.
+  const [renderLimit, setRenderLimit] = useState(100);
 
   const allTags = useMemo(() => [...new Set(leads.flatMap(l=>l.tags||[]))].sort(), [leads]);
 
@@ -2574,6 +2577,9 @@ const LeadTracker = ({setPage,toast}) => {
       return matchStatus&&matchType&&matchTag&&matchFollowUp&&matchSearch;
     });
   }, [leads, filterStatus, filterType, filterTag, search, today]);
+
+  // Reset pagination when filters change
+  useEffect(() => { setRenderLimit(100); }, [filterStatus, filterType, filterTag, search]);
 
   // Memoize per-status counts so the filter-tab row doesn't re-walk leads
   // 13 times on every keystroke
@@ -3117,7 +3123,13 @@ const LeadTracker = ({setPage,toast}) => {
         : filtered.length===0
         ? <div className="glass-card"><EmptyState icon={UserCheck} title="No leads found" desc="Add leads or adjust your filters"/></div>
         : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {filtered.map(l=>(
+          {filtered.length > renderLimit && (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 8px",fontSize:12}}>
+              <span style={{color:"#8B7A5F"}}>Showing first {renderLimit} of {filtered.length} leads</span>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setRenderLimit(r=>r+200)}>Load 200 more</button>
+            </div>
+          )}
+          {filtered.slice(0, renderLimit).map(l=>(
             <div key={l.id} className={`lead-card ${statusBorderCls[l.status]||""}`} style={{outline:selected.includes(l.id)?"1.5px solid rgba(126,184,247,.4)":"none"}}>
               <div className="flex-between">
                 <div style={{display:"flex",gap:10,alignItems:"flex-start",flex:1,minWidth:0}}>
