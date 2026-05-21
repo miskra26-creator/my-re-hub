@@ -354,6 +354,92 @@ Return STRICT JSON only (no markdown):
   }
 }
 
+// ── Tour narration script generator ───────────────────────────────────────────
+// VideoTour.AI's killer feature: a spoken narration script that sounds like a
+// real agent walking a buyer through the home. Tuned for cloned-voice TTS, so
+// the result is conversational, contraction-friendly, and 30-60 sec long.
+//
+// Returns { fullScript, perScene[], wordTimings (optional) }
+//   - fullScript: a single string for the TTS engine
+//   - perScene[]: one chunk per scene, used for burned-in captions
+export async function generateTourScript({ scenes, listing, vibe, agentVoice, agent }) {
+  const vibeDef = VIBE_BY_ID[vibe] || VIBES[0];
+  const sceneList = scenes.map((s, i) =>
+    `Scene ${i + 1}: ${s.room} (default label: "${ROOM_LABEL[s.room] || ''}")`
+  ).join('\n');
+
+  const stats = [];
+  if (listing.list_price || listing.sale_price) {
+    const price = listing.list_price || listing.sale_price;
+    stats.push(`$${Number(price).toLocaleString()}`);
+  }
+  if (listing.beds) stats.push(`${listing.beds} bedrooms`);
+  if (listing.baths) stats.push(`${listing.baths} baths`);
+  if (listing.sqft) stats.push(`${Number(listing.sqft).toLocaleString()} square feet`);
+
+  const targetWords = scenes.length * 12 + 30; // ~3 sec/scene of speech + intro/outro
+  const targetSec   = Math.round(targetWords / 2.4); // ~2.4 words/sec at conversational pace
+
+  const sys = `You are ${agent?.name || 'Monica Iskra'} narrating a real estate listing video. You speak this script aloud — it gets synthesized into a voiceover that plays over a cinematic photo reel of the home.
+
+Vibe: ${vibeDef.name} — ${vibeDef.tone}
+
+${agentVoice ? `Voice profile: ${agentVoice}` : ''}
+
+CRITICAL RULES:
+- This is SPOKEN aloud. Write the way you TALK, not the way you write. Contractions, short sentences, natural pauses.
+- Target ${targetWords} words total (~${targetSec} seconds of speech). Be concise.
+- Open with a strong scroll-stopping hook — one short sentence.
+- Walk through the home like a real tour: "as you step inside…", "the kitchen sits at the heart of…", "out back you'll find…"
+- Each scene gets ONE short sentence. Don't list features — paint a picture.
+- End with a soft CTA: "DM me to tour" or "Tap the link to schedule a showing."
+- NO emojis. NO hashtags. NO bullet points. NO "exclusive opportunity" / "schedule today" cliches.
+- Sound like a confident agent on a casual phone call, not a script.`;
+
+  const prompt = `Write the narration for this listing tour.
+
+LISTING:
+- Address: ${listing.address || ''}, ${listing.city || ''} ${listing.zip || ''}
+- Status: ${listing.status || ''}
+- Stats: ${stats.join(', ') || '(not provided)'}
+- Days on market: ${listing.dom || '?'}
+
+SCENES IN PLAYBACK ORDER:
+${sceneList}
+
+Return STRICT JSON only (no markdown):
+{
+  "fullScript": "the complete narration as one paragraph of plain prose, spoken naturally, target ${targetWords} words",
+  "perScene": ["one short sentence for scene 1", "one short sentence for scene 2", "...one entry per scene including intro/outro slots if you want them"]
+}
+
+The perScene array should have ${scenes.length} entries — one chunk of the fullScript per scene, in order. Used to display subtitles on screen synced with the photos.`;
+
+  const r = await fetch('/api/claude/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1800,
+      system: sys,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message || 'AI script error');
+  const text = (d.content?.[0]?.text || '').trim();
+  const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try { return JSON.parse(jsonText); }
+  catch (e) {
+    // Fallback narration so render still works if the AI flakes
+    const fallback = `Take a look at ${listing.address || 'this stunning home'}${listing.city ? ' in ' + listing.city : ''}. ${stats.join(', ')}. Walk through and see for yourself. DM me to tour.`;
+    return {
+      fullScript: fallback,
+      perScene: scenes.map((s, i) => i === 0 ? fallback : (ROOM_LABEL[s.room] || '')),
+    };
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Downscale + base64-encode an image File/Blob/URL.

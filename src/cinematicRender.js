@@ -395,14 +395,18 @@ async function drawClosingCard(ctx, w, h, p, opts) {
 //   brand:      { logoUrl, primaryColor, accentColor, name, phone, email, website }
 //   vibe:       'luxury' | 'just-listed' | etc.
 //   music:      { url, volume } | null
-//   opts:       { onProgress(0..1, label), onLog(text), aspect ('9:16'|'1:1'|'16:9'), quality ('high'|'max') }
+//   voiceover:  { blob, durationSec, perScene: string[], provider, speakConfig? } | null
+//               When present, music auto-ducks during narration and burned-in
+//               subtitles (per-scene text chunks) appear at the bottom.
+//   opts:       { onProgress(0..1, label), onLog(text), aspect, quality, captions:bool }
 //
 // Returns: { blob, mime, durationSec, dimensions: {w,h} }
-export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'luxury', music, opts = {} }) {
+export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'luxury', music, voiceover, opts = {} }) {
   const onProgress = opts.onProgress || (() => {});
   const onLog      = opts.onLog || (() => {});
   const aspect     = opts.aspect || '9:16';
   const quality    = opts.quality || 'high';
+  const showCaptions = opts.captions !== false; // default on when voiceover present
 
   const ASPECTS = {
     '9:16': { w: 1080, h: 1920 },
@@ -445,11 +449,19 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
     try { logoEl = await loadImage(brand.logoUrl); } catch (e) { /* ignore */ }
   }
 
-  // Compute timing
+  // Compute timing — when voiceover is present, stretch scenes so the reel
+  // is at least as long as the narration (no cutoff). Otherwise use vibe default.
   const introDur   = 2.2;      // stats card opener
-  const sceneDur   = cfg.sceneDuration;
-  const transDur   = 0.35;
   const outroDur   = 2.6;      // closing card
+  const transDur   = 0.35;
+  let   sceneDur   = cfg.sceneDuration;
+  if (voiceover?.durationSec) {
+    const minScenesDur = Math.max(0, voiceover.durationSec - 1.0); // leave 1s of outro overlap
+    const fitSceneDur = minScenesDur / scenes.length;
+    // Never go below vibe default — only stretch if narration is longer.
+    if (fitSceneDur > sceneDur) sceneDur = fitSceneDur;
+    onLog(`Voiceover ${voiceover.durationSec.toFixed(1)}s · pacing scenes at ${sceneDur.toFixed(2)}s each`);
+  }
   const totalDur   = introDur + scenes.length * sceneDur + outroDur;
   onLog(`Total duration: ${totalDur.toFixed(1)}s`);
 
@@ -467,22 +479,47 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
   ctx.fillRect(0, 0, w, h);
 
   // ── Audio mixing ────────────────────────────────────────────────────────────
-  let audioCtxNode, audioMixStream, audioCtxObj;
+  // When voiceover is present, music ducks to ~25% during the narration period
+  // (introDur to introDur + voiceover.durationSec). Otherwise music plays at
+  // configured volume throughout.
+  let audioCtxNode, audioMixStream, audioCtxObj, musicGainNode, voiceEl;
+  const hasMusic = !!(music?.url);
+  const hasVoiceover = !!(voiceover?.blob);
   try {
-    if (music?.url) {
+    if (hasMusic || hasVoiceover) {
       audioCtxObj = new (window.AudioContext || window.webkitAudioContext)();
       const dest = audioCtxObj.createMediaStreamDestination();
       audioMixStream = dest.stream;
-      const musicEl = new Audio();
-      musicEl.crossOrigin = 'anonymous';
-      musicEl.src = music.url;
-      musicEl.loop = true;
-      musicEl.volume = music.volume ?? 0.85;
-      await musicEl.play().catch(() => {/* fall through silently */});
-      const musicNode = audioCtxObj.createMediaElementSource(musicEl);
-      const musicGain = audioCtxObj.createGain();
-      musicGain.gain.value = music.volume ?? 0.85;
-      musicNode.connect(musicGain).connect(dest);
+
+      // Music track
+      let musicEl = null;
+      if (hasMusic) {
+        musicEl = new Audio();
+        musicEl.crossOrigin = 'anonymous';
+        musicEl.src = music.url;
+        musicEl.loop = true;
+        musicEl.volume = music.volume ?? 0.85;
+        await musicEl.play().catch(() => {/* */});
+        const musicNode = audioCtxObj.createMediaElementSource(musicEl);
+        musicGainNode = audioCtxObj.createGain();
+        musicGainNode.gain.value = music.volume ?? 0.85;
+        musicNode.connect(musicGainNode).connect(dest);
+      }
+
+      // Voiceover track (if a blob is provided)
+      if (voiceover?.blob) {
+        const voUrl = URL.createObjectURL(voiceover.blob);
+        voiceEl = new Audio();
+        voiceEl.crossOrigin = 'anonymous';
+        voiceEl.src = voUrl;
+        voiceEl.volume = 1.0;
+        const voNode = audioCtxObj.createMediaElementSource(voiceEl);
+        const voGain = audioCtxObj.createGain();
+        voGain.gain.value = 1.0;
+        voNode.connect(voGain).connect(dest);
+        // We'll start voiceEl at introDur (after the stats card)
+      }
+
       audioCtxNode = { musicEl };
     }
   } catch (e) {
