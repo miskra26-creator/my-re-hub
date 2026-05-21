@@ -493,8 +493,17 @@ export default function AutoReel({ setPage, toast }) {
         setProgressLabel('Generating AI camera motion per scene…');
         const renderBase = 0.20;
 
+        // Attach each scene's per-scene lifestyle prompt onto the scene
+        // object so generateClipsForScenes can weave it into the LTX motion
+        // prompt. This is what makes the pool scene render with swimmers
+        // ACTIVELY moving vs. just a static photo with a camera push.
+        const scenesWithLifestyle = scenes.map((s, i) => ({
+          ...s,
+          lifestyleAction: sceneLifestyle?.[i] ? (sceneLifestylePrompt?.[i] || '') : '',
+        }));
+
         // Step A: generate one AI clip per scene via the Modal endpoint
-        const aiClips = await generateClipsForScenes(scenes, {
+        const aiClips = await generateClipsForScenes(scenesWithLifestyle, {
           onProgress: (p, label) => {
             setProgress(renderBase + 0.40 * p);
             if (label) setProgressLabel(label);

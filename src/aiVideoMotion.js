@@ -112,9 +112,25 @@ const ROOM_MOTIONS = {
 
 // Pick a motion prompt for a scene. Deterministic on (sceneIdx, room) so
 // re-renders of the same reel give the same motion variety.
-export function pickMotionPrompt(room, sceneIdx = 0, featureLabel = '') {
+//
+// lifestyleAction: optional — when the scene has lifestyle people added
+//   (e.g. "people swimming in the pool"), weave that INTO the motion prompt
+//   so LTX-Video animates the people doing that action — not just the camera.
+//   This is what makes the pool clip show swimmers actually moving instead
+//   of just a static person mid-stroke with a camera push.
+export function pickMotionPrompt(room, sceneIdx = 0, featureLabel = '', lifestyleAction = '') {
   const list = ROOM_MOTIONS[room] || ROOM_MOTIONS.other;
   const base = list[sceneIdx % list.length];
+
+  // If lifestyle action provided, build a hybrid prompt that emphasizes
+  // the PEOPLE motion alongside the camera motion. Order matters for
+  // image-to-video models — leading with the subject motion produces
+  // better animation of the subjects vs. trailing it.
+  if (lifestyleAction && lifestyleAction.trim()) {
+    const subject = lifestyleAction.trim().replace(/^a /i, '').replace(/photorealistic[^,]*,?\s*/i, '').trim();
+    return `${subject} actively in motion, ${base}, lifelike motion of people, natural movement, cinematic real estate listing quality, 4 seconds`;
+  }
+
   // Inject the AI-detected feature label so the motion can highlight it
   // ("WHITE QUARTZ ISLAND" → "...revealing the white quartz island...")
   if (featureLabel && featureLabel.trim()) {
@@ -201,8 +217,11 @@ export async function generateClipsForScenes(scenes, { onProgress, onLog, onClip
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i];
     onProgress?.(i / scenes.length, `Generating AI motion for scene ${i + 1}/${scenes.length} (${s.room})…`);
-    const prompt = pickMotionPrompt(s.room, i, s.label || '');
-    log(`Scene ${i + 1}: room=${s.room} prompt="${prompt.slice(0, 80)}…"`);
+    // lifestyleAction comes from the per-scene custom prompt set in the
+    // Review panel ("people swimming in the pool"). When present, LTX-Video
+    // animates the people doing that action instead of just camera motion.
+    const prompt = pickMotionPrompt(s.room, i, s.label || '', s.lifestyleAction || '');
+    log(`Scene ${i + 1}: room=${s.room}${s.lifestyleAction ? ' [lifestyle:' + s.lifestyleAction.slice(0, 40) + '…]' : ''} prompt="${prompt.slice(0, 80)}…"`);
     try {
       const blob = await generateClip({ photo: s.photo, prompt, onLog: log });
       results.push({ idx: i, blob, prompt });
