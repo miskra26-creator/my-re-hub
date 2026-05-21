@@ -15,7 +15,8 @@ import {
   Upload, X, Sparkles, Download, RotateCcw, Loader, Check,
   AlertCircle, ImageIcon as ImageLucide, Wand2,
 } from 'lucide-react';
-import { STAGING_STYLES, STYLE_BY_ID, stagePhoto } from './aiVirtualStaging';
+import { STAGING_STYLES, STYLE_BY_ID, stagePhoto, stampVirtuallyStaged } from './aiVirtualStaging';
+import { useLS } from './cloudHooks';
 
 const ROOM_OPTIONS = [
   { id:'living',   label:'Living room' },
@@ -65,6 +66,9 @@ export default function VirtualStaging({ setPage, toast }) {
   const [globalStyle, setGlobalStyle] = useState('modern');
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  // MLS-prep options (persist across sessions)
+  const [stampBadge, setStampBadge] = useLS('staging_stamp_badge', true);
+  const [includeOriginals, setIncludeOriginals] = useLS('staging_include_originals', true);
   const fileRef = useRef();
 
   const addPhotos = useCallback((files) => {
@@ -150,18 +154,51 @@ export default function VirtualStaging({ setPage, toast }) {
     await stageOne(it);
   };
 
-  const downloadOne = (it) => {
-    if (!it.stagedBlob) return;
-    const ext = (it.stagedMime || 'image/png').split('/')[1] || 'png';
-    const safeRoom = it.room.toLowerCase();
-    const a = document.createElement('a');
-    a.href = it.stagedUrl;
-    a.download = `staged-${safeRoom}-${Date.now()}.${ext}`;
-    a.click();
+  // Strip the extension so we can append "-staged" / "-original"
+  const baseName = (fileName) => {
+    if (!fileName) return 'photo';
+    const m = fileName.match(/^(.+?)(\.[^.]+)?$/);
+    return m ? m[1] : fileName;
   };
 
-  const downloadAll = () => {
-    items.filter(it => it.stagedBlob).forEach((it, i) => setTimeout(() => downloadOne(it), i * 250));
+  // Trigger a browser download for a Blob
+  const downloadBlob = (blob, fileName) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const downloadOne = async (it) => {
+    if (!it.stagedBlob) return;
+    const original = baseName(it.file?.name) || `photo-${it.id.slice(2, 8)}`;
+    // Apply the "VIRTUALLY STAGED" badge if she's opted in
+    const stagedOut = stampBadge ? await stampVirtuallyStaged(it.stagedBlob) : it.stagedBlob;
+    const stagedExt = stampBadge ? 'jpg' : ((it.stagedMime || 'image/png').split('/')[1] || 'png');
+    downloadBlob(stagedOut, `${original}-staged.${stagedExt}`);
+  };
+
+  const downloadAll = async () => {
+    const ready = items.filter(it => it.stagedBlob);
+    if (!ready.length) return;
+    // Sequential to avoid the browser dedup-ing/blocking rapid-fire downloads
+    for (let i = 0; i < ready.length; i++) {
+      const it = ready[i];
+      // 1) Original (saved alongside per NAR pair-with-original guidance)
+      if (includeOriginals && it.file) {
+        const original = baseName(it.file.name) || `photo-${it.id.slice(2, 8)}`;
+        const ext = it.file.name?.split('.').pop() || 'jpg';
+        downloadBlob(it.file, `${original}-original.${ext}`);
+        await new Promise(r => setTimeout(r, 250));
+      }
+      // 2) Staged version (with badge if opted in)
+      await downloadOne(it);
+      await new Promise(r => setTimeout(r, 250));
+    }
   };
 
   const setAllStyle = (styleId) => {
@@ -199,7 +236,7 @@ export default function VirtualStaging({ setPage, toast }) {
       {/* Style picker (default for new uploads + bulk-apply) */}
       <div style={S.card}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:10}}>
-          <div style={S.cardLabel}>① Pick a style</div>
+          <div style={S.cardLabel}>① Pick a default style</div>
           {items.length > 0 && (
             <button onClick={() => setAllStyle(globalStyle)} style={S.ghostBtn}>
               Apply to all unstaged
@@ -224,10 +261,47 @@ export default function VirtualStaging({ setPage, toast }) {
         </div>
       </div>
 
+      {/* MLS-prep options */}
+      <div style={S.card}>
+        <div style={S.cardLabel}>② MLS upload prep</div>
+        <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5, marginBottom:14}}>
+          Configure how staged photos are saved when you download them for upload to Realcomp / Matrix.
+        </div>
+        <div style={{display:'flex', flexDirection:'column', gap:10}}>
+          <label style={{display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer', padding:'10px 12px', background:'rgba(255,255,255,.02)', borderRadius:8, border:'1px solid rgba(255,255,255,.06)'}}>
+            <input type="checkbox" checked={stampBadge} onChange={(e) => setStampBadge(e.target.checked)} style={{marginTop:2, accentColor:'#b8864b', width:16, height:16}}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12.5, fontWeight:800, color:'#f1f5f9', marginBottom:3}}>Add "VIRTUALLY STAGED" disclosure badge to downloaded photo</div>
+              <div style={{fontSize:11, color:'#94a3b8', lineHeight:1.5}}>
+                Applied at download time in bottom-right corner. <strong style={{color:'#e0b370'}}>NAR's late-2025 guidance</strong> recommends a visible label. Preview stays clean — only downloaded files get the badge.
+              </div>
+            </div>
+          </label>
+
+          <label style={{display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer', padding:'10px 12px', background:'rgba(255,255,255,.02)', borderRadius:8, border:'1px solid rgba(255,255,255,.06)'}}>
+            <input type="checkbox" checked={includeOriginals} onChange={(e) => setIncludeOriginals(e.target.checked)} style={{marginTop:2, accentColor:'#b8864b', width:16, height:16}}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12.5, fontWeight:800, color:'#f1f5f9', marginBottom:3}}>Also save the unaltered originals when downloading all</div>
+              <div style={{fontSize:11, color:'#94a3b8', lineHeight:1.5}}>
+                NAR guidance says buyers should be able to see the unstaged room. Saves <code style={{background:'rgba(0,0,0,.3)', padding:'1px 4px', borderRadius:3}}>filename-original.jpg</code> next to <code style={{background:'rgba(0,0,0,.3)', padding:'1px 4px', borderRadius:3}}>filename-staged.jpg</code>.
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div style={{
+          background:'rgba(245,158,11,.08)', borderLeft:'3px solid #f59e0b',
+          padding:'10px 12px', borderRadius:6, marginTop:14,
+          fontSize:11.5, color:'#fbbf24', lineHeight:1.5,
+        }}>
+          <strong>Realcomp note:</strong> their Feb 2025 photo guidelines say "no watermarks, words, or special effects" on listing photos — but that rule is aimed at agent/broker branding, not disclosure badges. Virtual staging isn't explicitly addressed. To be 100% safe, call Realcomp at <strong>(866) 553-3430</strong> and confirm. NAR's national guidance does recommend a visible label.
+        </div>
+      </div>
+
       {/* Upload + photo list */}
       <div style={S.card}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
-          <div style={S.cardLabel}>② Upload empty room photos</div>
+          <div style={S.cardLabel}>③ Upload empty room photos</div>
           <div style={{fontSize:11, color:'#64748b'}}>
             {items.length > 0 && `${items.length} photo${items.length === 1 ? '' : 's'} · ${doneCount} staged`}
           </div>
