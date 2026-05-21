@@ -8947,6 +8947,7 @@ export default function App() {
     "ai-concierge":       <AILeadConcierge {...props}/>,
     "social-agent":       <SocialAgent {...props}/>,
     "db-intel":           <DatabaseIntel {...props}/>,
+    "closing-mult":       <ClosingMultiplier {...props}/>,
     "pipeline":           <PipelineBoard {...props}/>,
     "tasks":              <TaskManager {...props}/>,
     "action-plans":       <ActionPlans {...props}/>,
