@@ -126,8 +126,8 @@ export default function AutoReel({ setPage, toast }) {
     (async () => {
       try {
         const [vRes, uRes] = await Promise.all([
-          fetch('/api/elevenlabs/voices'),
-          fetch('/api/elevenlabs/usage'),
+          fetch('/api/elevenlabs?action=voices'),
+          fetch('/api/elevenlabs?action=usage'),
         ]);
         if (vRes.status === 400) { setElKeyMissing(true); return; }
         const v = await vRes.json();

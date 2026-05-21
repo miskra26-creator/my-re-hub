@@ -1806,8 +1806,8 @@ const AIVoiceTool = ({ toast }) => {
     (async () => {
       try {
         const [vRes, uRes] = await Promise.all([
-          fetch('/api/elevenlabs/voices'),
-          fetch('/api/elevenlabs/usage'),
+          fetch('/api/elevenlabs?action=voices'),
+          fetch('/api/elevenlabs?action=usage'),
         ]);
         if (vRes.status === 400) {
           setKeyMissing(true);
@@ -1833,7 +1833,7 @@ const AIVoiceTool = ({ toast }) => {
     setBusy(true);
     setAudioUrl('');
     try {
-      const r = await fetch('/api/elevenlabs/tts', {
+      const r = await fetch('/api/elevenlabs?action=tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voiceId, text }),
@@ -1848,7 +1848,7 @@ const AIVoiceTool = ({ toast }) => {
       setTimeout(() => audioRef.current?.play(), 100);
       toast.success('Audio generated');
       // Refresh usage so the meter updates
-      fetch('/api/elevenlabs/usage').then(r => r.ok && r.json().then(setUsage)).catch(() => {});
+      fetch('/api/elevenlabs?action=usage').then(r => r.ok && r.json().then(setUsage)).catch(() => {});
     } catch (e) {
       toast.error(e.message);
     }

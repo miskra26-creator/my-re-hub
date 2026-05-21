@@ -175,7 +175,7 @@ async function synthesizeElevenLabs({ script, voiceId, onLog }) {
   try {
     // Use the with-timestamps endpoint so we get word-level alignment back,
     // which powers the karaoke caption mode.
-    const r = await fetch('/api/elevenlabs/tts-timestamps', {
+    const r = await fetch('/api/elevenlabs?action=tts-timestamps', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: script, voiceId }),
