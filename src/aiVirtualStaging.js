@@ -144,7 +144,10 @@ async function downscale(fileOrBlob, maxEdge = 1280) {
 //
 // Used by AutoReel as an optional "Lifestyle Mode" — adds the human element
 // that VideoTour.AI charges $29/mo for. Free on Gemini's 500/day quota.
-export async function addLifestylePeople({ photo, room = 'living', mood = 'family', customNotes, onLog }) {
+// customPeopleDesc: when provided (non-empty), replaces the mood-based default
+//   people description. Lets the user say things like "people swimming in the
+//   pool" for a pool photo where "family enjoying the backyard" wouldn't fit.
+export async function addLifestylePeople({ photo, room = 'living', mood = 'family', customPeopleDesc, customNotes, onLog }) {
   const log = onLog || (() => {});
 
   const PEOPLE_BY_ROOM_MOOD = {
@@ -195,9 +198,12 @@ export async function addLifestylePeople({ photo, room = 'living', mood = 'famil
     },
   };
 
-  const peopleDesc = (PEOPLE_BY_ROOM_MOOD[room]?.[mood])
-                  || PEOPLE_BY_ROOM_MOOD[room]?.family
-                  || `a person enjoying the space`;
+  // Custom override beats the mood default — lets caller specify exactly
+  // what the people should be doing for this specific photo.
+  const peopleDesc = (customPeopleDesc && customPeopleDesc.trim())
+    || (PEOPLE_BY_ROOM_MOOD[room]?.[mood])
+    || PEOPLE_BY_ROOM_MOOD[room]?.family
+    || `a person enjoying the space`;
 
   const prompt = [
     `Add ${peopleDesc} to this real estate listing photo.`,

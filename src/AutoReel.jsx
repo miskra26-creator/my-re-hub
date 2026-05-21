@@ -347,6 +347,10 @@ export default function AutoReel({ setPage, toast }) {
         scenes, narrative, tourScript, music,
         sceneStage: stageDefaults,       // boolean per scene
         sceneLifestyle: lifestyleDefaults, // boolean per scene
+        // Custom prompt per scene — empty string means "use the mood default".
+        // Lets her say "people swimming in the pool" for a pool photo where
+        // "family enjoying the backyard" wouldn't fit.
+        sceneLifestylePrompt: scenes.map(s => suggestLifestylePrompt(s)),
       });
       setProgress(1.0);
       setProgressLabel('Plan ready — review labels below, edit anything wrong, then hit Render');
@@ -374,7 +378,7 @@ export default function AutoReel({ setPage, toast }) {
     // Shallow-clone scenes so we can swap photos for the ones being staged/lifestyle'd
     // without mutating reviewPlan directly.
     const scenes = reviewPlan.scenes.map(s => ({ ...s }));
-    const { narrative, tourScript, music, sceneStage, sceneLifestyle } = reviewPlan;
+    const { narrative, tourScript, music, sceneStage, sceneLifestyle, sceneLifestylePrompt } = reviewPlan;
 
     try {
       // ── Phase 0a: Apply per-photo virtual staging (only on checked scenes) ─
@@ -421,6 +425,10 @@ export default function AutoReel({ setPage, toast }) {
               photo: s.photo.file || s.photo,
               room: s.room,
               mood: lifestyleMood,
+              // Per-scene custom override — when she's typed something
+              // specific like "people swimming in the pool", that wins
+              // over the mood default for this photo only.
+              customPeopleDesc: sceneLifestylePrompt?.[i] || '',
               onLog: addLog,
             });
             const lifeUrl = URL.createObjectURL(out.blob);
@@ -588,6 +596,14 @@ export default function AutoReel({ setPage, toast }) {
       const arr = [...(p.sceneLifestyle || [])];
       arr[sceneIdx] = !arr[sceneIdx];
       return { ...p, sceneLifestyle: arr };
+    });
+  };
+  const updateReviewLifestylePrompt = (sceneIdx, newPrompt) => {
+    setReviewPlan(p => {
+      if (!p) return p;
+      const arr = [...(p.sceneLifestylePrompt || [])];
+      arr[sceneIdx] = newPrompt;
+      return { ...p, sceneLifestylePrompt: arr };
     });
   };
 
@@ -1383,9 +1399,27 @@ export default function AutoReel({ setPage, toast }) {
                           <input type="checkbox" checked={lifeOn}
                             onChange={() => toggleReviewLifestyle(i)}
                             style={{accentColor:'#b8864b', width:14, height:14}}/>
-                          👨‍👩‍👧 Add people ({lifestyleMood})
+                          👨‍👩‍👧 Add people
                         </label>
                       </div>
+
+                      {/* Per-scene custom lifestyle prompt — only shows when
+                          "Add people" is checked. Empty falls back to the
+                          global mood default. */}
+                      {lifeOn && (
+                        <div style={{display:'flex', flexDirection:'column', gap:3}}>
+                          <input
+                            type="text"
+                            value={reviewPlan.sceneLifestylePrompt?.[i] || ''}
+                            onChange={(e) => updateReviewLifestylePrompt(i, e.target.value)}
+                            placeholder={`e.g. "people swimming in the pool" · blank = ${lifestyleMood} default`}
+                            style={{...S.input, width:'100%', fontSize:11.5, padding:'5px 9px'}}
+                          />
+                          <div style={{fontSize:9.5, color:'#64748b', paddingLeft:2}}>
+                            Describe EXACTLY what the people should be doing — overrides the mood default for this photo only
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1561,6 +1595,33 @@ export default function AutoReel({ setPage, toast }) {
       `}</style>
     </div>
   );
+}
+
+// Smart-suggest a lifestyle prompt based on what the AI saw in the photo.
+// Empty string = "fall back to global mood default" in addLifestylePeople.
+// We hard-suggest only for high-signal cases (pool, fireplace, kitchen
+// island, dining table) where the mood default doesn't fit.
+function suggestLifestylePrompt(scene) {
+  const label = (scene?.label || '').toLowerCase();
+  const room = (scene?.room || '').toLowerCase();
+  // Pool — most common "doesn't fit the mood default" case
+  if (/pool|swimming/.test(label)) {
+    return 'a happy couple or family swimming and lounging in the pool, photorealistic, warm sunny afternoon';
+  }
+  if (/hot tub|jacuzzi/.test(label)) {
+    return 'a relaxed couple enjoying the hot tub at golden hour, photorealistic';
+  }
+  if (/fire pit|firepit/.test(label)) {
+    return 'a group of friends gathered around the fire pit at dusk with drinks, photorealistic';
+  }
+  if (/grill|bbq|barbecue/.test(label)) {
+    return 'a couple grilling on the patio with friends in the background, photorealistic';
+  }
+  if (/deck|patio/.test(label) && room === 'outdoor') {
+    return 'a couple relaxing on the patio with drinks at golden hour, photorealistic';
+  }
+  // Empty = use the global mood default
+  return '';
 }
 
 function CopyCard({ label, text, multiline }) {
