@@ -1,49 +1,28 @@
-// Vercel Serverless Function — listing auto-import (Realtor.com).
-//
-// Two modes:
-//   GET  ?proxy=<url>  → fetch a photo URL through this endpoint (CORS bypass)
-//   POST { url|mlsNum} → scrape a Realtor.com listing, return { listing, photos }
-//
-// Anti-bot: Realtor.com blocks plain fetches with Kasada. If SCRAPER_API_KEY
-// is set on Vercel (free tier at scraperapi.com → 1000 req/mo, no card),
-// we route Realtor.com traffic through their residential-proxy network
-// which bypasses the bot wall. Without the key, the lookup will fail.
+// Listing auto-import (Realtor.com).
+// GET  ?proxy=URL    photo proxy (CORS bypass)
+// POST {url, mlsNum} scrape Realtor.com, return listing + photos
+// Requires SCRAPER_API_KEY on Vercel for Kasada bypass.
 
 export const config = {
   api: { bodyParser: { sizeLimit: '1mb' }, responseLimit: '15mb' },
 };
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
-const HEADERS = {
-  'User-Agent': UA,
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
-};
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36';
 
-// Wrap a Realtor.com (or any) URL through ScraperAPI when configured.
-function scrapedUrl(targetUrl) {
-  const key = process.env.SCRAPER_API_KEY;
-  if (!key) return targetUrl;
-  return 'http://api.scraperapi.com?api_key=' + key
-    + '&url=' + encodeURIComponent(targetUrl)
-    + '&render=false'
-    + '&country_code=us';
+function scraped(url) {
+  const k = process.env.SCRAPER_API_KEY;
+  if (!k) return url;
+  return 'http://api.scraperapi.com?api_key=' + k + '&url=' + encodeURIComponent(url) + '&country_code=us';
 }
 
 export default async function handler(req, res) {
-  // ── Photo proxy mode ──────────────────────────────────────────────────────
   if (req.query.proxy) {
     try {
-      const upstream = await fetch(req.query.proxy, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!upstream.ok) return res.status(upstream.status).json({ error: { message: 'photo proxy ' + upstream.status } });
-      const contentType = upstream.headers.get('content-type') || 'image/jpeg';
-      res.setHeader('Content-Type', contentType);
+      const r = await fetch(req.query.proxy, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000) });
+      if (!r.ok) return res.status(r.status).json({ error: { message: 'proxy ' + r.status } });
+      res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
       res.setHeader('Cache-Control', 'public, max-age=3600');
-      const buffer = Buffer.from(await upstream.arrayBuffer());
-      return res.status(200).send(buffer);
+      return res.status(200).send(Buffer.from(await r.arrayBuffer()));
     } catch (e) {
       return res.status(502).json({ error: { message: e.message } });
     }
@@ -51,144 +30,99 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).json({ error: { message: 'POST or ?proxy=URL' } });
 
-  const body = req.body || {};
-  let targetUrl = (body.url || '').trim();
-  const mlsNum = (body.mlsNum || '').trim();
-
   if (!process.env.SCRAPER_API_KEY) {
     return res.status(400).json({
-      error: {
-        message: 'MLS# auto-lookup needs SCRAPER_API_KEY set on Vercel. Realtor.com blocks bare requests. Sign up free at scraperapi.com (1000 reqs/month, no credit card), add SCRAPER_API_KEY to Vercel env vars, redeploy.',
-      },
+      error: { message: 'MLS lookup needs SCRAPER_API_KEY on Vercel. Sign up free at scraperapi.com, add env var, redeploy.' },
     });
   }
 
+  const body = req.body || {};
+  let target = (body.url || '').trim();
+  const mls = (body.mlsNum || '').trim();
+
   try {
-    if (!targetUrl && mlsNum) {
-      targetUrl = await resolveMlsToRealtorUrl(mlsNum);
-      if (!targetUrl) {
-        return res.status(404).json({
-          error: { message: 'No Realtor.com listing found for MLS# ' + mlsNum + '. Try pasting the realtor.com URL directly.' },
-        });
-      }
+    if (!target && mls) {
+      target = await mlsToUrl(mls);
+      if (!target) return res.status(404).json({ error: { message: 'No Realtor.com listing for MLS# ' + mls } });
     }
-    if (!targetUrl) return res.status(400).json({ error: { message: 'Provide url or mlsNum' } });
-    if (!/realtor\.com/i.test(targetUrl)) {
-      return res.status(400).json({ error: { message: 'Only Realtor.com URLs supported. Paste a realtor.com listing URL.' } });
+    if (!target) return res.status(400).json({ error: { message: 'Provide url or mlsNum' } });
+    if (target.indexOf('realtor.com') < 0) {
+      return res.status(400).json({ error: { message: 'Only realtor.com URLs supported' } });
     }
 
-    const r = await fetch(scrapedUrl(targetUrl), {
-      headers: HEADERS,
-      signal: AbortSignal.timeout(60000),
-      redirect: 'follow',
-    });
-    if (!r.ok) return res.status(r.status).json({ error: { message: 'realtor.com returned ' + r.status } });
+    const r = await fetch(scraped(target), { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000), redirect: 'follow' });
+    if (!r.ok) return res.status(r.status).json({ error: { message: 'realtor.com ' + r.status } });
     const html = await r.text();
-
-    const parsed = parseRealtor(html);
-    if (parsed.photos.length === 0 && !parsed.listing.address) {
-      return res.status(502).json({ error: { message: 'Got the page but could not extract listing data. Page structure may have changed.' } });
+    const out = parse(html);
+    if (out.photos.length === 0 && !out.listing.address) {
+      return res.status(502).json({ error: { message: 'No data extracted; page may have changed' } });
     }
-
-    return res.status(200).json({
-      ok: true,
-      sourceUrl: targetUrl,
-      listing: parsed.listing,
-      photos: parsed.photos,
-    });
+    return res.status(200).json({ ok: true, sourceUrl: target, listing: out.listing, photos: out.photos });
   } catch (e) {
-    return res.status(502).json({ error: { message: 'Import error: ' + e.message } });
+    return res.status(502).json({ error: { message: 'Import: ' + e.message } });
   }
 }
 
-async function resolveMlsToRealtorUrl(mlsNum) {
-  const searchUrl = 'https://www.realtor.com/realestateandhomes-search/?searchQueryState='
-    + encodeURIComponent('{"query":"' + mlsNum + '"}');
+async function mlsToUrl(mls) {
+  const u = 'https://www.realtor.com/realestateandhomes-search/?searchQueryState='
+    + encodeURIComponent('{"query":"' + mls + '"}');
   try {
-    const r = await fetch(scrapedUrl(searchUrl), {
-      headers: HEADERS,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(45000),
-    });
+    const r = await fetch(scraped(u), { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(45000), redirect: 'follow' });
     if (!r.ok) return null;
     const html = await r.text();
-    const re = /\/realestateandhomes-detail\/[A-Za-z0-9_\-]+_M\d+/g;
-    let m;
-    let found = null;
-    while ((m = re.exec(html)) !== null) { found = m[0]; break; }
-    if (found) return 'https://www.realtor.com' + found;
-    const og = html.match(/<meta[^>]+(?:property|name)="og:url"[^>]+content="([^"]*realestateandhomes-detail[^"]*)"/i);
-    if (og) return og[1].replace(/&amp;/g, '&');
+    const m = html.match(/\/realestateandhomes-detail\/[A-Za-z0-9_\-]+_M\d+/);
+    if (m) return 'https://www.realtor.com' + m[0];
     return null;
   } catch (e) { return null; }
 }
 
-function parseRealtor(html) {
-  const listing = {
-    address: '', city: '', state: '', zip: '',
-    list_price: null, sale_price: null,
-    beds: null, baths: null, sqft: null,
-    status: '', mls_num: '',
-  };
-  const photoSet = new Set();
+function parse(html) {
+  const listing = { address: '', city: '', state: '', zip: '', list_price: null, beds: null, baths: null, sqft: null, status: '' };
+  const photos = new Set();
 
   const ldRe = /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]+?)<\/script>/gi;
-  let ldMatch;
-  while ((ldMatch = ldRe.exec(html)) !== null) {
+  let m;
+  while ((m = ldRe.exec(html)) !== null) {
     try {
-      const parsed = JSON.parse(ldMatch[1].trim());
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      for (let i = 0; i < items.length; i++) extractLd(items[i], listing, photoSet);
-    } catch (e) { /* skip malformed */ }
+      const obj = JSON.parse(m[1].trim());
+      const items = Array.isArray(obj) ? obj : [obj];
+      for (let i = 0; i < items.length; i++) pull(items[i], listing, photos);
+    } catch (e) {}
   }
 
-  if (photoSet.size < 3) {
+  if (photos.size < 3) {
     const cdnRe = /https?:\/\/(?:ap\.rdcpix\.com|images\.realtor\.com)\/[A-Za-z0-9_\-\/]+\.(?:jpg|jpeg|png|webp)/g;
-    let cm;
-    while ((cm = cdnRe.exec(html)) !== null) {
-      photoSet.add(cm[0].split('?')[0]);
-      if (photoSet.size >= 30) break;
+    let c;
+    while ((c = cdnRe.exec(html)) !== null) {
+      photos.add(c[0].split('?')[0]);
+      if (photos.size >= 30) break;
     }
   }
 
-  if (photoSet.size === 0) {
-    const og = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i);
-    if (og) photoSet.add(og[1]);
-  }
-
-  return { listing, photos: Array.from(photoSet).slice(0, 30) };
+  return { listing, photos: Array.from(photos).slice(0, 30) };
 }
 
-function extractLd(item, listing, photoSet) {
+function pull(item, listing, photos) {
   if (!item || typeof item !== 'object') return;
-
-  if (item.address && typeof item.address === 'object') {
-    if (item.address.streetAddress && !listing.address) listing.address = item.address.streetAddress;
-    if (item.address.addressLocality && !listing.city) listing.city = item.address.addressLocality;
-    if (item.address.addressRegion && !listing.state) listing.state = item.address.addressRegion;
-    if (item.address.postalCode && !listing.zip) listing.zip = item.address.postalCode;
+  const a = item.address;
+  if (a && typeof a === 'object') {
+    if (a.streetAddress) listing.address = a.streetAddress;
+    if (a.addressLocality) listing.city = a.addressLocality;
+    if (a.addressRegion) listing.state = a.addressRegion;
+    if (a.postalCode) listing.zip = a.postalCode;
   }
-
-  if (item.offers && typeof item.offers === 'object') {
-    const o = item.offers;
-    if (o.price && !listing.list_price) listing.list_price = String(o.price).replace(/[^0-9.]/g, '');
-    if (o.availability && /sold/i.test(String(o.availability))) {
-      listing.status = 'Sold';
-      if (!listing.sale_price) listing.sale_price = listing.list_price;
-    }
+  const o = item.offers;
+  if (o && typeof o === 'object' && o.price) {
+    listing.list_price = String(o.price).replace(/[^0-9.]/g, '');
   }
-
-  if (item.numberOfBedrooms && !listing.beds) listing.beds = String(item.numberOfBedrooms);
-  if (item.numberOfBathroomsTotal && !listing.baths) listing.baths = String(item.numberOfBathroomsTotal);
-  if (item.numberOfBathrooms && !listing.baths) listing.baths = String(item.numberOfBathrooms);
-  if (item.floorSize && item.floorSize.value && !listing.sqft) listing.sqft = String(item.floorSize.value);
-
+  if (item.numberOfBedrooms) listing.beds = String(item.numberOfBedrooms);
+  if (item.numberOfBathroomsTotal) listing.baths = String(item.numberOfBathroomsTotal);
   if (item.image) {
     const imgs = Array.isArray(item.image) ? item.image : [item.image];
     for (let i = 0; i < imgs.length; i++) {
-      const img = imgs[i];
-      if (typeof img === 'string') photoSet.add(img.split('?')[0]);
-      else if (img && img.url) photoSet.add(String(img.url).split('?')[0]);
+      const x = imgs[i];
+      if (typeof x === 'string') photos.add(x.split('?')[0]);
+      else if (x && x.url) photos.add(String(x.url).split('?')[0]);
     }
   }
 }
