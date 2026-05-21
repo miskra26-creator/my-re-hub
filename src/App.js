@@ -945,6 +945,7 @@ const NAV = [
   { id:"landing-page",        label:"Listing Landing Page",icon:Globe },
   { id:"email-alerts",        label:"Email Alerts",        icon:Mail },
   { section:"ACCOUNT" },
+  { id:"voice-trainer",       label:"AI Voice Trainer",    icon:Wand2 },
   { id:"settings",            label:"Settings",            icon:Settings },
   { id:"help",                label:"Help Guide",          icon:HelpCircle },
 ];
@@ -6235,6 +6236,228 @@ const ClosingMultiplier = ({setPage, toast}) => {
 };
 
 
+// ─── VOICE TRAINER — AI learns Monica's actual writing voice ─────────────────
+// Pulls real samples (FB posts, IG captions, optionally pasted samples) and
+// extracts a voice profile that gets injected into every other AI feature
+// (Concierge, Social Agent, Closing Multiplier, drips). One-time training
+// = every AI feature in the hub instantly sounds like her, not like ChatGPT.
+const VoiceTrainer = ({setPage, toast}) => {
+  const [agentVoice, setAgentVoice] = useLS("agent_voice", "");
+  const [voiceProfile, setVoiceProfile] = useLS("agent_voice_profile", null);
+  const [integrations] = useLS("integrations", {});
+  const [samples, setSamples] = useState([]);
+  const [loadingSamples, setLoadingSamples] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [pastedSamples, setPastedSamples] = useState("");
+  const [lastTrained, setLastTrained] = useLS("agent_voice_trained_at", null);
+
+  const fbConnected = !!(integrations?.meta?.accessToken && integrations?.meta?.pageId);
+  const igConnected = !!(integrations?.meta?.accessToken && integrations?.meta?.igAccountId);
+
+  const fbApi = async (path) => {
+    const token = integrations?.meta?.accessToken;
+    if (!token) throw new Error("Meta token not set");
+    const url = `https://graph.facebook.com/v19.0/${path}${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) throw new Error(`FB ${j.error.code}: ${j.error.message}`);
+    return j;
+  };
+
+  const pullFromMeta = async () => {
+    setLoadingSamples(true);
+    const collected = [];
+    try {
+      // Facebook page posts (her own captions)
+      if (fbConnected) {
+        try {
+          const fb = await fbApi(`${integrations.meta.pageId}/posts?limit=50&fields=message,created_time`);
+          (fb.data || []).forEach(p => { if (p.message) collected.push(p.message); });
+        } catch (e) { console.warn("[VoiceTrainer] FB fetch:", e.message); }
+
+        // Try to grab her replies to comments (her actual conversational voice)
+        try {
+          const fbPosts = await fbApi(`${integrations.meta.pageId}/posts?limit=20&fields=id`);
+          for (const p of (fbPosts.data || []).slice(0, 20)) {
+            try {
+              const cs = await fbApi(`${p.id}/comments?limit=25&fields=from,message`);
+              (cs.data || []).forEach(c => {
+                // Only include her own comments (from the page herself)
+                if (c.from?.id === integrations.meta.pageId && c.message) {
+                  collected.push(c.message);
+                }
+              });
+            } catch {}
+          }
+        } catch {}
+      }
+
+      // Instagram captions
+      if (igConnected) {
+        try {
+          const ig = await fbApi(`${integrations.meta.igAccountId}/media?limit=50&fields=caption,timestamp`);
+          (ig.data || []).forEach(m => { if (m.caption) collected.push(m.caption); });
+        } catch (e) { console.warn("[VoiceTrainer] IG fetch:", e.message); }
+      }
+
+      // Dedupe + filter
+      const seen = new Set();
+      const filtered = collected.filter(s => {
+        const key = s.slice(0, 80);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return s.length > 20 && s.length < 2000;
+      });
+      setSamples(filtered);
+      if (filtered.length === 0) toast.error("No posts found. Check your Meta connection or paste samples below.");
+      else toast.success(`Pulled ${filtered.length} samples — preview and analyze below`);
+    } catch (e) {
+      toast.error("Couldn't pull from Meta: " + e.message);
+    }
+    setLoadingSamples(false);
+  };
+
+  const addPastedSamples = () => {
+    if (!pastedSamples.trim()) return;
+    // Split on blank-line boundaries OR "---" separators
+    const chunks = pastedSamples.split(/\n\s*(?:---+|===+)?\s*\n/).map(s => s.trim()).filter(s => s.length > 10);
+    setSamples(p => [...p, ...chunks]);
+    setPastedSamples("");
+    toast.success(`Added ${chunks.length} samples`);
+  };
+
+  const removeSample = (idx) => setSamples(p => p.filter((_, i) => i !== idx));
+
+  const analyze = async () => {
+    if (samples.length < 3) return toast.error("Need at least 3 samples to analyze");
+    setAnalyzing(true);
+    try {
+      const profile = await trainVoice(samples);
+      setVoiceProfile(profile);
+      // The downstream-injected guidance
+      setAgentVoice(profile.voiceGuidance);
+      setLastTrained(new Date().toISOString());
+      toast.success("Voice profile saved — every AI feature now writes in your voice");
+    } catch (e) {
+      toast.error("Analysis failed: " + e.message);
+    }
+    setAnalyzing(false);
+  };
+
+  return (
+    <div className="page-content">
+      <PageHeader title="AI Voice Trainer" sub="Teach every AI feature in your hub to write like you — by reading your actual posts" setPage={setPage} parent="dashboard"
+        action={lastTrained && <span style={{fontSize:11,color:"#64748b"}}>Last trained: {new Date(lastTrained).toLocaleString()}</span>}
+      />
+
+      <div className="glass-card" style={{marginBottom:22,padding:"20px 26px",background:"linear-gradient(135deg, rgba(167,139,250,.08), rgba(110,231,183,.04))",borderColor:"rgba(167,139,250,.2)"}}>
+        <div style={{fontSize:14,color:"#cbd5e1",lineHeight:1.7}}>
+          Every AI feature in your hub (Concierge, Social Agent, Closing Multiplier, drips) currently sounds like generic ChatGPT. Train it ONCE on your actual writing and it'll sound like YOU — your phrases, your sign-offs, your emoji habits, your topics.
+          <div style={{marginTop:10,fontSize:12,color:"#94a3b8"}}>How it works: pull 30-50 of your real FB / IG posts → AI analyzes the patterns → generates a voice profile → injects into every other AI call going forward. Re-run any time your voice evolves.</div>
+        </div>
+      </div>
+
+      <div className="grid-2" style={{gap:18,alignItems:"flex-start"}}>
+        {/* LEFT — collect samples */}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:14}}>📥 Pull from your social</div>
+            {(fbConnected || igConnected) ? (
+              <>
+                <div style={{fontSize:12,color:"#94a3b8",marginBottom:12}}>
+                  Connected: {fbConnected && "📘 Facebook Page"}{fbConnected && igConnected && " + "}{igConnected && "📸 Instagram"}
+                </div>
+                <button className="btn btn-blue" onClick={pullFromMeta} disabled={loadingSamples} style={{width:"100%"}}>
+                  {loadingSamples ? <><Spinner s={13}/>Pulling…</> : <><RefreshCw size={13}/>Pull last 50 posts + my replies</>}
+                </button>
+                <div style={{fontSize:11,color:"#475569",marginTop:8,fontStyle:"italic"}}>
+                  Grabs FB Page posts, IG captions, and your replies to comments (your actual conversational voice).
+                </div>
+              </>
+            ) : (
+              <div style={{padding:"12px 14px",background:"rgba(239,68,68,.07)",borderRadius:8,fontSize:12,color:"#fda4af"}}>
+                Connect Meta first: Sidebar → Integrations → Meta. Or paste samples manually below.
+              </div>
+            )}
+          </div>
+
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:14}}>✏ Or paste samples manually</div>
+            <textarea className="textarea" rows={6} placeholder="Paste your captions, posts, sent emails, even text messages you've written. Separate samples with blank lines or '---'." value={pastedSamples} onChange={e=>setPastedSamples(e.target.value)} style={{resize:"vertical",fontFamily:"inherit"}}/>
+            <button className="btn btn-ghost btn-sm" style={{marginTop:10}} onClick={addPastedSamples} disabled={!pastedSamples.trim()}><Plus size={12}/>Add to corpus</button>
+          </div>
+
+          {samples.length > 0 && (
+            <div className="glass-card" style={{padding:"18px 22px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>📋 Corpus ({samples.length} samples)</div>
+                <button className="btn btn-ghost btn-xs" onClick={()=>setSamples([])}>Clear all</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
+                {samples.slice(0, 50).map((s, i) => (
+                  <div key={i} style={{padding:"8px 12px",background:"rgba(255,255,255,.03)",borderRadius:6,fontSize:11,color:"#cbd5e1",display:"flex",justifyContent:"space-between",gap:8}}>
+                    <span style={{flex:1,minWidth:0,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{s.slice(0,160)}{s.length>160?"…":""}</span>
+                    <button onClick={()=>removeSample(i)} style={{background:"none",border:"none",color:"#475569",cursor:"pointer",padding:"0 4px"}}>✕</button>
+                  </div>
+                ))}
+                {samples.length > 50 && <div style={{fontSize:11,color:"#475569",padding:8,textAlign:"center"}}>+{samples.length - 50} more (capped to 50 for analysis)</div>}
+              </div>
+              <button className="btn btn-blue" style={{marginTop:14,width:"100%"}} onClick={analyze} disabled={analyzing || samples.length < 3}>
+                {analyzing ? <><Spinner s={13}/>Analyzing your voice…</> : <><Wand2 size={13}/>Analyze My Voice → Save Profile</>}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT — profile */}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {voiceProfile ? (
+            <>
+              <div className="glass-card" style={{padding:"20px 24px",borderLeft:"3px solid #a78bfa"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>YOUR AI VOICE GUIDANCE</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>Auto-injected into every AI feature in your hub. You can edit this directly:</div>
+                <textarea className="textarea" rows={6} value={agentVoice} onChange={e=>setAgentVoice(e.target.value)} style={{resize:"vertical",fontFamily:"inherit",fontSize:13,lineHeight:1.6}}/>
+              </div>
+
+              <div className="glass-card" style={{padding:"18px 22px"}}>
+                <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:14}}>🔍 Profile breakdown</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10,fontSize:12,color:"#cbd5e1"}}>
+                  {voiceProfile.summary && <div><strong style={{color:"#7eb8f7"}}>Summary:</strong> {voiceProfile.summary}</div>}
+                  {voiceProfile.tone && <div><strong style={{color:"#7eb8f7"}}>Tone:</strong> {Array.isArray(voiceProfile.tone)?voiceProfile.tone.join(", "):voiceProfile.tone}</div>}
+                  {voiceProfile.openings && <div><strong style={{color:"#7eb8f7"}}>Openings:</strong> {voiceProfile.openings}</div>}
+                  {voiceProfile.closings && <div><strong style={{color:"#7eb8f7"}}>Sign-offs:</strong> {voiceProfile.closings}</div>}
+                  {voiceProfile.signaturePhrases && Array.isArray(voiceProfile.signaturePhrases) && voiceProfile.signaturePhrases.length > 0 && (
+                    <div><strong style={{color:"#7eb8f7"}}>Signature phrases:</strong> {voiceProfile.signaturePhrases.map(p=>`"${p}"`).join(", ")}</div>
+                  )}
+                  {voiceProfile.emojiHabits && <div><strong style={{color:"#7eb8f7"}}>Emoji:</strong> {voiceProfile.emojiHabits}</div>}
+                  {voiceProfile.sentencePatterns && <div><strong style={{color:"#7eb8f7"}}>Sentence patterns:</strong> {voiceProfile.sentencePatterns}</div>}
+                  {voiceProfile.topics && <div><strong style={{color:"#7eb8f7"}}>Topics:</strong> {Array.isArray(voiceProfile.topics)?voiceProfile.topics.join(", "):voiceProfile.topics}</div>}
+                  {voiceProfile.avoidances && <div><strong style={{color:"#fbbf24"}}>Never:</strong> {voiceProfile.avoidances}</div>}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="glass-card" style={{padding:"40px 28px",textAlign:"center"}}>
+              <Wand2 size={42} color="#475569" style={{marginBottom:14}}/>
+              <div style={{fontSize:16,fontWeight:800,color:"#cbd5e1",marginBottom:6}}>Your voice profile will appear here</div>
+              <div style={{fontSize:12,color:"#64748b",lineHeight:1.6,maxWidth:340,margin:"0 auto"}}>
+                After analyzing, you'll see a full breakdown of your tone, signature phrases, emoji habits, and the final guidance paragraph that auto-injects into every AI feature.
+              </div>
+              {agentVoice && (
+                <div style={{marginTop:20,padding:"12px 16px",background:"rgba(255,255,255,.03)",borderRadius:8,textAlign:"left"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#a78bfa",marginBottom:4}}>CURRENT (manual) voice guidance:</div>
+                  <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.5}}>{agentVoice}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // ─── INTEGRATIONS ─────────────────────────────────────────────────────────────
 const Integrations = ({setPage,toast}) => {
   const [settings,setSettings] = useLS("integrations",{});
@@ -8949,6 +9172,7 @@ export default function App() {
     "social-agent":       <SocialAgent {...props}/>,
     "db-intel":           <DatabaseIntel {...props}/>,
     "closing-mult":       <ClosingMultiplier {...props}/>,
+    "voice-trainer":      <VoiceTrainer {...props}/>,
     "pipeline":           <PipelineBoard {...props}/>,
     "tasks":              <TaskManager {...props}/>,
     "action-plans":       <ActionPlans {...props}/>,
