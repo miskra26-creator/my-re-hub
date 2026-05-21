@@ -75,14 +75,6 @@ const GlobalStyles = () => (
       padding: 22px 18px 16px;
       border-bottom: 1px solid rgba(255,255,255,.05);
     }
-    .sidebar-logo-mark {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, #1a5aa0, #2d7dd2);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 900; color: #fff;
-      box-shadow: 0 4px 20px rgba(26,90,160,.45);
-      font-family: 'DM Serif Display', serif;
-    }
     .sidebar-title { font-size: 12.5px; font-weight: 800; color: #f1f5f9; letter-spacing: -.2px; line-height: 1.2; }
     .sidebar-sub { font-size: 9px; font-weight: 700; color: #475569; letter-spacing: 1.5px; text-transform: uppercase; }
 
@@ -8901,7 +8893,7 @@ const Sidebar = ({current,setPage,mobileOpen,setMobileOpen,inboxCount=0}) => {
     <div className={`sidebar ${mobileOpen?"open":""}`}>
       <div className="sidebar-logo">
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div className="sidebar-logo-mark">RE</div>
+          <img src="/logo-transparent.png" alt="" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
           <div>
             <div className="sidebar-title">Real Estate Hub</div>
             <div className="sidebar-sub">Intelligence Platform</div>
