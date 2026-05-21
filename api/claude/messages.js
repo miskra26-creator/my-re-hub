@@ -1,8 +1,15 @@
 /**
- * Vercel Serverless Function — Claude API Proxy
- * Browsers can't call api.anthropic.com directly (CORS + key exposure),
- * so the React app POSTs to /api/claude/messages and we forward the call
- * to https://api.anthropic.com/v1/messages with ANTHROPIC_API_KEY attached.
+ * Vercel Serverless Function — AI Proxy
+ *
+ * The React app POSTs to /api/claude/messages expecting Anthropic's response
+ * shape: { content: [{type:"text", text: "..."}] }
+ *
+ * We try providers in order:
+ *   1. ANTHROPIC_API_KEY → Anthropic Claude (best quality, paid)
+ *   2. GOOGLE_GEMINI_API_KEY → Google Gemini (free tier: 1500 req/day)
+ *
+ * Whichever responds first wins. Gemini's response is translated into
+ * Anthropic's shape so the client doesn't care which provider answered.
  */
 
 export default async function handler(req, res) {
@@ -11,28 +18,94 @@ export default async function handler(req, res) {
   }
 
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_API_KEY) {
+  const GEMINI_API_KEY    = process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+  if (!ANTHROPIC_API_KEY && !GEMINI_API_KEY) {
     return res.status(500).json({
-      error: { message: 'ANTHROPIC_API_KEY not configured on the server' },
+      error: { message: 'No AI provider configured. Set ANTHROPIC_API_KEY or GOOGLE_GEMINI_API_KEY in Vercel env vars.' },
     });
   }
 
-  try {
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(req.body),
-    });
-
-    const data = await upstream.json();
-    res.status(upstream.status).json(data);
-  } catch (err) {
-    res.status(502).json({
-      error: { message: 'Claude proxy error: ' + err.message },
-    });
+  // Try Anthropic first if configured
+  if (ANTHROPIC_API_KEY) {
+    try {
+      const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(req.body),
+      });
+      const data = await upstream.json();
+      if (upstream.ok) return res.status(upstream.status).json(data);
+      console.warn('[claude proxy] Anthropic failed, trying Gemini:', data?.error?.message || upstream.status);
+      // fall through to Gemini
+    } catch (err) {
+      console.warn('[claude proxy] Anthropic exception, trying Gemini:', err.message);
+    }
   }
+
+  // Gemini fallback
+  if (GEMINI_API_KEY) {
+    try {
+      const body = req.body || {};
+      // Translate Anthropic messages → Gemini contents
+      const contents = [];
+      if (body.system) {
+        // Gemini has a separate systemInstruction field on the request body
+      }
+      (body.messages || []).forEach((m) => {
+        contents.push({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+        });
+      });
+
+      const geminiBody = {
+        contents,
+        generationConfig: {
+          maxOutputTokens: body.max_tokens || 1500,
+          temperature: body.temperature ?? 0.7,
+        },
+      };
+      if (body.system) {
+        geminiBody.systemInstruction = { parts: [{ text: body.system }] };
+      }
+
+      // Use Gemini 2.0 Flash by default (free tier, fast, solid quality)
+      const model = 'gemini-2.0-flash';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+      const upstream = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(geminiBody),
+      });
+      const data = await upstream.json();
+      if (!upstream.ok) {
+        return res.status(upstream.status).json({
+          error: { message: 'Gemini error: ' + (data?.error?.message || upstream.status) },
+        });
+      }
+      // Translate Gemini response → Anthropic shape
+      const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+      return res.status(200).json({
+        id: 'gemini_' + Date.now(),
+        type: 'message',
+        role: 'assistant',
+        model,
+        content: [{ type: 'text', text }],
+        stop_reason: data?.candidates?.[0]?.finishReason || 'end_turn',
+        usage: {
+          input_tokens: data?.usageMetadata?.promptTokenCount || 0,
+          output_tokens: data?.usageMetadata?.candidatesTokenCount || 0,
+        },
+      });
+    } catch (err) {
+      return res.status(502).json({ error: { message: 'Gemini proxy error: ' + err.message } });
+    }
+  }
+
+  return res.status(500).json({ error: { message: 'AI proxy: no provider succeeded' } });
 }
