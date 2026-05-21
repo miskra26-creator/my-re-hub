@@ -238,7 +238,19 @@ export default function AutoReel({ setPage, toast }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(isUrl ? { url: q } : { mlsNum: q }),
       });
-      const data = await r.json();
+
+      // Parse response carefully — if the endpoint isn't reachable (e.g.
+      // Vercel didn't deploy it, env vars missing), the server may return
+      // HTML which JSON.parse can't handle. Surface a clear message.
+      const raw = await r.text();
+      let data;
+      try { data = JSON.parse(raw); }
+      catch (e) {
+        if (raw.includes('could not be found') || raw.includes('NOT_FOUND')) {
+          throw new Error('Auto-import endpoint not deployed on Vercel yet. Use manual photo upload below for now. (Realcomp IDX integration is the proper long-term fix once they reply to your email.)');
+        }
+        throw new Error(`Server returned non-JSON (HTTP ${r.status}). Try manual photo upload instead.`);
+      }
       if (!r.ok || data.error) {
         throw new Error(data.error?.message || `Import failed (HTTP ${r.status})`);
       }
