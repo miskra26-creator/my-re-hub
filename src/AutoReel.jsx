@@ -217,11 +217,13 @@ export default function AutoReel({ setPage, toast }) {
       addLog(`Picked ${ordered.length} best photos, ordered: ${ordered.map(o => o.room).join(' → ')}`);
       setProgress(0.25);
 
-      // Build scenes with photo refs
+      // Build scenes with photo refs. The label is the AI-extracted specific
+      // feature ("WHITE QUARTZ ISLAND") — generic room words have been stripped
+      // upstream so we don't show useless "KITCHEN" overlays.
       const scenes = ordered.map(o => ({
         photo: photos[o.index],
         room:  o.room,
-        label: o.label,
+        label: o.label || '',
         score: o.score,
         vacancy: o.vacancy,
       }));

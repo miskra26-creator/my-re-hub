@@ -38,13 +38,22 @@ const easeInCubic    = (t) => t * t * t;
 
 // ── Vibe-driven settings ──────────────────────────────────────────────────────
 // (Imported defaults — caller can pass overrides through opts)
+// Recalibrated 2026-05-21 after user feedback that output was muddy and
+// jittery. Changes from v1:
+//   - Removed sepia tint from luxury/cinematic/open-house (was making warm
+//     photos look yellow/muddy on phone screens)
+//   - Reduced grain from 0.04-0.08 down to 0.01-0.02 (was adding visible noise
+//     that read as "low quality" on dark phone screens)
+//   - Reduced motion intensity ~40% (was zooming too aggressively, reducing
+//     effective photo resolution and making motion feel jittery)
+//   - Vignette toned down ~30% (was darkening the corners too much)
 const VIBE_DEFAULTS = {
-  luxury:      { sceneDuration: 3.2, motionScale: 0.18, transition: 'fade',  grainAmount: 0.06, vignette: 0.45, filterCss: 'contrast(1.18) saturate(1.12) brightness(.96) sepia(.06)' },
-  'just-listed': { sceneDuration: 2.4, motionScale: 0.22, transition: 'whip',  grainAmount: 0.04, vignette: 0.30, filterCss: 'saturate(1.45) contrast(1.18) brightness(1.03)' },
-  'price-drop': { sceneDuration: 2.6, motionScale: 0.25, transition: 'zoom',  grainAmount: 0.04, vignette: 0.32, filterCss: 'contrast(1.28) saturate(1.30) brightness(1.04)' },
-  'open-house': { sceneDuration: 2.8, motionScale: 0.20, transition: 'fade',  grainAmount: 0.05, vignette: 0.32, filterCss: 'saturate(1.18) sepia(.12) brightness(1.06) contrast(1.05)' },
-  sold:        { sceneDuration: 2.8, motionScale: 0.20, transition: 'fade',  grainAmount: 0.05, vignette: 0.35, filterCss: 'brightness(1.08) saturate(1.32) hue-rotate(-12deg) contrast(1.06)' },
-  cinematic:   { sceneDuration: 3.6, motionScale: 0.16, transition: 'fade',  grainAmount: 0.08, vignette: 0.50, filterCss: 'contrast(1.20) saturate(1.10) brightness(.95) sepia(.05)' },
+  luxury:        { sceneDuration: 3.4, motionScale: 0.11, transition: 'fade',  grainAmount: 0.012, vignette: 0.30, filterCss: 'contrast(1.10) saturate(1.06) brightness(1.00)' },
+  'just-listed': { sceneDuration: 2.6, motionScale: 0.14, transition: 'whip',  grainAmount: 0.010, vignette: 0.22, filterCss: 'saturate(1.22) contrast(1.10) brightness(1.03)' },
+  'price-drop':  { sceneDuration: 2.8, motionScale: 0.15, transition: 'zoom',  grainAmount: 0.010, vignette: 0.24, filterCss: 'contrast(1.14) saturate(1.18) brightness(1.04)' },
+  'open-house':  { sceneDuration: 3.0, motionScale: 0.12, transition: 'fade',  grainAmount: 0.012, vignette: 0.22, filterCss: 'saturate(1.10) brightness(1.05) contrast(1.04)' },
+  sold:          { sceneDuration: 3.0, motionScale: 0.12, transition: 'fade',  grainAmount: 0.012, vignette: 0.24, filterCss: 'brightness(1.05) saturate(1.18) contrast(1.05)' },
+  cinematic:     { sceneDuration: 3.8, motionScale: 0.10, transition: 'fade',  grainAmount: 0.018, vignette: 0.34, filterCss: 'contrast(1.12) saturate(1.04) brightness(1.00)' },
 };
 
 // ── Per-scene cinematic motion ────────────────────────────────────────────────
@@ -301,88 +310,148 @@ function drawStatsCard(ctx, w, h, p, { hook, statsLine, accent, primary, brandNa
   }
 }
 
-// ── Closing card with logo + CTA ──────────────────────────────────────────────
+// ── Closing card — modern redesign 2026-05-21 ────────────────────────────────
+// Full-bleed blurred photo backdrop (the standout photo from the reel) with a
+// clean glassy overlay card containing logo + headline + CTA + contact info.
+// Replaces the 2010s solid-color version that read as "stock template."
 async function drawClosingCard(ctx, w, h, p, opts) {
-  const { headline, cta, brand, accent, primary, logoEl } = opts;
-  ctx.fillStyle = primary || '#0f172a';
-  ctx.fillRect(0, 0, w, h);
+  const { headline, cta, brand, accent, primary, logoEl, backdropImg } = opts;
 
-  // Bloom
-  const bloom = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h) * 0.6);
-  bloom.addColorStop(0, `${accent || '#b8864b'}33`);
-  bloom.addColorStop(1, 'transparent');
-  ctx.fillStyle = bloom;
-  ctx.fillRect(0, 0, w, h);
+  // ── Backdrop: blurred final photo, or fallback solid gradient ─────────────
+  if (backdropImg) {
+    ctx.save();
+    ctx.filter = 'blur(28px) brightness(0.55) saturate(1.05)';
+    const iw = backdropImg.naturalWidth;
+    const ih = backdropImg.naturalHeight;
+    const scale = Math.max(w / iw, h / ih) * 1.12;
+    const dw = iw * scale;
+    const dh = ih * scale;
+    ctx.drawImage(backdropImg, w/2 - dw/2, h/2 - dh/2, dw, dh);
+    ctx.restore();
+  } else {
+    // Fallback: subtle vertical gradient on the primary brand color
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, shadeColor(primary || '#0f172a', -8));
+    grad.addColorStop(1, primary || '#0f172a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }
 
-  let y = h * 0.28;
+  // Dark scrim — pull contrast back so overlay text reads cleanly
+  ctx.save();
+  const scrim = ctx.createLinearGradient(0, 0, 0, h);
+  scrim.addColorStop(0, 'rgba(0,0,0,0.45)');
+  scrim.addColorStop(0.5, 'rgba(0,0,0,0.55)');
+  scrim.addColorStop(1, 'rgba(0,0,0,0.7)');
+  ctx.fillStyle = scrim;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+
+  // ── Overlay card — centered, with soft glassy border ──────────────────────
+  const cardW = w * 0.78;
+  const cardH = h * 0.56;
+  const cardX = w / 2 - cardW / 2;
+  const cardY = h / 2 - cardH / 2;
+  const cardP = Math.min(1, p * 1.8);
+
+  ctx.save();
+  ctx.globalAlpha = cardP;
+  // Subtle card backdrop — slight tint so it reads as a card, not just text
+  ctx.fillStyle = 'rgba(15,20,38,0.25)';
+  roundedRect(ctx, cardX, cardY, cardW, cardH, 18);
+  ctx.fill();
+  // Hairline border in accent gold
+  ctx.strokeStyle = `${accent || '#b8864b'}55`;
+  ctx.lineWidth = 1.5;
+  roundedRect(ctx, cardX, cardY, cardW, cardH, 18);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Content layout ────────────────────────────────────────────────────────
+  // Vertical stack: logo → headline → divider → CTA → contact lines
+  let y = cardY + cardH * 0.13;
+  const centerX = w / 2;
 
   // Logo
   if (logoEl) {
     const logoP = Math.min(1, p * 2);
-    const logoSize = w * 0.32 * easeOutCubic(logoP);
-    const logoH = logoSize * (logoEl.naturalHeight / Math.max(1, logoEl.naturalWidth));
+    const logoMaxW = cardW * 0.42;
+    const logoNatRatio = logoEl.naturalHeight / Math.max(1, logoEl.naturalWidth);
+    const logoW = logoMaxW * easeOutCubic(logoP);
+    const logoH = logoW * logoNatRatio;
     ctx.save();
     ctx.globalAlpha = logoP;
-    ctx.drawImage(logoEl, w/2 - logoSize/2, y, logoSize, logoH);
+    ctx.drawImage(logoEl, centerX - logoW/2, y, logoW, logoH);
     ctx.restore();
-    y += logoH + h * 0.04;
+    y += logoH + cardH * 0.06;
   }
 
-  // Headline
+  // Headline — large serif, white, no shadow needed (we have scrim)
   if (headline) {
-    const hP = Math.max(0, Math.min(1, (p - 0.25) / 0.4));
+    const hP = Math.max(0, Math.min(1, (p - 0.20) / 0.35));
     ctx.save();
     ctx.fillStyle = '#fff';
-    const hSize = Math.floor(w * 0.072);
+    const hSize = Math.floor(w * 0.062);
     ctx.font = `900 ${hSize}px "DM Serif Display", Georgia, serif`;
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.globalAlpha = hP;
-    const offset = (1 - easeOutCubic(hP)) * h * 0.03;
-    shadowedFill(ctx, headline, w/2, y + offset, { shadowBlur: 16 });
-    y += hSize * 1.4;
+    const yOff = (1 - easeOutCubic(hP)) * 14;
+    ctx.fillText(headline, centerX, y + hSize/2 + yOff);
+    y += hSize * 1.3;
     ctx.restore();
   }
 
   // Accent divider
-  const dP = Math.max(0, Math.min(1, (p - 0.45) / 0.25));
+  const dP = Math.max(0, Math.min(1, (p - 0.40) / 0.20));
   ctx.save();
   ctx.strokeStyle = accent || '#b8864b';
-  ctx.lineWidth = 3;
-  const dW = w * 0.16 * dP;
+  ctx.lineWidth = 2;
+  const dW = cardW * 0.14 * dP;
   ctx.beginPath();
-  ctx.moveTo(w/2 - dW/2, y);
-  ctx.lineTo(w/2 + dW/2, y);
+  ctx.moveTo(centerX - dW/2, y);
+  ctx.lineTo(centerX + dW/2, y);
   ctx.stroke();
   ctx.restore();
-  y += h * 0.04;
+  y += cardH * 0.05;
 
   // CTA
   if (cta) {
-    const cP = Math.max(0, Math.min(1, (p - 0.55) / 0.3));
+    const cP = Math.max(0, Math.min(1, (p - 0.50) / 0.25));
     ctx.save();
     ctx.fillStyle = '#fff';
-    const cSize = Math.floor(w * 0.038);
+    const cSize = Math.floor(w * 0.034);
     ctx.font = `600 ${cSize}px "Cabinet Grotesk", "Helvetica Neue", system-ui, sans-serif`;
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.globalAlpha = cP;
-    const offset = (1 - easeOutCubic(cP)) * h * 0.025;
-    shadowedFill(ctx, cta, w/2, y + offset, { shadowBlur: 10 });
-    y += cSize * 1.6;
+    const yOff = (1 - easeOutCubic(cP)) * 10;
+    // Wrap CTA if it's too wide for the card
+    const ctaLines = wrapText(ctx, cta, cardW * 0.85);
+    const ctaH = cSize * 1.3;
+    ctaLines.forEach((line, i) => ctx.fillText(line, centerX, y + i * ctaH + cSize/2 + yOff));
+    y += ctaH * ctaLines.length + cardH * 0.04;
     ctx.restore();
   }
 
-  // Contact lines (brand contact info)
-  const contactLines = [brand?.phone, brand?.email, brand?.website].filter(Boolean);
+  // Contact lines — agent name + phone/email/website
+  const contactLines = [
+    brand?.name,
+    brand?.phone,
+    brand?.email || brand?.website,
+  ].filter(Boolean);
   if (contactLines.length) {
-    const ctxP = Math.max(0, Math.min(1, (p - 0.7) / 0.25));
+    const cxP = Math.max(0, Math.min(1, (p - 0.65) / 0.30));
     ctx.save();
-    ctx.fillStyle = `${accent || '#b8864b'}cc`;
-    const liSize = Math.floor(w * 0.026);
-    ctx.font = `500 ${liSize}px "Cabinet Grotesk", "Helvetica Neue", system-ui, sans-serif`;
+    const liSize = Math.floor(w * 0.022);
+    ctx.font = `600 ${liSize}px "Cabinet Grotesk", "Helvetica Neue", system-ui, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.globalAlpha = ctxP;
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = cxP;
     contactLines.forEach((line, i) => {
-      shadowedFill(ctx, line, w/2, y + i * liSize * 1.5, { shadowBlur: 8 });
+      // First line (agent name) in accent gold, others in soft white
+      ctx.fillStyle = i === 0 ? (accent || '#b8864b') : 'rgba(255,255,255,0.78)';
+      ctx.fillText(line, centerX, y + i * liSize * 1.7 + liSize/2);
     });
     ctx.restore();
   }
@@ -408,14 +477,18 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
   const quality    = opts.quality || 'high';
   const showCaptions = opts.captions !== false; // default on when voiceover present
 
+  // Render at 1.25x the target dimensions so photos stay sharp through the
+  // Ken Burns zoom AND MediaRecorder's lossy encoding. Chrome's VP9 encoder
+  // tends to cap actual output bitrate well below what we request, so
+  // supersampling at the source level helps preserve detail.
   const ASPECTS = {
     '9:16': { w: 1080, h: 1920 },
     '1:1':  { w: 1080, h: 1080 },
     '16:9': { w: 1920, h: 1080 },
   };
   const QUALITY = {
-    high: { scale: 1.0, bitrate: 14_000_000 },
-    max:  { scale: 1.0, bitrate: 24_000_000 },
+    high: { scale: 1.25, bitrate: 16_000_000 },
+    max:  { scale: 1.50, bitrate: 28_000_000 },
   };
   const baseAsp = ASPECTS[aspect];
   const qPreset = QUALITY[quality] || QUALITY.high;
@@ -792,8 +865,14 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
 
-        // Scene label (kinetic typography)
-        const label = narrative.sceneLabels?.[sceneIdx] || scenes[sceneIdx]?.label || '';
+        // Scene label (kinetic typography). Prefers the AI's per-photo
+        // specific label ("WHITE QUARTZ ISLAND") over the curation label,
+        // and SKIPS entirely when there's no specific feature to call out
+        // — better to show nothing than to slap "BEDROOM" on a bedroom.
+        const rawLabel = (narrative.sceneLabels?.[sceneIdx] || scenes[sceneIdx]?.label || '').trim();
+        // Filter out cliche generic labels even if AI sneaks one through
+        const isGeneric = /^(KITCHEN|BEDROOM|LIVING ROOM|BATHROOM|DINING ROOM|OFFICE|BASEMENT|ENTRY|HALLWAY|FOYER|ROOM)$/i.test(rawLabel);
+        const label = isGeneric ? '' : rawLabel;
         if (label) {
           // Label appears from 8% to 75% of scene, fades out at end
           const labelP = Math.max(0, Math.min(1, (sceneT - 0.08) / 0.5));

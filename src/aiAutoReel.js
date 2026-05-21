@@ -162,6 +162,10 @@ For each photo provided, return:
 - a quality score 1-10 (how visually compelling is it?)
 - a room type label, exactly one of: ${ROOM_ORDER.join(', ')}
 - a "vacancy" label: "vacant" (completely empty), "sparse" (few items), or "staged" (furnished). Floor plans and exterior shots are always "staged".
+- a SHORT specific label (2-4 ALL-CAPS words) describing WHAT IS ACTUALLY VISIBLE in the photo — NOT generic room labels.
+  Good labels describe the standout feature: "WHITE QUARTZ ISLAND", "VAULTED CEILINGS", "WALK-IN PANTRY", "FENCED PRIVATE YARD", "PRIMARY SUITE OASIS", "MARBLE WATERFALL ISLAND", "SPA SHOWER", "FINISHED BASEMENT", "COVERED PATIO", "MUDROOM ENTRY", "STAINLESS APPLIANCES", "BAY WINDOW NOOK".
+  Bad labels (generic): "KITCHEN", "BEDROOM", "BATHROOM", "LIVING ROOM" — these are NOT helpful because the viewer can already see what room it is.
+  If you genuinely can't identify a distinctive feature, leave the label empty string.
 - a one-sentence reason
 
 Quality criteria (what makes a HIGH-scoring photo):
@@ -193,8 +197,9 @@ Room categorization rules:
 Return STRICT JSON only (no markdown fences, no commentary):
 {
   "photos": [
-    { "index": 0, "score": 8, "room": "exterior", "vacancy": "staged", "reason": "Strong twilight curb appeal with warm window glow" },
-    { "index": 1, "score": 6, "room": "living", "vacancy": "vacant", "reason": "Empty living room — good light, but no furniture so could benefit from virtual staging" },
+    { "index": 0, "score": 9, "room": "exterior", "vacancy": "staged", "label": "BRICK COLONIAL CHARM", "reason": "Strong curb appeal with warm window glow" },
+    { "index": 1, "score": 8, "room": "kitchen", "vacancy": "staged", "label": "WHITE QUARTZ ISLAND", "reason": "Bright kitchen with statement waterfall island" },
+    { "index": 2, "score": 7, "room": "primary", "vacancy": "vacant", "label": "VAULTED CEILINGS", "reason": "Empty primary bedroom — vault adds drama, candidate for staging" },
     ...one entry per photo, in order...
   ]
 }`;
@@ -225,7 +230,10 @@ Return STRICT JSON only (no markdown fences, no commentary):
     index: p.index,
     score: typeof p.score === 'number' ? p.score : 5,
     room:  ROOM_ORDER.includes(p.room) ? p.room : 'other',
-    label: ROOM_LABEL[p.room] || '',
+    // Use the AI-generated specific label when present (e.g. "WHITE QUARTZ
+    // ISLAND"). Fall back to the generic ROOM_LABEL only when AI didn't
+    // provide one — and even then, prefer empty string over a cliche.
+    label: (typeof p.label === 'string' && p.label.trim()) ? p.label.trim().toUpperCase() : '',
     vacancy: ['vacant', 'sparse', 'staged'].includes(p.vacancy) ? p.vacancy : 'staged',
     reason: p.reason || '',
   }));
@@ -280,7 +288,7 @@ export function buildSceneOrder(curated, targetCount = 9) {
 export async function generateNarrative({ scenes, listing, vibe, agentVoice, agent }) {
   const vibeDef = VIBE_BY_ID[vibe] || VIBES[0];
   const sceneList = scenes.map((s, i) =>
-    `Scene ${i + 1}: room=${s.room} (default label: "${ROOM_LABEL[s.room] || ''}")`
+    `Scene ${i + 1}: room=${s.room}${s.label ? `, observed feature: "${s.label}"` : ''}`
   ).join('\n');
 
   const stats = [];
@@ -317,11 +325,15 @@ LISTING:
 SCENES IN PLAYBACK ORDER:
 ${sceneList}
 
+CRITICAL: For each scene's label, REUSE the observed feature from the scene list above when it's present — those are what an AI actually sees in the photo, so they will match what the viewer sees on screen. Do NOT make up generic room labels like "KITCHEN" or "BEDROOM" — the viewer can already tell what room it is. Use specific features visible in the photo (e.g. "WHITE QUARTZ ISLAND", "VAULTED CEILINGS").
+
+If a scene has NO observed feature listed, leave its label as an empty string "" — the room shows on screen without text.
+
 Return STRICT JSON only (no markdown):
 {
   "hook": "Opening scroll-stopper (under 50 chars, NO period at end)",
   "statsLine": "${stats.join(' · ') || ''}",
-  "sceneLabels": ["scene 1 label", "scene 2 label", ...one per scene...],
+  "sceneLabels": ["specific feature label or empty string for scene 1", "...one per scene..."],
   "closingHeadline": "Big text on closing card (under 30 chars)",
   "closingCta": "Action prompt (under 60 chars)",
   "igCaption": "The Instagram caption — text then a blank line then hashtags",
