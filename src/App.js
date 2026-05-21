@@ -6603,6 +6603,8 @@ const RealcompMLS = ({setPage, toast}) => {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showAutoSyncSetup, setShowAutoSyncSetup] = useState(false);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnosis, setDiagnosis] = useState(null);
   const fileRef = useRef(null);
 
   // Load from Supabase listings table + realtime sub
@@ -6673,6 +6675,79 @@ const RealcompMLS = ({setPage, toast}) => {
     e.target.value = "";
   };
 
+  // End-to-end diagnostic: posts a tiny known-good CSV to the webhook and
+  // reports back EXACTLY which step is broken. Lets us localize the problem
+  // without having to dig through Vercel logs / Cloudmailin / Matrix manually.
+  const runDiagnostic = async () => {
+    setDiagnosing(true);
+    setDiagnosis(null);
+    const findings = { steps: [], summary: '', nextStep: '' };
+    try {
+      // STEP 1: Are listings reachable in Supabase from this browser?
+      try {
+        const { data, error, count } = await supabase
+          .from("listings")
+          .select("*", { count: "exact", head: true });
+        if (error) throw error;
+        findings.steps.push({ ok: true, label: `Supabase listings table reachable · ${count ?? '?'} rows total` });
+      } catch (e) {
+        findings.steps.push({ ok: false, label: `Supabase listings table unreachable: ${e.message}` });
+        throw new Error("Supabase issue — check REACT_APP_SUPABASE_URL/ANON_KEY env vars");
+      }
+
+      // STEP 2: Is the webhook endpoint deployed and accepting POSTs?
+      const testCSV = [
+        "MLS#,Address,City,Status,List Price,Beds,Baths,SqFt",
+        "TEST-DIAG-001,123 Diagnostic Lane,Livonia,Active,425000,4,2.5,2400",
+      ].join("\n");
+      const r = await fetch("/api/webhook/realcomp-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plain: testCSV }),
+      });
+      let payload = null;
+      try { payload = await r.json(); } catch {}
+      if (!r.ok) {
+        findings.steps.push({ ok: false, label: `Webhook returned ${r.status}: ${payload?.error || '(no detail)'}` });
+        if (/MLS_USER_ID/i.test(payload?.error || '')) {
+          findings.nextStep = "Set MLS_USER_ID env var on Vercel (your Supabase user id). See diagnostic detail below.";
+        } else if (/Supabase env/i.test(payload?.error || '')) {
+          findings.nextStep = "Set SUPABASE_URL and SUPABASE_ANON_KEY env vars on Vercel (they exist as REACT_APP_* but the webhook needs the non-prefixed names too).";
+        } else {
+          findings.nextStep = "Check Vercel logs for the /api/webhook/realcomp-csv function for the exact error.";
+        }
+        throw new Error("Webhook failed");
+      }
+      findings.steps.push({ ok: true, label: `Webhook accepted CSV · received ${payload.received}, upserted ${payload.upserted}, failed ${payload.failed}` });
+
+      // STEP 3: Verify the test row landed in the table
+      const { data: probe } = await supabase
+        .from("listings")
+        .select("*")
+        .eq("mls_num", "TEST-DIAG-001")
+        .limit(1);
+      if (probe && probe.length) {
+        findings.steps.push({ ok: true, label: `Test row visible in listings table · id=${probe[0].id}` });
+        // Cleanup the test row
+        try {
+          await supabase.from("listings").delete().eq("mls_num", "TEST-DIAG-001");
+          findings.steps.push({ ok: true, label: 'Test row cleaned up' });
+        } catch {}
+      } else {
+        findings.steps.push({ ok: false, label: `Webhook said upserted ${payload.upserted} but test row not visible (RLS? wrong user_id?)` });
+        findings.nextStep = "The webhook reported success but the row isn't showing up under your user. Check that MLS_USER_ID on Vercel matches your Supabase auth user.id.";
+        throw new Error("RLS mismatch");
+      }
+
+      findings.summary = "✅ Webhook end-to-end works. If Realcomp isn't syncing, the issue is upstream — either Matrix hasn't sent the scheduled email yet, OR Cloudmailin isn't forwarding correctly.";
+      findings.nextStep = "Check Cloudmailin's dashboard at cloudmailin.com — it shows received emails AND outbound POST attempts. If Cloudmailin shows nothing recent, the issue is Matrix (scheduled email not firing or not configured). If Cloudmailin received an email but the POST failed, check the destination URL it has.";
+    } catch (e) {
+      if (!findings.summary) findings.summary = `❌ Diagnostic stopped at: ${e.message}`;
+    }
+    setDiagnosis(findings);
+    setDiagnosing(false);
+  };
+
   const clearAll = async () => {
     if (!window.confirm("Delete ALL listings from your cloud? This can't be undone.")) return;
     try {
@@ -6694,9 +6769,12 @@ const RealcompMLS = ({setPage, toast}) => {
 
   return (
     <div className="page-content">
-      <PageHeader title="Realcomp MLS" sub={`${listings.length} listings ${loading?"loading…":"cloud-synced"}`} setPage={setPage} parent="dashboard"
+      <PageHeader title="Realcomp MLS" sub={`${listings.length} listings ${loading?"loading…":"cloud-synced"}${listings[0]?.updatedAt?` · last sync ${new Date(listings[0].updatedAt).toLocaleString()}`:''}`} setPage={setPage} parent="dashboard"
         action={
-          <div style={{display:"flex",gap:8}}>
+          <div style={{display:"flex",gap:8, flexWrap:'wrap'}}>
+            <button className="btn btn-ghost btn-sm" onClick={runDiagnostic} disabled={diagnosing}>
+              {diagnosing ? <RefreshCw size={12} className="spin"/> : <CheckCircle size={12}/>}{diagnosing?"Diagnosing…":"Diagnose sync"}
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={()=>setShowAutoSyncSetup(s=>!s)}><Zap size={12}/>{showAutoSyncSetup?"Hide setup":"Auto-Sync Setup"}</button>
             <button className="btn btn-ghost btn-sm" onClick={()=>window.open("https://matrix.realcomponline.com","_blank")}><Globe size={12}/>Open Matrix</button>
             <button className="btn btn-blue btn-sm" onClick={()=>fileRef.current?.click()}><Upload size={12}/>Import CSV</button>
@@ -6704,6 +6782,43 @@ const RealcompMLS = ({setPage, toast}) => {
           </div>
         }
       />
+
+      {/* Diagnostic result panel */}
+      {diagnosis && (
+        <div style={{
+          background: 'rgba(15,20,38,.6)', border: '1px solid rgba(184,134,75,.3)',
+          borderRadius: 12, padding: 18, marginBottom: 18,
+        }}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+            <div style={{fontSize:14, fontWeight:800, color:'#fff'}}>Sync diagnostic</div>
+            <button onClick={()=>setDiagnosis(null)} style={{background:'transparent', border:'none', color:'#94a3b8', cursor:'pointer', fontSize:18}}>×</button>
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:8, marginBottom:14}}>
+            {diagnosis.steps.map((s, i) => (
+              <div key={i} style={{
+                display:'flex', alignItems:'flex-start', gap:8,
+                padding:'8px 12px', borderRadius:6,
+                background: s.ok ? 'rgba(16,185,129,.08)' : 'rgba(239,68,68,.08)',
+                borderLeft: `3px solid ${s.ok ? '#10b981' : '#ef4444'}`,
+              }}>
+                <span style={{color: s.ok ? '#6ee7b7' : '#fca5a5', fontWeight:800}}>{s.ok ? '✓' : '✗'}</span>
+                <span style={{fontSize:12.5, color:'#e2e8f0', lineHeight:1.5}}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+          {diagnosis.summary && (
+            <div style={{fontSize:13, color:'#f1f5f9', marginBottom:8, lineHeight:1.5}}>{diagnosis.summary}</div>
+          )}
+          {diagnosis.nextStep && (
+            <div style={{
+              background:'rgba(184,134,75,.1)', borderLeft:'3px solid #b8864b',
+              padding:'10px 12px', borderRadius:6, fontSize:12, color:'#e0b370', lineHeight:1.5,
+            }}>
+              <strong>Next step:</strong> {diagnosis.nextStep}
+            </div>
+          )}
+        </div>
+      )}
 
       {showAutoSyncSetup && (
         <div className="glass-card" style={{marginBottom:20,padding:"18px 22px"}}>
