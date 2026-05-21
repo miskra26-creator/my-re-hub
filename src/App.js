@@ -6,6 +6,7 @@ import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
 import { draftSocialReply, looksLikeSpam, isLowSignalComment, DEFAULT_SOCIAL_SETTINGS } from './aiSocialAgent';
 import { scoreAllLeads, groupByBucket, BUCKET_META } from './aiDatabaseIntel';
 import { multiplyClosing } from './aiClosingMultiplier';
+import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
