@@ -5452,25 +5452,89 @@ const parseRealcompCSV = (text) => {
 };
 
 const RealcompMLS = ({setPage, toast}) => {
-  const [listings, setListings] = useLS("realcomp_listings", []);
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [showAutoSyncSetup, setShowAutoSyncSetup] = useState(false);
   const fileRef = useRef(null);
 
-  const handleFile = (e) => {
+  // Load from Supabase listings table + realtime sub
+  const reload = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("listings")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      // Normalize snake_case → camelCase for UI consistency with the parser
+      const ui = (data || []).map(r => ({
+        id: r.id,
+        mlsNum: r.mls_num || "",
+        address: r.address || "",
+        city: r.city || "",
+        zip: r.zip || "",
+        status: r.status || "",
+        listPrice: r.list_price != null ? String(r.list_price) : "",
+        salePrice: r.sale_price != null ? String(r.sale_price) : "",
+        beds: r.beds != null ? String(r.beds) : "",
+        baths: r.baths != null ? String(r.baths) : "",
+        sqft: r.sqft != null ? String(r.sqft) : "",
+        dom: r.dom != null ? String(r.dom) : "",
+        listDate: r.list_date || "",
+        closeDate: r.close_date || "",
+        agent: r.agent || "",
+        updatedAt: r.updated_at,
+      }));
+      setListings(ui);
+    } catch (e) {
+      console.warn("[realcomp] load failed:", e.message);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const ch = supabase
+      .channel("listings_changes_" + Date.now())
+      .on("postgres_changes", {event:"*", schema:"public", table:"listings"}, () => reload())
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [reload]);
+
+  const handleFile = async (e) => {
     const file = e.target.files[0];
     if(!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const parsed = parseRealcompCSV(ev.target.result);
-      if(parsed.length === 0) { toast.error("No listings found — make sure it's a Realcomp CSV export"); return; }
-      const existingIds = new Set(listings.map(l => l.mlsNum).filter(Boolean));
-      const newListings = parsed.filter(l => !l.mlsNum || !existingIds.has(l.mlsNum));
-      setListings(prev => [...newListings, ...prev]);
-      toast.success(`Imported ${newListings.length} listings from Realcomp`);
+    reader.onload = async (ev) => {
+      try {
+        // Upload to the same webhook endpoint Cloudmailin uses, so behavior is
+        // identical for manual + auto imports.
+        const res = await fetch("/api/webhook/realcomp-csv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plain: ev.target.result }),
+        });
+        const j = await res.json();
+        if (j.ok) {
+          toast.success(`Imported ${j.upserted} listings (${j.received} rows in CSV)`);
+          reload();
+        } else {
+          toast.error(j.error || "Import failed");
+        }
+      } catch(err) { toast.error("Upload error: " + err.message); }
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const clearAll = async () => {
+    if (!window.confirm("Delete ALL listings from your cloud? This can't be undone.")) return;
+    try {
+      const { error } = await supabase.from("listings").delete().neq("id", "");
+      if (error) throw error;
+      toast.success("Cleared all listings");
+      reload();
+    } catch (e) { toast.error("Clear failed: " + e.message); }
   };
 
   const statuses = ["all", ...Array.from(new Set(listings.map(l => l.status).filter(Boolean)))];
@@ -5484,9 +5548,10 @@ const RealcompMLS = ({setPage, toast}) => {
 
   return (
     <div className="page-content">
-      <PageHeader title="Realcomp MLS" sub={`${listings.length} listings imported`} setPage={setPage} parent="dashboard"
+      <PageHeader title="Realcomp MLS" sub={`${listings.length} listings ${loading?"loading…":"cloud-synced"}`} setPage={setPage} parent="dashboard"
         action={
           <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowAutoSyncSetup(s=>!s)}><Zap size={12}/>{showAutoSyncSetup?"Hide setup":"Auto-Sync Setup"}</button>
             <button className="btn btn-ghost btn-sm" onClick={()=>window.open("https://matrix.realcomponline.com","_blank")}><Globe size={12}/>Open Matrix</button>
             <button className="btn btn-blue btn-sm" onClick={()=>fileRef.current?.click()}><Upload size={12}/>Import CSV</button>
             <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}} onChange={handleFile}/>
@@ -5494,14 +5559,42 @@ const RealcompMLS = ({setPage, toast}) => {
         }
       />
 
+      {showAutoSyncSetup && (
+        <div className="glass-card" style={{marginBottom:20,padding:"18px 22px"}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+            <Zap size={16} color="#fbbf24"/>Auto-sync your Matrix saved search (free, ~10 min one-time setup)
+          </div>
+          <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.7,marginBottom:14}}>
+            Matrix can email a daily CSV of your saved search. A free service called <strong>Cloudmailin</strong> catches that email and forwards it to your hub. Result: every morning, your active / pending / sold listings are automatically refreshed here. No more manual CSV uploads.
+          </div>
+          <ol style={{paddingLeft:18,color:"#cbd5e1",lineHeight:1.9,fontSize:13,margin:0}}>
+            <li><strong>Sign up for Cloudmailin</strong> (free) — <a href="https://www.cloudmailin.com/" target="_blank" rel="noreferrer" style={{color:"#7eb8f7"}}>cloudmailin.com</a>. Free plan = 10,000 emails/month (way more than you need).</li>
+            <li>In Cloudmailin, create an inbound address. Get the email like <code style={{background:"rgba(255,255,255,.08)",padding:"1px 6px",borderRadius:4}}>abc123@cloudmailin.net</code> and set the destination URL to:</li>
+            <li style={{listStyle:"none",marginLeft:-18,marginBottom:4}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",background:"rgba(255,255,255,.05)",borderRadius:7,padding:"8px 12px",marginTop:4}}>
+                <code style={{flex:1,fontSize:12,color:"#cbd5e1",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{typeof window!=="undefined"?window.location.origin:"https://my-re-hub.vercel.app"}/api/webhook/realcomp-csv</code>
+                <button className="btn btn-ghost btn-xs" onClick={()=>{navigator.clipboard.writeText((typeof window!=="undefined"?window.location.origin:"https://my-re-hub.vercel.app")+"/api/webhook/realcomp-csv");toast.success("Copied!");}}><Copy size={11}/>Copy</button>
+              </div>
+              Set the format to <strong>JSON Normalized</strong>.
+            </li>
+            <li><strong>In Matrix</strong>: run a search for <em>My Active Listings</em> (Listing Agent = your name, Status = Active / Pending / Sold — whatever you want included). Click <strong>Save Search</strong>.</li>
+            <li>Click <strong>Email me Results</strong> → set frequency to <strong>Daily</strong>, format to <strong>CSV</strong>, recipient to your Cloudmailin address from step 2.</li>
+            <li>That's it. Tomorrow morning the hub will auto-populate with your current actives, pendings, and solds.</li>
+          </ol>
+          <div style={{fontSize:11,color:"#475569",marginTop:14,fontStyle:"italic"}}>Tip: you can also POST any CSV manually to that URL with curl/Postman for testing. Or just use the Import CSV button above — same pipeline.</div>
+        </div>
+      )}
+
       <div className="info-banner info-green" style={{marginBottom:20}}>
         <CheckCircle size={14} style={{flexShrink:0}}/>
-        In Matrix: run any search → Results → Export → choose <strong>CSV</strong> → upload here. All fields map automatically.
+        Listings now live in Supabase. The webhook + Auto-Sync Setup button above lets Matrix push daily CSVs automatically. Or click Import CSV for manual upload.
       </div>
 
-      {listings.length === 0 ? (
+      {loading ? (
+        <div className="glass-card" style={{padding:"40px",textAlign:"center",color:"#475569"}}><Spinner s={22}/><div style={{marginTop:10,fontSize:13}}>Loading your listings…</div></div>
+      ) : listings.length === 0 ? (
         <div className="glass-card">
-          <EmptyState icon={Building} title="No listings yet" desc="Export a CSV from Realcomp Matrix and import it above"/>
+          <EmptyState icon={Building} title="No listings yet" desc="Click Auto-Sync Setup above to wire up the daily Matrix → cloud pipeline. Or Import CSV for a one-off upload."/>
         </div>
       ) : (
         <>
@@ -5514,7 +5607,7 @@ const RealcompMLS = ({setPage, toast}) => {
                 </button>
               ))}
             </div>
-            <button className="btn btn-ghost btn-sm" style={{marginLeft:"auto"}} onClick={()=>{if(window.confirm("Clear all imported listings?"))setListings([])}}><Trash2 size={12}/>Clear All</button>
+            <button className="btn btn-ghost btn-sm" style={{marginLeft:"auto"}} onClick={clearAll}><Trash2 size={12}/>Clear All</button>
           </div>
 
           <div style={{overflowX:"auto"}}>
