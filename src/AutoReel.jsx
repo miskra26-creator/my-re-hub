@@ -231,13 +231,18 @@ export default function AutoReel({ setPage, toast }) {
   const canGenerate = photos.length >= 3 && !busy;
   const vibeDef = VIBE_BY_ID[vibe] || VIBES[0];
 
-  const generate = async () => {
+  // ── PHASE 1: PLAN — runs the cheap AI work, then pauses for review ──────────
+  // Curates photos, stages vacant rooms, generates the narrative + script.
+  // Sets reviewPlan so Monica can edit anything wrong before the expensive
+  // render/voiceover steps run.
+  const planReel = async () => {
     if (photos.length < 3) {
       toast?.error('Add at least 3 photos');
       return;
     }
     setBusy(true);
     setResult(null);
+    setReviewPlan(null);
     setLog([]);
     const addLog = (m) => setLog(l => [...l, m]);
 
@@ -316,23 +321,71 @@ export default function AutoReel({ setPage, toast }) {
         agentVoice, agent: profile,
       });
       addLog(`Hook: "${narrative.hook}"`);
-      setProgress(0.35);
+      setProgress(0.55);
 
-      // ── Phase 2b: Voiceover (optional) ─────────────────────────────────────
-      let voiceover = null;
+      // ── Phase 2b: Narration script (optional) ─────────────────────────────
+      // We generate the spoken-script TEXT now (cheap) but DON'T synthesize
+      // voice yet — Monica can edit the script in the review panel first.
+      let tourScript = null;
       if (narration) {
-        setPhase('voice');
+        setPhase('script');
         setProgressLabel('Writing narration script…');
-        addLog('Generating tour narration script');
-        const scriptOut = await generateTourScript({
-          scenes, listing, vibe, agentVoice, agent: profile,
-        });
-        addLog(`Script: "${scriptOut.fullScript.slice(0, 80)}..."`);
+        addLog('Generating tour narration script (synthesis happens after review)');
+        try {
+          tourScript = await generateTourScript({
+            scenes, listing, vibe, agentVoice, agent: profile,
+          });
+          addLog(`Script: "${tourScript.fullScript.slice(0, 80)}..."`);
+        } catch (e) {
+          addLog(`Script gen failed (continuing without voiceover): ${e.message}`);
+        }
+        setProgress(0.75);
+      }
 
+      // Pick music now so it's in the plan
+      const music = pickRandomTrack(vibeDef.music);
+      addLog(`Music: ${music?.name || '(silent)'}`);
+
+      // ── PAUSE FOR REVIEW ──────────────────────────────────────────────────
+      // Monica can now edit hook / scene labels / closing CTA / narration
+      // script before we burn money on voice synthesis + AI motion + render.
+      setReviewPlan({ scenes, narrative, tourScript, music });
+      setProgress(1.0);
+      setProgressLabel('Plan ready — review labels below, edit anything wrong, then hit Render');
+      setPhase('review');
+      addLog('✓ Plan ready · review the labels below before rendering');
+      toast?.success('Plan ready — review the labels then hit Render Final Reel');
+    } catch (e) {
+      addLog(`ERROR: ${e.message}`);
+      toast?.error('Plan failed: ' + e.message);
+      setPhase('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── PHASE 2: RENDER FINAL — uses the (possibly edited) reviewPlan ──────────
+  // This is where money/time gets spent: voiceover synthesis + AI motion (if
+  // enabled) + the actual render. Anything Monica edited in the review panel
+  // gets applied here.
+  const renderFinalReel = async () => {
+    if (!reviewPlan) return;
+    setBusy(true);
+    setResult(null);
+    const addLog = (m) => setLog(l => [...l, m]);
+    const { scenes, narrative, tourScript, music } = reviewPlan;
+
+    try {
+      // ── Phase 2b: Synthesize the voiceover (using possibly-edited script) ──
+      let voiceover = null;
+      if (narration && tourScript?.fullScript) {
+        setPhase('voice');
+        setProgress(0.05);
         setProgressLabel(`Synthesizing voice (${voicePref})…`);
+        addLog('Synthesizing narration audio');
         try {
           const voiceRes = await synthesizeNarration({
-            script: scriptOut.fullScript,
+            script: tourScript.fullScript,
             preferred: voicePref,
             elevenLabsVoiceId: elVoiceId,
             onLog: addLog,
@@ -343,7 +396,7 @@ export default function AutoReel({ setPage, toast }) {
               blob: voiceRes.blob,
               mime: voiceRes.mime,
               durationSec: dur,
-              perScene: scriptOut.perScene || [],
+              perScene: tourScript.perScene || [],
               wordTimings: voiceRes.wordTimings || [],
               provider: voiceRes.provider,
             };
@@ -355,7 +408,7 @@ export default function AutoReel({ setPage, toast }) {
           addLog(`Narration failed (continuing without): ${voiceErr.message}`);
           toast?.warning?.('Narration failed — reel will render without voice');
         }
-        setProgress(0.45);
+        setProgress(0.20);
       }
 
       // ── Phase 3: Render ───────────────────────────────────────────────────
@@ -364,18 +417,12 @@ export default function AutoReel({ setPage, toast }) {
       //                     FFmpeg stitches the clips together with audio
       //   - aiMotion=false: Canvas Ken Burns pipeline (legacy slideshow mode)
       setPhase('render');
-
-      // Pick a music track matching the vibe's music category. When narration
-      // is on, music gets ducked under the voiceover automatically.
-      const music = pickRandomTrack(vibeDef.music);
-      addLog(`Music: ${music?.name || '(silent)'}`);
-
       let renderRes;
 
       if (aiMotion) {
         addLog('Using AI image-to-video motion (LTX-Video on Modal)');
         setProgressLabel('Generating AI camera motion per scene…');
-        const renderBase = narration ? 0.45 : 0.40;
+        const renderBase = 0.20;
 
         // Step A: generate one AI clip per scene via the Modal endpoint
         const aiClips = await generateClipsForScenes(scenes, {
@@ -387,7 +434,7 @@ export default function AutoReel({ setPage, toast }) {
         });
         const okClips = aiClips.filter(c => c.blob);
         if (!okClips.length) {
-          throw new Error('All AI motion clips failed — check Modal server is deployed and the URL is correct');
+          throw new Error('All AI motion clips failed — your LTX-Video Modal server may not be deployed yet. Run the deploy command from the AI Motion section above.');
         }
         addLog(`✓ Got ${okClips.length}/${scenes.length} AI clips back`);
 
@@ -400,7 +447,7 @@ export default function AutoReel({ setPage, toast }) {
           opts: {
             aspect,
             onProgress: (p, label) => {
-              setProgress(renderBase + 0.40 + 0.55 * p);
+              setProgress(renderBase + 0.40 + 0.35 * p);
               if (label) setProgressLabel(label);
             },
             onLog: addLog,
@@ -418,8 +465,7 @@ export default function AutoReel({ setPage, toast }) {
             quality: 'high',
             captions,
             onProgress: (p, label) => {
-              const base = narration ? 0.45 : 0.40;
-              setProgress(base + (1 - base - 0.05) * p);
+              setProgress(0.20 + 0.75 * p);
               if (label) setProgressLabel(label);
             },
             onLog: addLog,
@@ -438,17 +484,41 @@ export default function AutoReel({ setPage, toast }) {
         durationSec: renderRes.durationSec,
         dimensions: renderRes.dimensions,
       });
+      setReviewPlan(null);
       setProgress(1);
       setProgressLabel('Done');
       setPhase('');
       toast?.success(`Reel rendered! (${renderRes.durationSec.toFixed(1)}s)`);
     } catch (e) {
       addLog(`ERROR: ${e.message}`);
-      toast?.error('Generation failed: ' + e.message);
+      toast?.error('Render failed: ' + e.message);
       setPhase('');
     } finally {
       setBusy(false);
     }
+  };
+
+  // Apply edits from the review panel back into reviewPlan state
+  const updateReviewNarrative = (patch) => {
+    setReviewPlan(p => p ? { ...p, narrative: { ...p.narrative, ...patch } } : p);
+  };
+  const updateReviewSceneLabel = (sceneIdx, newLabel) => {
+    setReviewPlan(p => {
+      if (!p) return p;
+      const labels = [...(p.narrative.sceneLabels || [])];
+      labels[sceneIdx] = newLabel;
+      return { ...p, narrative: { ...p.narrative, sceneLabels: labels } };
+    });
+  };
+  const updateReviewScript = (newScript) => {
+    setReviewPlan(p => p ? { ...p, tourScript: { ...p.tourScript, fullScript: newScript } } : p);
+  };
+
+  const cancelPlan = () => {
+    setReviewPlan(null);
+    setProgress(0);
+    setProgressLabel('');
+    setPhase('');
   };
 
   // ── Download ────────────────────────────────────────────────────────────────
@@ -1034,24 +1104,30 @@ export default function AutoReel({ setPage, toast }) {
         />
       )}
 
-      {/* ── GENERATE ── */}
+      {/* ── PLAN (step 1 of 2) ── */}
       <div style={S.card}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:14}}>
           <div>
-            <div style={{fontSize:14, fontWeight:800, color:'#f1f5f9', marginBottom:4}}>Ready to make magic?</div>
+            <div style={{fontSize:14, fontWeight:800, color:'#f1f5f9', marginBottom:4}}>
+              {reviewPlan ? 'Plan ready — review below' : result ? 'Done · scroll down' : 'Step 1: AI plans the reel'}
+            </div>
             <div style={{fontSize:12, color:'#94a3b8'}}>
               {photos.length < 3
                 ? `Add ${3 - photos.length} more photo${3 - photos.length === 1 ? '' : 's'} to start`
-                : `${photos.length} photos · ${vibeDef.name} vibe · ${aspect}`}
+                : reviewPlan
+                  ? 'AI picked your best photos, ordered them, wrote labels + script. Edit any wrong labels below, then hit Render.'
+                  : `${photos.length} photos · ${vibeDef.name} vibe · ${aspect} — click to have AI analyze + write copy first`}
             </div>
           </div>
-          <button onClick={generate} disabled={!canGenerate} style={{
-            ...S.primaryBtn,
-            opacity: canGenerate ? 1 : 0.4, cursor: canGenerate ? 'pointer' : 'not-allowed',
-          }}>
-            {busy ? <Loader size={16} className="spin"/> : <Wand2 size={16}/>}
-            {busy ? 'Generating…' : 'Generate Reel'}
-          </button>
+          {!reviewPlan && (
+            <button onClick={planReel} disabled={!canGenerate} style={{
+              ...S.primaryBtn,
+              opacity: canGenerate ? 1 : 0.4, cursor: canGenerate ? 'pointer' : 'not-allowed',
+            }}>
+              {busy ? <Loader size={16} className="spin"/> : <Wand2 size={16}/>}
+              {busy ? 'Planning…' : 'Plan Reel'}
+            </button>
+          )}
         </div>
 
         {(busy || progress > 0) && !result && (
@@ -1082,6 +1158,162 @@ export default function AutoReel({ setPage, toast }) {
           </details>
         )}
       </div>
+
+      {/* ── REVIEW PANEL (between plan and final render) ── */}
+      {reviewPlan && !result && (
+        <div style={{
+          ...S.card,
+          borderColor:'rgba(184,134,75,.5)',
+          background:'linear-gradient(180deg, rgba(184,134,75,.10), rgba(15,20,38,.6))',
+        }}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:10}}>
+            <div>
+              <div style={{...S.cardLabel, color:'#d4a017', marginBottom:4}}>✏️ Review & edit before rendering</div>
+              <div style={{fontSize:11.5, color:'#94a3b8'}}>
+                AI guessed the labels from each photo. If anything's wrong or off-brand, fix it here. These are what shows on screen.
+              </div>
+            </div>
+            <button onClick={cancelPlan} disabled={busy} style={{
+              ...S.ghostBtn, color:'#fca5a5', borderColor:'rgba(239,68,68,.3)',
+            }}>
+              <X size={13}/> Discard plan
+            </button>
+          </div>
+
+          {/* Hook (on-screen opening text) */}
+          <div style={{marginBottom:14}}>
+            <div style={S.fieldLabel}>Hook (big text on the opening slide)</div>
+            <input
+              type="text"
+              value={reviewPlan.narrative.hook || ''}
+              onChange={(e) => updateReviewNarrative({ hook: e.target.value })}
+              style={{...S.input, width:'100%', marginTop:5, fontSize:14, fontWeight:700}}
+              maxLength={60}
+            />
+          </div>
+
+          {/* Per-scene labels */}
+          <div style={{marginBottom:14}}>
+            <div style={S.fieldLabel}>Per-scene labels (the text that pops up on each photo)</div>
+            <div style={{fontSize:10.5, color:'#64748b', marginTop:4, marginBottom:8}}>
+              Empty = no label shows (often best). Use ALL-CAPS 2-4 words describing the feature visible ("WHITE QUARTZ ISLAND", "VAULTED CEILINGS"). NOT generic room names.
+            </div>
+            <div style={{display:'flex', flexDirection:'column', gap:8}}>
+              {reviewPlan.scenes.map((s, i) => {
+                const label = reviewPlan.narrative.sceneLabels?.[i] || '';
+                const url = s.photo?.url || (s.photo?.file ? URL.createObjectURL(s.photo.file) : '');
+                return (
+                  <div key={i} style={{
+                    display:'flex', gap:10, alignItems:'center',
+                    padding:'8px 10px', background:'rgba(0,0,0,.25)', borderRadius:8,
+                  }}>
+                    <div style={{
+                      width:60, height:60, borderRadius:6, overflow:'hidden', flexShrink:0,
+                      background:'#000',
+                    }}>
+                      {url && <img src={url} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}}/>}
+                    </div>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:10, color:'#94a3b8', marginBottom:3, display:'flex', gap:8, alignItems:'center'}}>
+                        <span style={{fontWeight:700}}>Scene {i + 1}</span>
+                        <span style={{color:'#64748b'}}>· {s.room}</span>
+                        {s.wasStaged && <span style={{color:'#b8864b', fontWeight:700}}>· virtually staged</span>}
+                      </div>
+                      <input
+                        type="text"
+                        value={label}
+                        onChange={(e) => updateReviewSceneLabel(i, e.target.value.toUpperCase())}
+                        placeholder='Leave blank to show NO label (often best) · or "WHITE QUARTZ ISLAND"'
+                        style={{...S.input, width:'100%', fontSize:12.5, padding:'7px 10px'}}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Closing card text */}
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14}}>
+            <div>
+              <div style={S.fieldLabel}>Closing headline</div>
+              <input
+                type="text"
+                value={reviewPlan.narrative.closingHeadline || ''}
+                onChange={(e) => updateReviewNarrative({ closingHeadline: e.target.value })}
+                style={{...S.input, width:'100%', marginTop:5}}
+              />
+            </div>
+            <div>
+              <div style={S.fieldLabel}>Closing CTA</div>
+              <input
+                type="text"
+                value={reviewPlan.narrative.closingCta || ''}
+                onChange={(e) => updateReviewNarrative({ closingCta: e.target.value })}
+                style={{...S.input, width:'100%', marginTop:5}}
+              />
+            </div>
+          </div>
+
+          {/* Narration script (only if narration is on) */}
+          {narration && reviewPlan.tourScript && (
+            <div style={{marginBottom:14}}>
+              <div style={S.fieldLabel}>Narration script (what you'll hear out loud · edit anything wrong before voice synthesis)</div>
+              <textarea
+                value={reviewPlan.tourScript.fullScript || ''}
+                onChange={(e) => updateReviewScript(e.target.value)}
+                rows={5}
+                style={{...S.input, width:'100%', marginTop:5, resize:'vertical', fontFamily:'inherit', lineHeight:1.5}}
+              />
+              <div style={{fontSize:10.5, color:'#64748b', marginTop:4}}>
+                Approximate length: ~{Math.round(reviewPlan.tourScript.fullScript.split(/\s+/).length / 2.4)} seconds spoken. Voice synthesis happens AFTER you hit Render.
+              </div>
+            </div>
+          )}
+
+          {/* Captions for posting (these don't show in the video, only used for posting later) */}
+          <details style={{marginBottom:14}}>
+            <summary style={{cursor:'pointer', fontSize:11.5, color:'#94a3b8', fontWeight:700}}>
+              Edit Instagram / Facebook captions (for posting, not on the video) ▾
+            </summary>
+            <div style={{marginTop:10, display:'flex', flexDirection:'column', gap:10}}>
+              <div>
+                <div style={S.fieldLabel}>Instagram caption (text + hashtags)</div>
+                <textarea
+                  value={reviewPlan.narrative.igCaption || ''}
+                  onChange={(e) => updateReviewNarrative({ igCaption: e.target.value })}
+                  rows={4}
+                  style={{...S.input, width:'100%', marginTop:5, resize:'vertical', fontFamily:'inherit', whiteSpace:'pre-wrap'}}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>Facebook caption</div>
+                <textarea
+                  value={reviewPlan.narrative.fbCaption || ''}
+                  onChange={(e) => updateReviewNarrative({ fbCaption: e.target.value })}
+                  rows={3}
+                  style={{...S.input, width:'100%', marginTop:5, resize:'vertical', fontFamily:'inherit'}}
+                />
+              </div>
+            </div>
+          </details>
+
+          <div style={{display:'flex', gap:10, justifyContent:'flex-end', flexWrap:'wrap', alignItems:'center'}}>
+            <div style={{fontSize:11, color:'#64748b', marginRight:'auto'}}>
+              {aiMotion
+                ? '⚠ AI motion ON — render will hit your Modal endpoint (~30 sec per scene). Make sure it\'s deployed.'
+                : 'AI motion OFF — render uses the free in-browser Ken Burns pipeline (~60 sec total).'}
+            </div>
+            <button onClick={renderFinalReel} disabled={busy} style={{
+              ...S.primaryBtn,
+              opacity: busy ? 0.5 : 1,
+            }}>
+              {busy ? <Loader size={16} className="spin"/> : <Wand2 size={16}/>}
+              {busy ? 'Rendering…' : 'Render Final Reel →'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── RESULT ── */}
       {result && (
