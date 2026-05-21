@@ -73,6 +73,9 @@ export default function AutoReel({ setPage, toast }) {
     address: '', city: '', zip: '', list_price: '', beds: '', baths: '', sqft: '', status: '', mls_num: '',
   });
   const [photos, setPhotos] = useState([]); // [{ id, file, url }]
+  const [importQuery, setImportQuery] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
   const [vibe, setVibe] = useState('luxury');
   const [aspect, setAspect] = useState('9:16');
   const [narration, setNarration] = useLS('autoreel_narration', false);
@@ -209,6 +212,85 @@ export default function AutoReel({ setPage, toast }) {
     });
     toast?.success(`Loaded ${l.address}`);
   }, [toast]);
+
+  // ── Auto-import from MLS# or Realtor.com URL ────────────────────────────────
+  // Calls /api/listings/import which scrapes Realtor.com and returns photo URLs
+  // + listing data. Photos are then fetched through the same endpoint's proxy
+  // mode to bypass CORS and converted to Files so the rest of the flow treats
+  // them like manual uploads.
+  const runImport = useCallback(async () => {
+    const q = importQuery.trim();
+    if (!q) return;
+    setImporting(true);
+    setImportMsg('Looking up listing…');
+
+    try {
+      // Detect URL vs MLS#
+      const isUrl = /^https?:\/\//i.test(q);
+      const isMls = /^[A-Za-z]?\d{6,10}$/.test(q);
+
+      if (!isUrl && !isMls) {
+        throw new Error('Paste a Realtor.com listing URL OR an MLS# (6-10 digits, optionally with a letter prefix)');
+      }
+
+      const r = await fetch('/api/listings/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isUrl ? { url: q } : { mlsNum: q }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        throw new Error(data.error?.message || `Import failed (HTTP ${r.status})`);
+      }
+
+      // Hydrate listing form
+      setListing(prev => ({
+        ...prev,
+        address: data.listing.address || prev.address,
+        city: data.listing.city || prev.city,
+        zip: data.listing.zip || prev.zip,
+        list_price: data.listing.list_price || prev.list_price,
+        beds: data.listing.beds || prev.beds,
+        baths: data.listing.baths || prev.baths,
+        sqft: data.listing.sqft || prev.sqft,
+        status: data.listing.status || prev.status,
+        mls_num: data.listing.mls_num || (isMls ? q : prev.mls_num),
+      }));
+
+      // Download photos through the proxy + convert to File objects
+      setImportMsg(`Downloading ${data.photos.length} photos…`);
+      const downloaded = [];
+      for (let i = 0; i < data.photos.length; i++) {
+        setImportMsg(`Downloading photo ${i + 1}/${data.photos.length}…`);
+        try {
+          const proxyUrl = `/api/listings/import?proxy=${encodeURIComponent(data.photos[i])}`;
+          const photoResp = await fetch(proxyUrl);
+          if (!photoResp.ok) continue;
+          const blob = await photoResp.blob();
+          const file = new File([blob], `imported_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' });
+          downloaded.push({
+            id: 'p_' + Math.random().toString(36).slice(2),
+            file,
+            url: URL.createObjectURL(file),
+            name: file.name,
+          });
+        } catch (e) { /* skip failed photo */ }
+      }
+
+      if (!downloaded.length) {
+        throw new Error('Listing data imported but no photos could be downloaded. Check that the listing has photos.');
+      }
+
+      // Add to (not replace) existing photo list, capped at 30
+      setPhotos(p => [...p, ...downloaded].slice(0, 30));
+      setImportMsg(`✓ Imported ${downloaded.length} photos · listing data auto-filled. Pick a vibe and Plan Reel.`);
+      toast?.success(`Imported ${downloaded.length} photos from Realtor.com`);
+    } catch (e) {
+      setImportMsg('❌ ' + e.message);
+      toast?.error('Import failed: ' + e.message);
+    }
+    setImporting(false);
+  }, [importQuery, toast]);
 
   // ── Photo upload ────────────────────────────────────────────────────────────
   const fileRef = useRef();
@@ -754,6 +836,52 @@ export default function AutoReel({ setPage, toast }) {
       {/* ── STEP 1: Source ── */}
       <div style={S.card}>
         <div style={S.cardLabel}>① Listing</div>
+
+        {/* ⚡ AUTO-IMPORT — paste MLS# or Realtor.com URL */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(184,134,75,.10), rgba(212,160,23,.04))',
+          border: '1px solid rgba(184,134,75,.35)',
+          borderRadius: 10, padding: 12, marginBottom: 14,
+        }}>
+          <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
+            <span style={{fontSize:16}}>⚡</span>
+            <div style={{fontSize:12, fontWeight:800, color:'#e0b370', letterSpacing:1, textTransform:'uppercase'}}>
+              One-Click Import (the AutoReel-app feature)
+            </div>
+          </div>
+          <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5, marginBottom:10}}>
+            Paste your <strong style={{color:'#cbd5e1'}}>MLS#</strong> OR a <strong style={{color:'#cbd5e1'}}>Realtor.com URL</strong>. AI grabs the photos + price + beds/baths/sqft and auto-fills everything. You skip straight to picking a vibe.
+          </div>
+          <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+            <input
+              type="text"
+              value={importQuery}
+              onChange={(e) => setImportQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !importing) runImport(); }}
+              placeholder="e.g. 20251234567 (MLS#) or paste a realtor.com listing URL"
+              disabled={importing}
+              style={{...S.input, flex:1, minWidth:240, fontSize:13}}
+            />
+            <button onClick={runImport} disabled={importing || !importQuery.trim()} style={{
+              ...S.primaryBtn,
+              padding:'10px 18px', fontSize:13,
+              opacity: (importing || !importQuery.trim()) ? 0.5 : 1,
+              cursor: (importing || !importQuery.trim()) ? 'not-allowed' : 'pointer',
+            }}>
+              {importing ? <Loader size={14} className="spin"/> : <span>⚡</span>}
+              {importing ? 'Importing…' : 'Auto-Import'}
+            </button>
+          </div>
+          {importMsg && (
+            <div style={{
+              marginTop: 10, fontSize: 11.5,
+              color: importMsg.startsWith('❌') ? '#fca5a5' : importMsg.startsWith('✓') ? '#6ee7b7' : '#e0b370',
+              lineHeight: 1.5,
+            }}>
+              {importMsg}
+            </div>
+          )}
+        </div>
 
         {/* Listings dropdown */}
         {allListings.length > 0 && (
