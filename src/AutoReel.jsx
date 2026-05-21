@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Sparkles, Upload, X, Image as ImageIcon, Play, Download, Wand2,
-  ArrowRight, RotateCcw, Check, Loader, Facebook, Instagram, AlertCircle,
+  ArrowRight, RotateCcw, Check, Loader, AlertCircle, Share2,
 } from 'lucide-react';
 import { supabase, isCloudEnabled } from './supabase';
 import { useLS } from './cloudHooks';
@@ -76,7 +76,8 @@ export default function AutoReel({ setPage, toast }) {
   const [progressLabel, setProgressLabel] = useState('');
   const [log, setLog] = useState([]);
   const [result, setResult] = useState(null); // { blob, url, narrative, scenes, publicUrl? }
-  const [meta] = useLS('integrations.meta', { accessToken: '', pageId: '', igAccountId: '' });
+  const [integrations] = useLS('integrations', {});
+  const meta = integrations?.meta || { accessToken: '', pageId: '', igAccountId: '' };
   const [brand] = useLS('rehub_brand', {});
   const [agentVoice] = useLS('agent_voice', '');
   const [profile] = useLS('re_profile', { name: 'Monica Iskra' });
@@ -623,14 +624,14 @@ export default function AutoReel({ setPage, toast }) {
               background:'rgba(24,119,242,.15)', borderColor:'rgba(24,119,242,.4)', color:'#60a5fa',
               opacity: busy ? 0.5 : 1,
             }}>
-              <Facebook size={15}/> Post to Facebook
+              <span style={{fontSize:15}}>📘</span> Post to Facebook
             </button>
             <button onClick={() => postToMeta(['instagram'])} disabled={busy} style={{
               ...S.ghostBtn,
               background:'rgba(228,64,95,.15)', borderColor:'rgba(228,64,95,.4)', color:'#f9a8d4',
               opacity: busy ? 0.5 : 1,
             }}>
-              <Instagram size={15}/> Post to Instagram
+              <span style={{fontSize:15}}>📷</span> Post to Instagram
             </button>
             <button onClick={() => postToMeta(['facebook','instagram'])} disabled={busy} style={{
               ...S.ghostBtn,
