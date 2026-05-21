@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { supabase } from './supabase';
 import { useLS, useIDB } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
+import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
 import VideoAuto from './VideoAuto';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
@@ -904,6 +905,7 @@ const NAV = [
   { id:"market-report",       label:"Market Report Builder",icon:BarChart3 },
   { section:"GROW" },
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
+  { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
   { id:"pipeline",            label:"Pipeline Board",      icon:Layout },
   { id:"tasks",               label:"Tasks",               icon:CheckCircle },
   { id:"action-plans",        label:"Action Plans",        icon:Zap },
@@ -5308,6 +5310,214 @@ const CommissionTracker = ({setPage, toast}) => {
   );
 };
 
+// ─── AI LEAD CONCIERGE — settings UI ──────────────────────────────────────────
+// Pairs with AILeadConciergeWorker. This is the dashboard where Monica
+// controls auto-response behavior: which sources, which channels, daily
+// cap, quiet hours, and a today/this-week activity log.
+const AILeadConcierge = ({setPage, toast}) => {
+  const [settings, setSettings] = useLS("concierge_settings", DEFAULT_CONCIERGE_SETTINGS);
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [agentVoice] = useLS("agent_voice", "");
+  const [previewLead, setPreviewLead] = useState({
+    name: "Sarah Johnson", email: "sarah@example.com", phone: "248-555-0199",
+    source: "Zillow", type: "Buyer", area: "Livonia",
+    address: "1234 Maple Ave, Livonia MI", budget: "425000",
+    notes: "I'd like to schedule a showing this weekend if possible.",
+  });
+  const [preview, setPreview] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  // Daily counter (read-only display)
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const [logTick, setLogTick] = useState(0);
+  const log = (() => { try { return JSON.parse(localStorage.getItem("concierge_log") || "{}"); } catch { return {}; } })();
+  const todayCount = log[todayKey]?.count || 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setInterval(() => setLogTick(n=>n+1), 5000); return () => clearInterval(t); }, []);
+  void logTick;
+
+  const set = (path, val) => {
+    setSettings(s => {
+      const next = { ...s };
+      const parts = path.split(".");
+      let cursor = next;
+      for (let i = 0; i < parts.length - 1; i++) {
+        cursor[parts[i]] = { ...(cursor[parts[i]] || {}) };
+        cursor = cursor[parts[i]];
+      }
+      cursor[parts[parts.length - 1]] = val;
+      return next;
+    });
+  };
+
+  const allSources = Object.keys(settings.sources || DEFAULT_CONCIERGE_SETTINGS.sources);
+
+  const runPreview = async () => {
+    setPreviewing(true);
+    try {
+      const out = await draftLeadResponse({ lead: previewLead, profile, agentVoice });
+      setPreview(out);
+    } catch (e) {
+      toast.error("Preview failed: " + e.message);
+    }
+    setPreviewing(false);
+  };
+
+  const resetTodayCounter = () => {
+    if (!window.confirm(`Reset today's auto-response counter (currently ${todayCount})?`)) return;
+    const fresh = { ...log };
+    delete fresh[todayKey];
+    localStorage.setItem("concierge_log", JSON.stringify(fresh));
+    setLogTick(n => n + 1);
+    toast.success("Today's counter reset to 0");
+  };
+
+  return (
+    <div className="page-content">
+      <PageHeader title="AI Lead Concierge" sub="Auto-respond to hot leads within 60 seconds" setPage={setPage} parent="dashboard"
+        action={
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:12,fontWeight:700,color:settings.enabled?"#6ee7b7":"#64748b"}}>
+              {settings.enabled ? "🟢 ON — auto-firing" : "⚪ OFF — drafts only"}
+            </span>
+            <button
+              className={`btn ${settings.enabled?"btn-danger":"btn-blue"} btn-sm`}
+              onClick={()=>set("enabled", !settings.enabled)}>
+              {settings.enabled ? "Turn OFF" : "Turn ON"}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Hero info banner */}
+      <div className="glass-card" style={{marginBottom:20,padding:"18px 22px",background:"linear-gradient(135deg, rgba(110,231,183,.08), rgba(26,90,160,.05))",borderColor:"rgba(110,231,183,.2)"}}>
+        <div style={{fontSize:14,color:"#cbd5e1",lineHeight:1.7}}>
+          When a new lead arrives in your Lead Inbox (Zillow, Realtor.com, BoldTrail, web form, etc.) and the source is enabled below, the AI Concierge:
+          <ul style={{marginTop:8,paddingLeft:20,color:"#94a3b8"}}>
+            <li>📧 <strong>Drafts + auto-sends a personalized email</strong> via your connected Gmail (within ~30 sec of arrival)</li>
+            <li>📱 <strong>Creates a Text task</strong> with the SMS pre-written — tap "Send" on your phone to fire it</li>
+            <li>📊 <strong>Logs the activity</strong> on the lead's timeline so you see what went out</li>
+          </ul>
+          <div style={{marginTop:10,fontSize:12,color:"#64748b"}}>5-min response = 78% win rate. Most agents take 917 min. The concierge gets you to seconds.</div>
+        </div>
+      </div>
+
+      <div className="grid-2" style={{gap:18,alignItems:"flex-start"}}>
+        {/* LEFT: Settings */}
+        <div style={{display:"flex",flexDirection:"column",gap:18}}>
+          {/* Sources */}
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>📥 Lead Sources to Auto-Respond</div>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              {allSources.map(src => (
+                <label key={src} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"7px 11px",borderRadius:8,background:settings.sources?.[src]?"rgba(110,231,183,.06)":"rgba(255,255,255,.02)",border:`1px solid ${settings.sources?.[src]?"rgba(110,231,183,.2)":"rgba(255,255,255,.05)"}`}}>
+                  <input type="checkbox" checked={!!settings.sources?.[src]} onChange={e=>set(`sources.${src}`, e.target.checked)} style={{width:16,height:16}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:"#cbd5e1",flex:1}}>{src}</span>
+                  {settings.sources?.[src] && <span style={{fontSize:10,color:"#6ee7b7",fontWeight:700}}>AUTO</span>}
+                </label>
+              ))}
+            </div>
+            <div style={{fontSize:11,color:"#475569",marginTop:10,fontStyle:"italic"}}>Tip: keep Facebook + Instagram OFF for auto-fire — those leads are low-intent and benefit from a human touch first.</div>
+          </div>
+
+          {/* Channels */}
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>📨 Channels</div>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                <input type="checkbox" checked={!!settings.channels?.email} onChange={e=>set("channels.email", e.target.checked)} style={{width:16,height:16}}/>
+                <span style={{fontSize:13,fontWeight:600,color:"#cbd5e1"}}>📧 Email — auto-sent via your connected Gmail</span>
+              </label>
+              <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                <input type="checkbox" checked={!!settings.channels?.sms} onChange={e=>set("channels.sms", e.target.checked)} style={{width:16,height:16}}/>
+                <span style={{fontSize:13,fontWeight:600,color:"#cbd5e1"}}>📱 SMS — drafted as a Text task (tap Send on mobile)</span>
+              </label>
+              <div style={{fontSize:11,color:"#64748b",marginTop:6,paddingLeft:26}}>SMS auto-send via Twilio coming in Phase 2. For now, tap "Send" on the task and your phone's SMS app opens pre-filled.</div>
+            </div>
+          </div>
+
+          {/* Safety */}
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>🛡 Safety Guardrails</div>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <div className="label">Daily Max Auto-Responses</div>
+                <input className="input" type="number" min="1" max="500" value={settings.dailyCap} onChange={e=>set("dailyCap", parseInt(e.target.value)||30)} style={{maxWidth:120}}/>
+                <div style={{fontSize:11,color:"#64748b",marginTop:6}}>Used today: <strong style={{color:todayCount>=settings.dailyCap*.8?"#fbbf24":"#6ee7b7"}}>{todayCount} of {settings.dailyCap}</strong>{todayCount>0 && <button className="btn btn-ghost btn-xs" style={{marginLeft:8}} onClick={resetTodayCounter}>Reset</button>}</div>
+              </div>
+
+              <div>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:10}}>
+                  <input type="checkbox" checked={!!settings.quietHours?.enabled} onChange={e=>set("quietHours.enabled", e.target.checked)} style={{width:16,height:16}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:"#cbd5e1"}}>🌙 Quiet hours (skip auto-fire outside these)</span>
+                </label>
+                {settings.quietHours?.enabled && (
+                  <div style={{display:"flex",gap:10,alignItems:"center",paddingLeft:26}}>
+                    <div>
+                      <div className="label">Start</div>
+                      <select className="select" value={settings.quietHours.startHour} onChange={e=>set("quietHours.startHour", parseInt(e.target.value))}>
+                        {Array.from({length:24}).map((_,h)=><option key={h} value={h}>{h===0?"12 AM":h<12?`${h} AM`:h===12?"12 PM":`${h-12} PM`}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <div className="label">End</div>
+                      <select className="select" value={settings.quietHours.endHour} onChange={e=>set("quietHours.endHour", parseInt(e.target.value))}>
+                        {Array.from({length:24}).map((_,h)=><option key={h} value={h}>{h===0?"12 AM":h<12?`${h} AM`:h===12?"12 PM":`${h-12} PM`}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Live preview */}
+        <div style={{display:"flex",flexDirection:"column",gap:18}}>
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>🎭 Preview — what the AI would send</div>
+            <div style={{fontSize:12,color:"#94a3b8",marginBottom:12}}>Edit this fake lead and click Preview to see the AI's draft. Test before turning auto-fire on.</div>
+            <div className="grid-2" style={{gap:10,marginBottom:14}}>
+              <div><div className="label">Name</div><input className="input" value={previewLead.name} onChange={e=>setPreviewLead(p=>({...p,name:e.target.value}))}/></div>
+              <div><div className="label">Source</div>
+                <select className="select" value={previewLead.source} onChange={e=>setPreviewLead(p=>({...p,source:e.target.value}))}>
+                  {allSources.map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div><div className="label">Area</div><input className="input" value={previewLead.area} onChange={e=>setPreviewLead(p=>({...p,area:e.target.value}))}/></div>
+              <div><div className="label">Budget</div><input className="input" value={previewLead.budget} onChange={e=>setPreviewLead(p=>({...p,budget:e.target.value}))}/></div>
+              <div style={{gridColumn:"1/-1"}}><div className="label">Property they asked about</div><input className="input" value={previewLead.address} onChange={e=>setPreviewLead(p=>({...p,address:e.target.value}))}/></div>
+              <div style={{gridColumn:"1/-1"}}><div className="label">Their notes / message</div><input className="input" value={previewLead.notes} onChange={e=>setPreviewLead(p=>({...p,notes:e.target.value}))}/></div>
+            </div>
+            <button className="btn btn-blue" onClick={runPreview} disabled={previewing}>
+              {previewing ? <><Spinner s={13}/>Drafting…</> : <><Wand2 size={13}/>Preview AI Draft</>}
+            </button>
+          </div>
+
+          {preview && (
+            <>
+              {preview.emailSubject && (
+                <div className="glass-card" style={{padding:"16px 20px"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#7eb8f7",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>📧 EMAIL</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:8}}>Subject: {preview.emailSubject}</div>
+                  <div style={{fontSize:13,color:"#cbd5e1",whiteSpace:"pre-wrap",lineHeight:1.6}}>{preview.emailBody}</div>
+                </div>
+              )}
+              {preview.smsBody && (
+                <div className="glass-card" style={{padding:"16px 20px"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#fbbf24",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>📱 SMS <span style={{color:"#64748b",fontWeight:600,marginLeft:8}}>{preview.smsBody.length} chars</span></div>
+                  <div style={{fontSize:13,color:"#cbd5e1",whiteSpace:"pre-wrap",lineHeight:1.6}}>{preview.smsBody}</div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // ─── INTEGRATIONS ─────────────────────────────────────────────────────────────
 const Integrations = ({setPage,toast}) => {
   const [settings,setSettings] = useLS("integrations",{});
@@ -5977,6 +6187,174 @@ const GmailSyncWorker = ({notify, toast}) => {
 
 // ─── SCHEDULED POSTS WORKER (background, renders nothing) ───────────────────
 // Polls the posts queue every 60 seconds. For each post whose scheduledAt has
+// ─── AI LEAD CONCIERGE WORKER ────────────────────────────────────────────────
+// Listens for new rows in lead_inbox via Supabase realtime. For each new lead
+// that matches the user's concierge settings (enabled, source allowed, within
+// quiet hours, under daily cap), drafts a personalized AI response and:
+//   • Queues the email into email_queue (GmailSyncWorker auto-sends within ~30s)
+//   • Creates a Text task with the SMS pre-written (tap-to-send on mobile)
+// Marks the lead_inbox row's meta with concierge_fired_at so we never re-fire.
+const AILeadConciergeWorker = ({ notify, toast }) => {
+  const [settings] = useLS("concierge_settings", DEFAULT_CONCIERGE_SETTINGS);
+  const [profile]  = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic", phone: "" });
+  const [agentVoice] = useLS("agent_voice", "");
+  const [, setQueue] = useLS("email_queue", []);
+  const [, setTasks] = useLS("tasks", []);
+  const settingsRef = useRef(settings);
+  const profileRef  = useRef(profile);
+  const voiceRef    = useRef(agentVoice);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { profileRef.current  = profile;  }, [profile]);
+  useEffect(() => { voiceRef.current    = agentVoice; }, [agentVoice]);
+
+  const processedIds = useRef(new Set()); // session-local dedupe
+
+  useEffect(() => {
+    const handleNewLead = async (row) => {
+      const s = settingsRef.current;
+      if (!s.enabled) return;
+      if (!row?.id || processedIds.current.has(row.id)) return;
+      processedIds.current.add(row.id);
+
+      // Source filter
+      const source = row.source || "Web";
+      const sourceAllowed = s.sources?.[source] === true;
+      if (!sourceAllowed) {
+        console.log(`[Concierge] Skipping ${row.name||row.id} — source "${source}" not enabled`);
+        return;
+      }
+
+      // Quiet hours
+      if (s.quietHours?.enabled) {
+        const hour = new Date().getHours();
+        if (hour < s.quietHours.startHour || hour >= s.quietHours.endHour) {
+          console.log(`[Concierge] Quiet hours (${hour}:00) — skipping ${row.name||row.id}`);
+          return;
+        }
+      }
+
+      // Daily cap
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const log = JSON.parse(localStorage.getItem("concierge_log") || "{}");
+      const todayCount = log[todayKey]?.count || 0;
+      if (todayCount >= (s.dailyCap || 30)) {
+        console.log(`[Concierge] Daily cap (${s.dailyCap}) reached — skipping`);
+        return;
+      }
+
+      // Channel + contact-info requirements
+      const wantEmail = s.channels?.email && row.email;
+      const wantSms   = s.channels?.sms   && row.phone;
+      if (!wantEmail && !wantSms) {
+        console.log(`[Concierge] Neither email nor SMS possible — skipping`);
+        return;
+      }
+
+      // Draft
+      let drafted;
+      try {
+        drafted = await draftLeadResponse({
+          lead: row,
+          profile: profileRef.current,
+          agentVoice: voiceRef.current,
+        });
+      } catch (e) {
+        console.warn(`[Concierge] AI draft failed for ${row.name||row.id}:`, e.message);
+        toast?.error?.(`AI concierge couldn't draft response for ${row.name||"new lead"}: ${e.message}`);
+        return;
+      }
+
+      const firstName = (row.name || "").split(" ")[0] || "there";
+      let didEmail = false, didSms = false;
+
+      // Queue email
+      if (wantEmail && drafted.emailSubject && drafted.emailBody) {
+        setQueue(p => [...p, {
+          id: `concierge_e_${row.id}_${Date.now()}`,
+          leadId: row.id,
+          leadName: row.name,
+          leadEmail: row.email,
+          campaignId: "concierge",
+          campaignName: "AI Concierge — instant response",
+          subject: drafted.emailSubject,
+          body: drafted.emailBody,
+          dueDate: todayKey,
+          stepIndex: 0,
+          sent: false,
+          createdAt: new Date().toISOString(),
+        }]);
+        didEmail = true;
+      }
+
+      // Create SMS task with smsBody pre-filled
+      if (wantSms && drafted.smsBody) {
+        setTasks(p => [...p, {
+          id: `concierge_sms_${row.id}_${Date.now()}`,
+          title: `📱 Send AI text to ${firstName} (${source} lead, just arrived)`,
+          type: "Text",
+          leadId: row.id,
+          leadName: row.name,
+          dueDate: todayKey,
+          notes: drafted.smsBody,
+          smsBody: drafted.smsBody,
+          campaignId: "concierge",
+          campaignName: "AI Concierge — instant response",
+          stepIndex: 0,
+          completed: false,
+          createdAt: new Date().toISOString(),
+        }]);
+        didSms = true;
+      }
+
+      // Bump daily counter
+      log[todayKey] = { count: (log[todayKey]?.count || 0) + 1 };
+      localStorage.setItem("concierge_log", JSON.stringify(log));
+
+      // Activity log on the lead (if it's already in leads)
+      try {
+        const actKey = `activities_${row.id}`;
+        const existing = JSON.parse(localStorage.getItem(actKey) || "[]");
+        existing.unshift({
+          id: uid(), type: "concierge", direction: "outbound",
+          note: `🤖 AI Concierge drafted ${didEmail?"email":""}${didEmail&&didSms?" + ":""}${didSms?"text":""} for new ${source} lead`,
+          createdAt: new Date().toISOString(),
+        });
+        localStorage.setItem(actKey, JSON.stringify(existing));
+      } catch {}
+
+      // Mark inbox row as fired (so other sessions don't double-fire)
+      try {
+        await supabase.from("lead_inbox").update({
+          raw: { ...(row.raw || {}), concierge_fired_at: new Date().toISOString() },
+        }).eq("id", row.id);
+      } catch (e) { console.warn("[Concierge] mark fired failed:", e?.message); }
+
+      // Toast + notification
+      const channels = [didEmail && "email", didSms && "text"].filter(Boolean).join(" + ");
+      toast?.success?.(`🤖 AI Concierge ${channels} queued for ${row.name || "new lead"}`);
+      notify?.(`AI Concierge fired`, `${channels} response queued for ${row.name || "new lead"} (${source})`, "concierge");
+    };
+
+    if (!isCloudEnabled) return; // no realtime without Supabase
+
+    const channel = supabase
+      .channel("concierge_inbox_" + Date.now())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "lead_inbox" }, (payload) => {
+        const row = payload.new;
+        // Skip rows that already got a concierge response (e.g. seen on another device)
+        if (row?.raw?.concierge_fired_at) return;
+        handleNewLead(row).catch(e => console.warn("[Concierge handle]", e));
+      })
+      .subscribe();
+
+    return () => { try { supabase.removeChannel(channel); } catch {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null; // invisible worker
+};
+
+
 // passed and is still status==='scheduled', tries to publish via Meta APIs.
 // Updates the post in place with the result, then dispatches 'posts-updated'
 // so any open Content Scheduler page re-renders.
@@ -7633,6 +8011,7 @@ export default function App() {
     "showing-calendar":   <ShowingCalendar {...props}/>,
     "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
+    "ai-concierge":       <AILeadConcierge {...props}/>,
     "pipeline":           <PipelineBoard {...props}/>,
     "tasks":              <TaskManager {...props}/>,
     "action-plans":       <ActionPlans {...props}/>,
@@ -7701,6 +8080,7 @@ export default function App() {
       </div>
       <GmailSyncWorker notify={notify} toast={toast}/>
       <ScheduledPostsWorker notify={notify} toast={toast}/>
+      <AILeadConciergeWorker notify={notify} toast={toast}/>
       <Toast toasts={toasts} remove={remove}/>
 
       {/* PWA Install Banner */}
