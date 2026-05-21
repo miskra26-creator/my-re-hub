@@ -6,198 +6,160 @@
 
 ---
 
-## Last session: 2026-05-20 (laptop, autonomous 3-hour run while Monica was away)
+## Last session: 2026-05-20 (laptop, evening — autonomous "keep building" run)
 
 ### Headline
 
-**Cloud sync was secretly broken; leads now scale to 6000+ without freezing.**
+**Shipped 5 major AI-powered features in one evening.** Monica said "keep
+building" + "this platform needs to make me a $30-50M producer." Built the
+agent stack she'd otherwise pay ~$500-2000/mo for if she bought all the
+SaaS equivalents separately.
 
-When Monica reported the Add Lead form freezing with her 6,000-lead FUB sync,
-digging in revealed two compounding bugs + a real architectural limit:
+### What got built (all live on https://my-re-hub.vercel.app)
 
-1. **`user_data` table had no base-table grants** — only the RLS policy.
-   PostgREST silently 401'd on every cloud write. Result: nothing she'd
-   done on the laptop EVER synced to Supabase. Both devices ran their own
-   local copies. Fixed via SQL: `grant select, insert, update, delete on
-   public.user_data to authenticated`. Also added to `supabase-setup.sql`.
-2. **`cloudHooks` did O(n) JSON.stringify on read** to detect changes —
-   200-400ms per useIDB key per load with her 2MB lead blob. Removed the
-   comparison (trust cloud, accept the extra re-render).
-3. **Architectural limit** — storing all 6000 leads as one giant JSON
-   blob in `user_data.value` was always going to fight against itself.
-   So we moved leads to a dedicated table with one row per lead.
+**1. Free AI via Google Gemini fallback** (`api/claude/messages.js`)
+- `/api/claude/messages` now tries Anthropic first, then Gemini (free tier).
+- Default model: `gemini-flash-latest` (only model with non-zero free tier
+  on Monica's new project — 2.0-flash and 2.0-flash-lite both show limit:0).
+- Translates Anthropic message format → Gemini contents format and back.
+- Vercel env var: `GOOGLE_GEMINI_API_KEY` (set). Monica's free Gemini key
+  is live. All AI features now run at $0 monthly cost.
 
-### What got built (all committed + pushed, all deployed to Vercel)
+**2. AI Lead Concierge** (`src/aiResponder.js` + `AILeadConcierge` + `AILeadConciergeWorker`)
+- Listens via Supabase realtime for new `lead_inbox` rows.
+- Drafts personalized email + SMS via one AI call.
+- Auto-sends email through GmailSyncWorker. Creates Text task with smsBody
+  for one-tap-Send (Twilio Phase 2).
+- Settings page at `/ai-concierge`: per-source toggles, channels, daily cap,
+  quiet hours, live preview.
+- Safety: off by default, won't double-fire, marks `concierge_fired_at`
+  on inbox row.
 
-**Dedicated `leads` table** (`supabase-migrations/003_leads_table.sql`):
-- One row per lead, indexed on `(user_id, status)`, `(user_id, updated_at desc)`,
-  `(user_id, fub_id)` for fast queries
-- RLS scoped per-user + base table grants for authenticated role
-- Auto-bumping `updated_at` trigger
-- Already run against her live project via Supabase Management API
+**3. Social Engagement Agent** (`src/aiSocialAgent.js` + `SocialAgent` + `SocialEngagementWorker`)
+- Polls Meta Graph API every 5 min for new FB Page + IG Business comments.
+- Pre-filter (spam patterns, low-signal noise) before spending AI calls.
+- Auto-like ALL FB comments (algorithm booster). Auto-reply substantive
+  ones in Monica's voice via Graph API.
+- Detects buyer/seller intent → drafts a DM (queued for review, NOT
+  auto-sent because pages_messaging needs 24-hr window + app review).
+- Escalates negative/legal/complex to her inbox with toast notification.
+- Page at `/social-agent`: 3 tabs (Activity / Settings / Preview AI).
+- HUGE for her FB monetization — fast replies = 3-5x algorithm boost.
+- Requires Meta Page Access Token scopes: `pages_manage_engagement`,
+  `pages_read_engagement`, `instagram_manage_comments`. She may need to
+  regenerate her token if it's only got the post/publish scopes.
 
-**`src/useLeadsCloud.js`** — purpose-built hook with module-level shared
-store:
-- All hook callsites (10 across the app) share one fetch + one realtime
-  subscription. Avoids 10x redundant downloads of the lead array.
-- Returns `[leads, setLeads, loaded]` — same API as `useIDB('leads', [])`
-  so all consumers work unchanged.
-- `setLeads(arrayOrFn)` does a smart field-level diff and only sends
-  changed rows to Supabase. FUB sync's
-  `setLeads(p => [...fubLeads, ...p.filter(l => !l.fubId)])` correctly
-  upserts new fub leads + deletes removed ones, without re-uploading
-  the whole array.
-- Auto-migration: on first mount, if Supabase `leads` is empty AND IDB
-  has the legacy blob, uploads in 500-row chunks and sets a
-  `leads_migrated_to_table_v3` flag. Idempotent and safe to re-run.
-- Realtime subscription on `leads` table for the current user — edits
-  on one device propagate to the other within ~100ms.
-- IndexedDB stays as offline cache; loads instantly while cloud fetch
-  runs in parallel.
+**4. Database Intelligence** (`src/aiDatabaseIntel.js` + `DatabaseIntel`)
+- Batches her 6,041 leads through Gemini, scores each 1-10 on
+  transaction-likelihood-in-next-90-days, sorts into 5 buckets:
+  - 🔥 Hot Revival (high-intent leads she stopped working)
+  - 📈 Buyer Signals (active intent in notes/status)
+  - 🏡 Sell Window (past clients 4-7yr post-close — peak resell)
+  - 💌 Sphere Touch Due (overdue check-ins)
+  - ❄ Truly Cold (suggest archive)
+- Per-lead: AI's reasoning + suggested next action + pre-written script.
+- One-click actions: Text Now (opens SMS + copies script), Enroll in
+  Long-Term Nurture drip, Enroll past clients in Sphere 33-Touch.
+- Page at `/db-intel` under INSIGHTS.
+- Batch size 25, 250ms between batches, ~5-10sec per batch. For 6000 leads
+  that's ~20-40 minutes one-time. Re-run weekly.
 
-**App.js refactor** — all 10 `useIDB("leads", [])` → `useLeadsCloud()`.
-Same return signature, so LeadTracker, ContactDetail, LeadInbox,
-SOIManager, Tasks, Campaigns, Dashboard, etc. all worked without
-further changes.
+**5. Closing Multiplier** (`src/aiClosingMultiplier.js` + `ClosingMultiplier`)
+- One closing → 6 marketing assets in one AI call:
+  - 📱 IG Reel (hook + script + B-roll + caption)
+  - 📘 FB post
+  - ✉ Sphere email (subject + body)
+  - 📮 Just-Sold postcard (headline + subhead + CTA, rendered preview)
+  - ⭐ Google review request (specific to client's deal)
+  - 💡 "Lessons" teaching post (LinkedIn-style)
+- Auto-pulls from synced Realcomp listings (one-click "load this sold").
+- Save-to-library for re-use.
+- Page at `/closing-mult` under GROW.
 
-**Light theme extraction** — moved the cream/Cabinet Grotesk/Inter
-aesthetic from `.lead-tracker-v2` into a reusable `.theme-light` class
-in GlobalStyles. Applied to:
-- Dashboard (page-content + theme-light)
-- Finances
-- Commission Tracker
+### Files added this session
+```
+src/aiResponder.js              # Lead concierge AI drafter
+src/aiSocialAgent.js            # FB/IG comment AI replier
+src/aiDatabaseIntel.js          # Lead scoring engine
+src/aiClosingMultiplier.js      # Closing → 6 assets generator
+src/useLeadsCloud.js            # (earlier in session) leads table hook
+api/_lib/parseRealcompCSV.js    # (earlier) shared Matrix CSV parser
+api/webhook/realcomp-csv.js     # (earlier) Cloudmailin → listings webhook
+supabase-migrations/003_leads_table.sql
+supabase-migrations/004_listings_table.sql
+```
 
-Skipped Pipeline because its custom flex/kanban layout would fight
-with `.theme-light`'s margin/padding. Needs a partial theme variant.
+### Stack snapshot
 
-Also earlier in the same session before the autonomous push:
-- Researched + shipped **9 lead-source drip campaigns** with proper
-  email/text/call multi-channel cadence (Tom Ferry / Sierra 8x8 /
-  Zillow 10-Day plan / Buffini 33-touch / FUB text-first / NAR data).
-  See `BUILT_IN_CAMPAIGNS` in App.js.
-- Added **Enroll in Drip Campaign** UI to ContactDetail with smart
-  picker showing email/text/call breakdown per campaign.
-- Added **📱 Send button** on text-type tasks (opens phone SMS app
-  pre-filled, copies to clipboard fallback on desktop).
-- Multiple LeadTracker perf fixes (memoized counts/filters/tags,
-  100-lead pagination cap).
-
-### How the migration plays out for Monica
-
-On next load on each device (laptop + office), the new code:
-1. Reads the legacy IDB leads blob instantly (instant UI)
-2. Checks Supabase `leads` table → it's empty for her user
-3. Sees the IDB has 6000+ leads + no migration flag → uploads in
-   500-row chunks (~12 round trips, maybe 30-60 sec the first time)
-4. Sets the migration flag in IDB so it doesn't re-run
-5. From then on, every lead edit is a single-row UPSERT (cheap)
-6. Other device next time it loads: cloud has leads, downloads them,
-   replaces local IDB, shows the synced data
-
-She should see this once, then the app should feel snappy.
-
-### Stack snapshot (unchanged but for the new leads table)
-
-- **App**: `https://my-re-hub.vercel.app` (auto-deploys on push to main)
+- **App**: `https://my-re-hub.vercel.app` (Vercel auto-deploys on push to main)
 - **GitHub**: `https://github.com/miskra26-creator/my-re-hub`
 - **Supabase**: `https://hastxrejqacppfgdldrm.supabase.co`
-  - Tables: `user_data` (key/value per-user), `lead_inbox` (incoming
-    webhooks), `leads` (NEW — proper per-row storage)
-  - PAT for Management API: ask Monica to regenerate at
-    supabase.com/dashboard/account/tokens (the previous token she shared
-    is still active; she's chosen not to rotate)
-- **Vercel env vars**: `REACT_APP_SUPABASE_URL`,
-  `REACT_APP_SUPABASE_ANON_KEY`, `FUB_API_KEY`, `REACT_APP_FUB_API_KEY`,
-  `CI=false`. Not yet: `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`.
+  - Tables: `user_data`, `lead_inbox`, `leads` (6041 rows), `listings`
+- **Vercel env vars**: REACT_APP_SUPABASE_URL, REACT_APP_SUPABASE_ANON_KEY,
+  FUB_API_KEY, REACT_APP_FUB_API_KEY, CI=false, MLS_USER_ID,
+  **GOOGLE_GEMINI_API_KEY** (new this session).
+  Not set: ANTHROPIC_API_KEY (Monica declined to pay — Gemini covers it).
+- **Cloudmailin**: Monica signed up, address `0898465e000e14a5ef1f@cloudmailin.net`,
+  pointed at `/api/webhook/realcomp-csv`. Matrix scheduled email twice
+  daily (AM + PM). First sync runs tomorrow morning.
 
-### Currently in-flight
+### What's queued and what's blocked
 
-- **Pipeline theme rollout** — paused. Pipeline uses a custom flex
-  layout for its kanban columns; `.theme-light`'s margin/padding would
-  break it. Needs a `.theme-light-noframe` variant OR explicit override
-  in `.theme-light` when paired with another class.
-- **Custom domain** — Monica owns `teamiskrasells.com` on GoDaddy.
-  Wire `hub.teamiskrasells.com` to Vercel via DNS CNAME. ~10 min.
-  Vercel side: `vercel domains add hub.teamiskrasells.com`.
-- **ANTHROPIC_API_KEY** for production AI features. Add to Vercel env.
+Monica said "test later, keep building" — she hasn't actually used any of the
+4 AI features yet. When she comes back:
 
-### Queued for next session (priority order)
+**She should test in this order:**
+1. **Closing Multiplier** — easiest win, instant satisfaction. Type one of her
+   recent sold addresses, watch 6 assets generate in 10 sec.
+2. **AI Lead Concierge** — Preview tab first, then turn ON if happy.
+3. **Database Intelligence** — Run Analysis (will take a few min for 6k leads).
+4. **Social Engagement Agent** — needs Meta token scope check; Preview tab safe
+   to test without enabling.
 
-1. **Verify the leads migration ran for Monica** on her next session.
-   Check Supabase `leads` table row count. If she has 6000 leads
-   locally and the cloud is still empty, something failed in the
-   migration — diagnose.
-2. **Pipeline light theme** — needs the no-frame variant.
-3. **Custom domain** — wire `hub.teamiskrasells.com`.
-4. **Lead parsing email forwarding** — set up Cloudmailin or
-   SendGrid Inbound Parse so Zillow/BoldTrail/Realtor.com emails flow
-   into the existing webhook endpoints automatically.
-5. **BoldTrail API integration** (if she has access through her office).
-6. **Add ANTHROPIC_API_KEY to Vercel** for production AI features.
-7. **Meta Ads Phase 2** — image upload + LEAD_GENERATION objective +
-   auto status-sync.
-8. **Auto-respond toggle for AI Lead Responder.**
-9. **Smart caption animation** for VideoAuto.
-10. **AVM consolidation** — cross-link other tools.
-11. **Bank/CC CSV import for Finances**.
-12. **Eventually drop FUB** entirely (~60 days of parallel running
-    with lead parsing in place).
+**Queued for next session (not yet built):**
+1. **Pre-Listing Presentation Builder** — auto-gen 10-slide deck for listing
+   appointments. Comps, marketing plan, her stats, net sheet, PDF download.
+2. **Seller Lead Gen Engine** — home valuation landing pages per neighborhood,
+   QR codes for postcards/signs, automated equity report emails.
+3. **Hyper-Targeted Ad Composer v2** — extend existing AdComposer to auto-pull
+   active listings and generate listing-specific ad creative variants.
+4. **Custom domain** — wire `hub.teamiskrasells.com` via GoDaddy CNAME.
+5. **Twilio integration** — true SMS auto-fire. ~$5-15/mo. Currently SMS
+   drafts as Tasks; she taps Send on her phone.
+6. **Realcomp first auto-sync verification** — tomorrow morning, confirm CSV
+   email arrived → webhook → listings populated.
 
-### Gotchas (lessons learned this session)
+### Gotchas / things to watch
 
-- **Supabase RLS without base grants = silent failure.** Discovered
-  twice this session (lead_inbox + user_data). When creating any new
-  Supabase table, the migration SQL must include both `alter table ...
-  enable row level security` AND `grant select, insert, update, delete
-  on <table> to authenticated`. Otherwise PostgREST will 401 even
-  though the RLS policy would technically allow the action.
-- **Don't `Prefer: return=representation` from anon-role inserts**
-  unless the role also has SELECT — PostgREST runs an implicit SELECT
-  to return the row.
-- **Storing arrays in JSONB doesn't scale.** A 2MB blob in user_data
-  was always going to be slow once leads got into the thousands.
-  Anything that grows over 100 items + needs cross-device sync should
-  go into its own table (with proper indexes + RLS) from day one.
-- **`JSON.stringify(big)` is O(n) and expensive** — don't use it as a
-  comparison primitive in hot React effect paths.
-- **React StrictMode double-mounts effects in dev** — Supabase channel
-  names must be unique per subscription (timestamp + random suffix) or
-  the second `.subscribe()` errors with "cannot add postgres_changes
-  callbacks after subscribe()".
-- **CRA env vars require a full dev-server restart** to load. Hot
-  reload doesn't pick them up.
-- **Don't run both Claudes simultaneously.** Last week's lesson; still
-  true. One brain at a time on the codebase or merge conflicts.
+- **Gemini quota per-project**: `gemini-2.0-flash` and `gemini-2.0-flash-lite`
+  show `limit:0` on Monica's project. `gemini-flash-latest` works. If we
+  ever upgrade to Pro, may need to recheck.
+- **Realtime channel uniqueness**: every Supabase channel name must be unique
+  per subscription (Date.now()+random suffix). All workers follow this.
+- **Meta token scopes**: Social Agent will silently fail if her current token
+  is missing engagement scopes. The page banner detects connection but not
+  scope-level. If Activity tab stays empty after enabling, regenerate token.
+- **Listings page (RealcompMLS)**: now reads from Supabase listings table
+  (not localStorage `realcomp_listings`). Old localStorage data is orphaned;
+  could clean up later.
+- **AI Lead Concierge fires on `lead_inbox` INSERT only**: doesn't auto-fire
+  for manually-added leads (those go straight to `leads` table). That's by
+  design — manual leads are agents adding sphere/referrals, no auto-blast.
+- **Auto-sync git script** still working — pushed all 5 features this session
+  successfully.
 
-### State of the dev server
-
-The dev server on Monica's laptop should still be running from earlier
-in the session. The leads-refactor code changes will hot-reload through
-HMR — she shouldn't need to restart. If anything looks weird, killing +
-restarting `npm start` is always safe.
-
-### How to apply if she says "back to work"
-
-Surface the top 3 from the queue:
-1. Verify her leads migration worked (check Supabase row count after
-   she's loaded the app post-deploy)
-2. Pipeline theme rollout
-3. Wire her teamiskrasells.com custom domain
-
-If she's reporting a problem instead, check:
-- Browser console for `[useLeadsCloud]` migration log lines
-- Supabase `leads` table row count for her user_id
-- Whether the cloud sync is actually firing (Network tab should show
-  PATCH/POST to `/rest/v1/leads`)
+### State of dev server
+- Should still be running on her laptop from earlier in the day.
+- All builds passed clean. All features compile. None blocked on her input
+  beyond Monica testing + (optionally) regenerating Meta token for full
+  Social Agent functionality.
 
 ---
 
-## How to update this file (for future Claude sessions)
+## How to update this file
 
 When wrapping up a session:
-
-1. Add a new `## Last session: YYYY-MM-DD (laptop|desktop)` section at the top
-2. Move the previous "Last session" section down (or archive it after a week)
-3. Update **Currently in-flight** and **Queued** based on what you did
-4. Add anything to **Gotchas** that the other Claude needs to know
-5. Commit + push (`npm run save` or just `git add CLAUDE_NOTES.md && git commit && git push`)
+1. Add a new `## Last session` section at the top
+2. Move the previous one down (archive after a week)
+3. Update queued / in-flight / gotchas
+4. Commit + push (`npm run save`)
