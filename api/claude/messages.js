@@ -74,9 +74,11 @@ export default async function handler(req, res) {
         geminiBody.systemInstruction = { parts: [{ text: body.system }] };
       }
 
-      // gemini-1.5-flash-latest is the most universally-available free model
-      // (gemini-2.0-flash sometimes shows quota 0 for new projects).
-      const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
+      // gemini-flash-latest is the most reliably-available free-tier model
+      // as of Q2 2026. 2.0-flash and 2.0-flash-lite often show quota=0
+      // for new accounts depending on region; flash-latest aliases to the
+      // current-gen Flash model that always has free-tier traffic enabled.
+      const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
       const upstream = await fetch(url, {
         method: 'POST',
