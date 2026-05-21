@@ -26,7 +26,7 @@ import {
   saveVoiceRef, loadVoiceRef, clearVoiceRef, hasVoiceRefSaved, getRefTranscript,
   synthesizeNarration, probeAudioDuration,
 } from './autoReelVoice';
-import { stagePhoto, STAGING_STYLES, STYLE_BY_ID } from './aiVirtualStaging';
+import { stagePhoto, addLifestylePeople, STAGING_STYLES, STYLE_BY_ID } from './aiVirtualStaging';
 import { generateClipsForScenes, probeVideoMotionServer, getVideoMotionUrl, setVideoMotionUrl } from './aiVideoMotion';
 import { stitchReel } from './aiReelStitch';
 
@@ -80,6 +80,11 @@ export default function AutoReel({ setPage, toast }) {
   const [captions, setCaptions] = useLS('autoreel_captions', true);
   const [autoStage, setAutoStage] = useLS('autoreel_autostage', true);
   const [stagingStyle, setStagingStyle] = useLS('autoreel_staging_style', 'modern');
+  // Lifestyle mode = VideoTour-AI's photorealistic-people-in-room feature.
+  // When ON, AI adds people enjoying the space to up to 3 scenes (kitchen,
+  // living, outdoor) so the reel feels lived-in, not just empty staging.
+  const [lifestyle, setLifestyle] = useLS('autoreel_lifestyle', false);
+  const [lifestyleMood, setLifestyleMood] = useLS('autoreel_lifestyle_mood', 'family');
   // AI motion: when ON, use Modal-hosted LTX-Video for real camera motion
   // per scene. When OFF, fall back to the Ken Burns canvas pipeline.
   const [aiMotion, setAiMotion] = useLS('autoreel_ai_motion', false);
@@ -312,6 +317,45 @@ export default function AutoReel({ setPage, toast }) {
         addLog(`${vacantScenes.length} vacant room(s) detected but auto-stage is OFF`);
       }
 
+      // ── Phase 1c: Lifestyle people (VideoTour-AI feature) ────────────────
+      // Add photorealistic people to up to 3 standout scenes — the lived-in
+      // feel that makes the reel emotional, not just architectural.
+      if (lifestyle) {
+        const LIFESTYLE_PRIORITY = ['kitchen','living','outdoor','dining','primary'];
+        // Find up to 3 best-scoring scenes matching priority rooms
+        const candidates = scenes
+          .map((s, i) => ({ s, i }))
+          .filter(({ s }) => LIFESTYLE_PRIORITY.includes(s.room))
+          .sort((a, b) => LIFESTYLE_PRIORITY.indexOf(a.s.room) - LIFESTYLE_PRIORITY.indexOf(b.s.room))
+          .slice(0, 3);
+        if (candidates.length > 0) {
+          setPhase('lifestyle');
+          addLog(`Adding lifestyle people (${lifestyleMood}) to ${candidates.length} scene(s)`);
+          for (let n = 0; n < candidates.length; n++) {
+            const { s, i } = candidates[n];
+            setProgressLabel(`Adding lifestyle people to ${s.room} (${n + 1} of ${candidates.length})…`);
+            try {
+              const out = await addLifestylePeople({
+                photo: s.photo.file || s.photo,
+                room: s.room,
+                mood: lifestyleMood,
+                onLog: addLog,
+              });
+              const lifeUrl = URL.createObjectURL(out.blob);
+              scenes[i] = {
+                ...scenes[i],
+                photo: { url: lifeUrl, file: out.blob, name: `lifestyle-${s.room}.png` },
+                hasLifestyle: true,
+              };
+              addLog(`✓ Lifestyle added to scene ${i + 1}`);
+            } catch (e) {
+              addLog(`Lifestyle gen failed for scene ${i + 1}: ${e.message} — using original`);
+            }
+            setProgress(0.40 + 0.10 * (n + 1) / candidates.length);
+          }
+        }
+      }
+
       // ── Phase 2: Narrative ────────────────────────────────────────────────
       setPhase('narrate');
       setProgressLabel('Writing hook + scene labels…');
@@ -457,7 +501,7 @@ export default function AutoReel({ setPage, toast }) {
         addLog('Using Ken Burns canvas pipeline (no AI motion)');
         setProgressLabel('Rendering cinematic reel…');
         renderRes = await renderCinematicReel({
-          scenes, narrative, brand, vibe,
+          scenes, narrative, brand, vibe, listing,
           music: music ? { url: music.url, volume: 0.7 } : null,
           voiceover,
           opts: {
@@ -958,6 +1002,51 @@ export default function AutoReel({ setPage, toast }) {
                 }}>
                   <div style={{fontSize:16, marginBottom:3}}>{s.emoji}</div>
                   <div style={{fontSize:11.5, fontWeight:800, color:'#f1f5f9'}}>{s.name}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── STEP 3.75: Lifestyle People (the VideoTour-AI killer feature) ── */}
+      <div style={{...S.card, borderColor: lifestyle ? 'rgba(184,134,75,.4)' : 'rgba(255,255,255,.06)'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:10}}>
+          <div style={S.cardLabel}>👨‍👩‍👧 Lifestyle People <span style={{color:'#94a3b8', fontWeight:600, letterSpacing:0, textTransform:'none'}}>· photorealistic humans in the rooms · the VideoTour-AI $29/mo feature</span></div>
+          <label style={{
+            display:'inline-flex', alignItems:'center', gap:8, cursor:'pointer',
+            fontSize:12, fontWeight:800, color: lifestyle ? '#e0b370' : '#cbd5e1',
+          }}>
+            <input type="checkbox" checked={lifestyle} onChange={(e) => setLifestyle(e.target.checked)}
+              style={{width:18, height:18, accentColor:'#b8864b'}}/>
+            {lifestyle ? 'Lifestyle ON' : 'Lifestyle OFF'}
+          </label>
+        </div>
+        {!lifestyle && (
+          <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5}}>
+            VideoTour.AI's most distinctive feature: AI adds photorealistic people to your standout rooms — a family cooking in the kitchen, a couple on the patio. Makes the home feel lived-in and emotional vs. just empty staging. Free on your Gemini quota (3 photos per reel · ~9 of your 500/day used).
+          </div>
+        )}
+        {lifestyle && (
+          <>
+            <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5, marginBottom:12}}>
+              AI will pick up to 3 standout scenes (kitchen, living, outdoor) and add photorealistic people enjoying them. Pick the mood that matches your target buyer.
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:10}}>
+              {[
+                { id:'family', emoji:'👨‍👩‍👧', name:'Family',  desc:'Parents + kids enjoying the space — appeals to family buyers' },
+                { id:'couple', emoji:'💑',     name:'Couple',  desc:'Young couple cooking, relaxing — appeals to first-time buyers' },
+                { id:'luxury', emoji:'🥂',     name:'Luxury',  desc:'Elegant adults entertaining — appeals to luxury buyers' },
+              ].map(m => (
+                <button key={m.id} onClick={() => setLifestyleMood(m.id)} style={{
+                  background: lifestyleMood === m.id ? 'linear-gradient(135deg, rgba(184,134,75,.25), rgba(212,160,23,.10))' : 'rgba(255,255,255,.03)',
+                  border: lifestyleMood === m.id ? '2px solid #b8864b' : '1px solid rgba(255,255,255,.08)',
+                  borderRadius: 10, padding: '12px 10px', cursor: 'pointer',
+                  textAlign: 'left',
+                }}>
+                  <div style={{fontSize:20, marginBottom:4}}>{m.emoji}</div>
+                  <div style={{fontSize:12.5, fontWeight:800, color:'#f1f5f9'}}>{m.name}</div>
+                  <div style={{fontSize:10.5, color:'#94a3b8', lineHeight:1.4, marginTop:3}}>{m.desc}</div>
                 </button>
               ))}
             </div>

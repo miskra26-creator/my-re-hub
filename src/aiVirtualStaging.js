@@ -137,6 +137,98 @@ async function downscale(fileOrBlob, maxEdge = 1280) {
   }
 }
 
+// ─── Public: insert lifestyle people into a room (VideoTour-AI killer feature)
+// Adds photorealistic people enjoying the space — a couple cooking in the
+// kitchen, a family in the living room, etc. Same Gemini Image endpoint as
+// staging, different prompt.
+//
+// Used by AutoReel as an optional "Lifestyle Mode" — adds the human element
+// that VideoTour.AI charges $29/mo for. Free on Gemini's 500/day quota.
+export async function addLifestylePeople({ photo, room = 'living', mood = 'family', customNotes, onLog }) {
+  const log = onLog || (() => {});
+
+  const PEOPLE_BY_ROOM_MOOD = {
+    kitchen: {
+      family:  'a happy family with two parents and a child preparing a meal together',
+      couple:  'a young attractive couple cooking and laughing together',
+      luxury:  'an elegantly dressed couple having morning coffee',
+    },
+    living: {
+      family:  'a family of four (two parents, two children) relaxing together on the couch',
+      couple:  'a young couple cuddling on the couch with a book and warm drink',
+      luxury:  'a sophisticated couple having a glass of wine by the fireplace',
+    },
+    dining: {
+      family:  'a family enjoying dinner together around the dining table',
+      couple:  'a couple having a romantic candlelit dinner',
+      luxury:  'an elegant dinner party with four guests',
+    },
+    primary: {
+      family:  'a person reading a book in bed in the morning light',
+      couple:  'a couple enjoying coffee in bed with morning sunlight',
+      luxury:  'a person in a luxurious robe by the window',
+    },
+    bedroom: {
+      family:  'a child reading a book on the bed',
+      couple:  'a person reading in a cozy armchair',
+      luxury:  'a person enjoying a quiet moment in soft morning light',
+    },
+    bath: {
+      family:  'soft natural light, fresh towels stacked, plant and candle accents (no people)',
+      couple:  'soft natural light, fresh towels stacked, plant and candle accents (no people)',
+      luxury:  'soft natural light, fresh towels stacked, plant and candle accents (no people)',
+    },
+    office: {
+      family:  'a person working at the desk with focused natural light',
+      couple:  'a person working at the desk with focused natural light',
+      luxury:  'a person working at the desk with focused natural light',
+    },
+    outdoor: {
+      family:  'a family enjoying the backyard with kids playing, parents on the patio',
+      couple:  'a couple relaxing on the patio with drinks',
+      luxury:  'an elegant outdoor entertaining setup with hosts and guests',
+    },
+    exterior: {
+      family:  'a family arriving home, kids running to the front door',
+      couple:  'a couple walking up the front path holding hands',
+      luxury:  'an elegant couple posed by the entry',
+    },
+  };
+
+  const peopleDesc = (PEOPLE_BY_ROOM_MOOD[room]?.[mood])
+                  || PEOPLE_BY_ROOM_MOOD[room]?.family
+                  || `a person enjoying the space`;
+
+  const prompt = [
+    `Add ${peopleDesc} to this real estate listing photo.`,
+    `CRITICAL: Maintain the exact architecture, walls, floors, ceiling, windows, doors, lighting, and camera angle of the original photo. Do not modify any structural or furniture elements.`,
+    `The people should be photorealistic, natural-looking, well-dressed (real-estate-lifestyle appropriate), and posed naturally as if living in the space. Lighting on the people should match the room's lighting.`,
+    `Style: real estate listing lifestyle photography — warm, inviting, aspirational but believable.`,
+    customNotes ? `Additional notes: ${customNotes}` : '',
+  ].filter(Boolean).join(' ');
+
+  log(`Adding lifestyle people (${mood}) to ${room}…`);
+
+  const blob = photo instanceof Blob ? photo : (photo?.file || photo);
+  const aspectRatio = await detectAspectRatio(blob);
+  const downsized = await downscale(blob);
+  const { base64, mimeType } = await fileToBase64(downsized);
+
+  const r = await fetch('/api/gemini/image-edit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64: base64, mimeType, prompt, aspectRatio }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Lifestyle gen failed: HTTP ${r.status}`);
+  }
+  const data = await r.json();
+  const lifestyleBlob = await base64ToBlob(data.imageBase64, data.mimeType || 'image/png');
+  log(`✓ Lifestyle image returned (${data.mimeType})`);
+  return { blob: lifestyleBlob, mime: data.mimeType, promptUsed: prompt };
+}
+
 // ─── Public: stage one photo ─────────────────────────────────────────────────
 export async function stagePhoto({ photo, room = 'living', style = 'modern', customNotes, onLog }) {
   const log = onLog || (() => {});

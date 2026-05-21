@@ -1,3 +1,8 @@
+import {
+  getBadgeForStatus, drawStatusBadge, drawStatStickers, drawFeatureSticker,
+  drawAddressBar, drawBrandWatermark, drawLightLeak, buildStatStickers,
+} from './aiReelOverlays';
+
 /**
  * cinematicRender — purpose-built renderer for the AutoReel feature.
  *
@@ -479,7 +484,7 @@ async function drawClosingCard(ctx, w, h, p, opts) {
 //   opts:       { onProgress(0..1, label), onLog(text), aspect, quality, captions:bool }
 //
 // Returns: { blob, mime, durationSec, dimensions: {w,h} }
-export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'luxury', music, voiceover, opts = {} }) {
+export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'luxury', music, voiceover, listing, opts = {} }) {
   const onProgress = opts.onProgress || (() => {});
   const onLog      = opts.onLog || (() => {});
   const aspect     = opts.aspect || '9:16';
@@ -885,23 +890,57 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
 
-        // Scene label (kinetic typography). Prefers the AI's per-photo
-        // specific label ("WHITE QUARTZ ISLAND") over the curation label,
-        // and SKIPS entirely when there's no specific feature to call out
-        // — better to show nothing than to slap "BEDROOM" on a bedroom.
+        // ── MOTION GRAPHICS OVERLAYS ─────────────────────────────────────
+        // The "wow" layer — animated stickers, status badges, callouts that
+        // make this feel like AutoReel/VideoTour-AI instead of a slideshow.
+
+        // 1. Light-leak flash between scenes (cinematic transition snap)
+        if (sceneIdx > 0) {
+          drawLightLeak(ctx, w, h, sceneT, { duration: 0.30, accent });
+        }
+
+        // 2. Status badge ("JUST LISTED" / "PRICE DROP" / etc.) on first scene
+        //    Anchored to lower-third like a yard sign.
+        if (sceneIdx === 0) {
+          const badge = getBadgeForStatus(listing?.status);
+          if (badge) {
+            // Pass scene-elapsed time in seconds
+            drawStatusBadge(ctx, w, h, sceneT * sceneDur, { badge, sceneIdx });
+          }
+          // 3. Animated stat stickers stack ($425K · 4 BD · 3 BA · 2400 SQFT)
+          const stickers = buildStatStickers(listing);
+          drawStatStickers(ctx, w, h, sceneT * sceneDur, {
+            stats: stickers, sceneIdx, accent,
+          });
+        }
+
+        // 4. Per-scene feature sticker (swings in for scenes 2+)
+        //    Uses AI-extracted specific labels ("WHITE QUARTZ ISLAND" etc.)
+        //    Skips generic labels even if the AI sneaks one through.
         const rawLabel = (narrative.sceneLabels?.[sceneIdx] || scenes[sceneIdx]?.label || '').trim();
-        // Filter out cliche generic labels even if AI sneaks one through
         const isGeneric = /^(KITCHEN|BEDROOM|LIVING ROOM|BATHROOM|DINING ROOM|OFFICE|BASEMENT|ENTRY|HALLWAY|FOYER|ROOM)$/i.test(rawLabel);
         const label = isGeneric ? '' : rawLabel;
-        if (label) {
-          // Label appears from 8% to 75% of scene, fades out at end
-          const labelP = Math.max(0, Math.min(1, (sceneT - 0.08) / 0.5));
-          const fadeOut = sceneT > 0.75 ? Math.max(0, 1 - (sceneT - 0.75) / 0.20) : 1;
-          ctx.save();
-          ctx.globalAlpha = fadeOut;
-          drawKineticLabel(ctx, label, w/2, h * 0.18, w, h, labelP, accent);
-          ctx.restore();
+        if (label && sceneIdx > 0) {
+          drawFeatureSticker(ctx, w, h, sceneT, { label, sceneIdx, accent });
         }
+
+        // 5. Address lower-third bar — slides in mid-reel
+        //    Appears on a mid-tour scene so viewers see exactly which address
+        if (sceneIdx === Math.floor(scenes.length / 2) && listing?.address) {
+          drawAddressBar(ctx, w, h, sceneT * sceneDur, {
+            address: listing.address,
+            city: listing.city,
+            windowStartSec: 0.3,
+            accent,
+          });
+        }
+
+        // 6. Persistent brand watermark (corner logo + agent name)
+        drawBrandWatermark(ctx, w, h, t, {
+          logoEl,
+          agentName: brand?.name,
+          accent,
+        });
 
         // Caption (only when voiceover is active)
         // Karaoke mode when we have word-level timings; block mode otherwise.
