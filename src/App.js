@@ -8,6 +8,7 @@ import { scoreAllLeads, groupByBucket, BUCKET_META } from './aiDatabaseIntel';
 import { multiplyClosing } from './aiClosingMultiplier';
 import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
+import AutoReel from './AutoReel';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
 import GoogleBusiness from './GoogleBusiness';
@@ -893,6 +894,7 @@ const NAV = [
   { section:"CREATE" },
   { id:"listing-writer",      label:"AI Listing Writer",    icon:FileText },
   { id:"social-studio",       label:"Social Caption Studio",icon:MessageSquare },
+  { id:"auto-reel",           label:"AutoReel · AI Reels",  icon:Sparkles },
   { id:"video-studio",        label:"Auto Video Maker",     icon:Video },
   { id:"ai-studio",           label:"AI Studio",            icon:Wand2 },
   { id:"viral-studio",        label:"Viral Studio",         icon:TrendingUp },
@@ -9148,6 +9150,7 @@ export default function App() {
     dashboard:            <Dashboard {...props}/>,
     "listing-writer":     <ListingWriter {...props}/>,
     "social-studio":      <SocialStudio {...props}/>,
+    "auto-reel":          <AutoReel {...props}/>,
     "video-studio":       <VideoAuto {...props}/>,
     "ai-studio":          <AIStudio {...props}/>,
     "viral-studio":       <ViralStudio {...props}/>,
