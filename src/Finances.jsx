@@ -135,7 +135,7 @@ export default function Finances({ setPage, toast }) {
   }, [expenses, year]);
 
   return (
-    <div className="page-content theme-light">
+    <div className="page-content">
       {/* Header */}
       <div style={{ marginBottom: 18 }}>
         <button className="btn-back" style={{ marginBottom: 14 }} onClick={() => setPage?.('dashboard')}>

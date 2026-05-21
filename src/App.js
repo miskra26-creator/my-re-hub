@@ -1126,7 +1126,7 @@ const Dashboard = ({setPage,toast}) => {
   const greeting = hour<12?"Good morning":"Good afternoon";
 
   return (
-    <div className="page-content theme-light">
+    <div className="page-content">
       {/* Header */}
       <div style={{marginBottom:28,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
         <div>
@@ -5214,7 +5214,7 @@ const CommissionTracker = ({setPage, toast}) => {
   };
 
   return (
-    <div className="page-content theme-light">
+    <div className="page-content">
       <PageHeader title="Commission Tracker" sub={`${thisYear} income pipeline`} setPage={setPage} parent="dashboard"
         action={<button className="btn btn-blue" onClick={()=>{setShowForm(true);setEditId(null);}}><Plus size={13}/>Add Commission</button>}
       />
