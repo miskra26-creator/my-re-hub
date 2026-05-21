@@ -102,6 +102,15 @@ function drawCoverWithMotion(ctx, img, cx, cy, w, h, scale, panX, panY) {
 }
 
 // ── Rounded rect path ─────────────────────────────────────────────────────────
+// Shade a hex color by a percentage (positive = lighter, negative = darker)
+function shadeColor(hex, percent) {
+  const m = hex.replace('#', '');
+  if (m.length !== 6) return hex;
+  const adj = (v) => Math.max(0, Math.min(255, parseInt(v, 16) + Math.round(255 * (percent / 100))));
+  const r = adj(m.slice(0, 2)), g = adj(m.slice(2, 4)), b = adj(m.slice(4, 6));
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
 function roundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -522,6 +531,17 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
     try { logoEl = await loadImage(brand.logoUrl); } catch (e) { /* ignore */ }
   }
 
+  // Pick the closing-card backdrop: the highest-scoring loaded photo, or the
+  // first available. Used as a blurred full-bleed background under the
+  // overlay card on the closing slide.
+  let closingBackdrop = null;
+  {
+    const scored = scenes.map((s, i) => ({ img: photoEls[i], score: s.score || 0 }))
+      .filter(x => x.img)
+      .sort((a, b) => b.score - a.score);
+    closingBackdrop = scored[0]?.img || photoEls.find(Boolean) || null;
+  }
+
   // Compute timing — when voiceover is present, stretch scenes so the reel
   // is at least as long as the narration (no cutoff). Otherwise use vibe default.
   const introDur   = 2.2;      // stats card opener
@@ -908,10 +928,13 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
       else {
         const outroT = t - introDur - scenes.length * sceneDur;
         const p = Math.min(1, outroT / outroDur);
+        // Use the highest-quality photo as the closing-card backdrop. Falls
+        // back to the first photo, or null (solid gradient) if none available.
+        const backdrop = closingBackdrop;
         drawClosingCard(ctx, w, h, p, {
           headline: narrative.closingHeadline,
           cta: narrative.closingCta,
-          brand, accent, primary, logoEl,
+          brand, accent, primary, logoEl, backdropImg: backdrop,
         });
       }
 
