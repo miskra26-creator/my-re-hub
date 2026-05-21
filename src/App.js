@@ -931,6 +931,7 @@ const NAV = [
   { id:"client-templates",    label:"Client Templates",    icon:Heart },
   { id:"integrations",        label:"Integrations",        icon:Globe },
   { section:"INSIGHTS" },
+  { id:"db-intel",            label:"Database Intelligence", icon:Wand2 },
   { id:"analytics",           label:"Business Analytics",  icon:TrendingUp },
   { id:"market-analyzer",     label:"Market Analyzer",     icon:Search },
   { id:"cma-tool",            label:"CMA Assistant",       icon:Building },
@@ -5794,6 +5795,201 @@ const SocialAgent = ({setPage, toast}) => {
 };
 
 
+// ─── DATABASE INTELLIGENCE — find money hiding in 6000+ leads ────────────────
+// Most agents lose 80% of their lead value by stopping follow-up after 2-3
+// touches. NAR: median 11mo from first contact to close. This page batches
+// leads through Claude/Gemini and surfaces actionable opportunities Monica
+// has been ignoring.
+const DatabaseIntel = ({setPage, toast}) => {
+  const [leads] = useLeadsCloud();
+  const [scored, setScored] = useLS("db_intel_results", null);
+  const [lastRun, setLastRun] = useLS("db_intel_last_run", null);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [activeBucket, setActiveBucket] = useState("hot_revival");
+  const [emailQueue, setEmailQueue] = useLS("email_queue", []);
+  const [tasks, setTasks] = useLS("tasks", []);
+
+  const run = async () => {
+    if (!leads.length) return toast.error("No leads to analyze yet");
+    if (!window.confirm(`Analyze ${leads.length} leads via AI? Takes a few minutes. Free on Gemini.`)) return;
+    setRunning(true);
+    setProgress({ done: 0, total: leads.length });
+    try {
+      const results = await scoreAllLeads(leads, {
+        batchSize: 25,
+        onProgress: (done, total) => setProgress({ done, total }),
+      });
+      setScored(results);
+      setLastRun(new Date().toISOString());
+      toast.success(`Analyzed ${results.length} leads — see the buckets below`);
+    } catch (e) {
+      toast.error("Analysis failed: " + e.message);
+    }
+    setRunning(false);
+  };
+
+  const buckets = scored ? groupByBucket(scored) : null;
+
+  const quickText = (lead) => {
+    if (!lead.phone) return toast.error(`${lead.name} has no phone`);
+    const body = lead.intel?.suggestedScript || "";
+    navigator.clipboard?.writeText(body).catch(() => {});
+    window.location.href = `sms:${lead.phone.replace(/\D/g, "")}?body=${encodeURIComponent(body)}`;
+    toast.info("SMS opened — script copied too");
+  };
+
+  const enrollDrip = (lead, campId = "camp_long_term") => {
+    // Quick re-enroll into Long-Term Nurture (sensible default)
+    const camp = BUILT_IN_CAMPAIGNS.find(c => c.id === campId);
+    if (!camp) return toast.error("Campaign not found");
+    if (!lead.email && camp.steps.some(s => (s.type||"email") === "email")) return toast.error(`${lead.name} has no email`);
+    const start = new Date();
+    const firstName = (lead.name || "").split(" ")[0];
+    const newEmails = [], newTasks = [];
+    camp.steps.forEach((step, i) => {
+      const due = new Date(start); due.setDate(due.getDate() + step.day);
+      const dueStr = due.toISOString().slice(0, 10);
+      const type = step.type || "email";
+      const body = (step.body || "").replace(/\[name\]/gi, firstName).replace(/\[area\]/gi, lead.area || "your area");
+      if (type === "email") newEmails.push({
+        id: uid(), leadId: lead.id, leadName: lead.name, leadEmail: lead.email,
+        campaignId: camp.id, campaignName: camp.name,
+        subject: (step.subject||"").replace(/\[name\]/gi, firstName),
+        body, dueDate: dueStr, stepIndex: i, sent: false, createdAt: now(),
+      });
+      else if (type === "text" || type === "call") newTasks.push({
+        id: uid(), title: `${type === "text" ? "Text" : "Call"} ${firstName} — ${camp.name}`,
+        type: type === "text" ? "Text" : "Call", leadId: lead.id, leadName: lead.name,
+        dueDate: dueStr, notes: body, smsBody: type === "text" ? body : undefined,
+        campaignId: camp.id, campaignName: camp.name, stepIndex: i, completed: false, createdAt: now(),
+      });
+    });
+    if (newEmails.length) setEmailQueue(p => [...p, ...newEmails]);
+    if (newTasks.length) setTasks(p => [...p, ...newTasks]);
+    toast.success(`${lead.name} enrolled in "${camp.name}" (${newEmails.length} emails + ${newTasks.length} tasks queued)`);
+  };
+
+  return (
+    <div className="page-content">
+      <PageHeader title="Database Intelligence" sub="AI scans your 6000+ leads to surface money you've forgotten about" setPage={setPage} parent="dashboard"
+        action={
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {lastRun && !running && <span style={{fontSize:11,color:"#64748b"}}>Last run: {new Date(lastRun).toLocaleString()}</span>}
+            <button className="btn btn-blue" onClick={run} disabled={running}>
+              {running ? <><Spinner s={13}/>Analyzing {progress.done}/{progress.total}…</> : <><Wand2 size={13}/>{scored ? "Re-Analyze" : "Run Analysis"}</>}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Hero info */}
+      {!scored && !running && (
+        <div className="glass-card" style={{marginBottom:22,padding:"24px 28px",background:"linear-gradient(135deg, rgba(110,231,183,.08), rgba(26,90,160,.05))",borderColor:"rgba(110,231,183,.2)"}}>
+          <div style={{fontSize:20,fontWeight:900,color:"#fff",fontFamily:"'DM Serif Display',serif",marginBottom:10}}>Find the money hiding in your CRM</div>
+          <div style={{fontSize:14,color:"#cbd5e1",lineHeight:1.7,marginBottom:14}}>
+            You have <strong style={{color:"#6ee7b7"}}>{leads.length.toLocaleString()} leads</strong>. NAR data shows 80% of agents lose 80% of their lead value because they stop following up at touch 2-3. Median time from first contact to close is 11 months. Most of your "cold" leads are warm leads you forgot about.
+          </div>
+          <div style={{fontSize:14,color:"#cbd5e1",lineHeight:1.7,marginBottom:14}}>
+            This tool batches every lead through the AI and groups them into <strong>5 actionable buckets</strong>:
+            <ul style={{margin:"10px 0",paddingLeft:24,color:"#94a3b8"}}>
+              <li>🔥 <strong>Hot Revival</strong> — high-intent leads you stopped working</li>
+              <li>📈 <strong>Buyer Signals</strong> — active intent in their notes/status</li>
+              <li>🏡 <strong>Past Clients in Sell Window</strong> — 4-7 yrs since closing (peak resell time)</li>
+              <li>💌 <strong>Sphere Touch Due</strong> — overdue check-ins driving referrals</li>
+              <li>❄ <strong>Truly Cold</strong> — suggest archive</li>
+            </ul>
+          </div>
+          <div style={{fontSize:13,color:"#64748b",fontStyle:"italic"}}>Runs on free Gemini AI. Takes ~{Math.ceil(leads.length/25*5)}-{Math.ceil(leads.length/25*10)} seconds. Re-run weekly as your data updates.</div>
+        </div>
+      )}
+
+      {/* Progress */}
+      {running && (
+        <div className="glass-card" style={{marginBottom:22,padding:"20px 24px"}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:12}}>Analyzing {progress.done}/{progress.total} leads…</div>
+          <div style={{background:"rgba(255,255,255,.05)",borderRadius:99,height:8,overflow:"hidden"}}>
+            <div style={{background:"linear-gradient(90deg,#10b981,#059669)",height:8,width:`${progress.total ? (progress.done/progress.total*100) : 0}%`,transition:"width .3s"}}/>
+          </div>
+          <div style={{fontSize:11,color:"#64748b",marginTop:8}}>Don't close the tab — analysis runs in your browser. Free Gemini, no API cost.</div>
+        </div>
+      )}
+
+      {/* Bucket tabs + results */}
+      {scored && buckets && (
+        <>
+          <div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
+            {Object.keys(BUCKET_META).map(b => {
+              const meta = BUCKET_META[b];
+              const count = buckets[b].length;
+              const isActive = activeBucket === b;
+              return (
+                <button key={b} onClick={()=>setActiveBucket(b)}
+                  style={{padding:"10px 16px",borderRadius:11,cursor:"pointer",border:`1.5px solid ${isActive?meta.color:"rgba(255,255,255,.08)"}`,background:isActive?`${meta.color}18`:"rgba(255,255,255,.02)",color:isActive?"#fff":"#94a3b8",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:8}}>
+                  {meta.label}
+                  <span style={{background:isActive?meta.color:"rgba(255,255,255,.1)",color:isActive?"#fff":"#94a3b8",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:800}}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="glass-card" style={{marginBottom:18,padding:"14px 18px",borderLeft:`3px solid ${BUCKET_META[activeBucket].color}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>{BUCKET_META[activeBucket].label}</div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.5}}>{BUCKET_META[activeBucket].desc}</div>
+          </div>
+
+          {buckets[activeBucket].length === 0 ? (
+            <div className="glass-card"><EmptyState icon={CheckCircle} title="Nothing in this bucket" desc="That's good news — or it means we need more lead data. Try another bucket."/></div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {buckets[activeBucket].slice(0, 50).map(lead => (
+                <div key={lead.id} className="glass-card" style={{padding:"16px 20px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:14,marginBottom:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:4}}>
+                        <span style={{fontFamily:"'DM Serif Display',serif",fontSize:17,fontWeight:800,color:"#fff"}}>{lead.name}</span>
+                        <span style={{padding:"3px 9px",borderRadius:99,background:`${BUCKET_META[activeBucket].color}22`,color:BUCKET_META[activeBucket].color,fontSize:11,fontWeight:800}}>SCORE {lead.intel?.score}/10</span>
+                        <span className={`badge ${lead.status==="Hot Prospect"?"badge-red":lead.status==="Past Client"?"badge-green":"badge-gray"}`}>{lead.status}</span>
+                        {lead.source && <span className="badge badge-gray" style={{fontSize:10}}>{lead.source}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:16,fontSize:12,color:"#94a3b8",flexWrap:"wrap",marginBottom:6}}>
+                        {lead.email && <span>✉ {lead.email}</span>}
+                        {lead.phone && <span>📞 {lead.phone}</span>}
+                        {lead.area && <span>📍 {lead.area}</span>}
+                        {lead.budget && <span>💰 {fmtMoney(lead.budget)}</span>}
+                      </div>
+                      {lead.intel?.reason && (
+                        <div style={{fontSize:12,color:"#cbd5e1",marginTop:6,padding:"8px 12px",background:"rgba(255,255,255,.03)",borderRadius:7,borderLeft:"2px solid rgba(126,184,247,.4)"}}>
+                          <strong style={{color:"#7eb8f7"}}>Why this matters:</strong> {lead.intel.reason}
+                        </div>
+                      )}
+                      {lead.intel?.suggestedScript && (
+                        <div style={{fontSize:12,color:"#cbd5e1",marginTop:6,padding:"8px 12px",background:"rgba(110,231,183,.06)",borderRadius:7,borderLeft:"2px solid #6ee7b7"}}>
+                          <strong style={{color:"#6ee7b7"}}>Suggested {lead.intel.suggestedAction}:</strong> {lead.intel.suggestedScript}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {lead.phone && <button className="btn btn-ghost btn-sm" onClick={()=>quickText(lead)}>📱 Text Now (script copied)</button>}
+                    {lead.email && <button className="btn btn-ghost btn-sm" onClick={()=>enrollDrip(lead, "camp_long_term")}>📧 Enroll: Long-Term Nurture</button>}
+                    {lead.status === "Past Client" && lead.email && <button className="btn btn-ghost btn-sm" onClick={()=>enrollDrip(lead, "camp_soi")}>💎 Enroll: Sphere 33-Touch</button>}
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setPage("leads")}>👤 Open lead</button>
+                  </div>
+                </div>
+              ))}
+              {buckets[activeBucket].length > 50 && (
+                <div style={{textAlign:"center",fontSize:12,color:"#475569",padding:14}}>Showing top 50 of {buckets[activeBucket].length} in this bucket</div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+
 // ─── INTEGRATIONS ─────────────────────────────────────────────────────────────
 const Integrations = ({setPage,toast}) => {
   const [settings,setSettings] = useLS("integrations",{});
@@ -8506,6 +8702,7 @@ export default function App() {
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
     "ai-concierge":       <AILeadConcierge {...props}/>,
     "social-agent":       <SocialAgent {...props}/>,
+    "db-intel":           <DatabaseIntel {...props}/>,
     "pipeline":           <PipelineBoard {...props}/>,
     "tasks":              <TaskManager {...props}/>,
     "action-plans":       <ActionPlans {...props}/>,
