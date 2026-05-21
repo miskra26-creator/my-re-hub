@@ -8984,7 +8984,7 @@ function LoginScreen({ onLogin }) {
         <div style={{textAlign:'center',marginBottom:32}}>
           <img src="/logo-transparent.png" alt="Monica Iskra" style={{width:96,height:96,objectFit:'contain',marginBottom:8}}/>
           <div style={{fontSize:22,fontWeight:800,color:'#fff',letterSpacing:'-0.5px'}}>Real Estate Hub</div>
-          <div style={{fontSize:13,color:'rgba(255,255,255,.45)',marginTop:4}}>Monica Iskra · Livonia, MI</div>
+          <div style={{fontSize:13,color:'rgba(255,255,255,.45)',marginTop:4}}>Monica · Realtor</div>
         </div>
 
         {resetSent ? (
