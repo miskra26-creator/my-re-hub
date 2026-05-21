@@ -204,6 +204,11 @@ const GlobalStyles = () => (
       background-repeat: no-repeat; background-position: right 12px center; padding-right: 34px;
     }
     .select option { background: #0d1020; color: #e2e8f0; }
+    /* Apply dark theme to ALL native dropdowns globally — fixes "white box
+       with invisible options" issue on pages that use bare <select> without
+       the .select class (AutoReel, VirtualStaging, etc.) */
+    select { color-scheme: dark; }
+    select option { background: #0d1020; color: #e2e8f0; padding: 6px; }
     .textarea { resize: vertical; min-height: 90px; line-height: 1.65; }
     input[type=range] { accent-color: #1a5aa0; width: 100%; }
     input[type=checkbox] { accent-color: #1a5aa0; width: 15px; height: 15px; cursor: pointer; }

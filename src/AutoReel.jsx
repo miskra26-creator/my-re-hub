@@ -148,6 +148,19 @@ export default function AutoReel({ setPage, toast }) {
   const [progressLabel, setProgressLabel] = useState('');
   const [log, setLog] = useState([]);
   const [result, setResult] = useState(null); // { blob, url, narrative, scenes, publicUrl? }
+
+  // ── Review-before-render state ──────────────────────────────────────────────
+  // After AI curates + narrates, we PAUSE here so Monica can fix any wrong
+  // labels / captions before the expensive render kicks off. AI is good at
+  // spotting features in photos but sometimes confuses room types or makes
+  // up labels that don't match what's visible.
+  const [reviewPlan, setReviewPlan] = useState(null);
+  // reviewPlan shape: {
+  //   scenes,        // ordered, with staged photos if applicable
+  //   narrative,     // { hook, sceneLabels[], closingHeadline, closingCta, igCaption, fbCaption, statsLine }
+  //   tourScript,    // { fullScript, perScene } | null  (only when narration is on)
+  //   music,         // chosen background track
+  // }
   const [integrations] = useLS('integrations', {});
   const meta = integrations?.meta || { accessToken: '', pageId: '', igAccountId: '' };
   const [brand] = useLS('rehub_brand', {});
