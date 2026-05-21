@@ -78,6 +78,40 @@ export default function AutoReel({ setPage, toast }) {
   const [hasVoiceRef, setHasVoiceRef] = useState(() => hasVoiceRefSaved());
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
+  // ── ElevenLabs voice picker state ───────────────────────────────────────────
+  const [elVoices, setElVoices] = useState([]);
+  const [elVoiceId, setElVoiceId] = useLS('autoreel_el_voice_id', '');
+  const [elKeyMissing, setElKeyMissing] = useState(false);
+  const [elUsage, setElUsage] = useState(null);
+  const [elLoaded, setElLoaded] = useState(false);
+
+  // Lazy-load voices when she opens the Pro Voice option for the first time
+  useEffect(() => {
+    if (!narration || voicePref !== 'pro' || elLoaded) return;
+    setElLoaded(true);
+    (async () => {
+      try {
+        const [vRes, uRes] = await Promise.all([
+          fetch('/api/elevenlabs/voices'),
+          fetch('/api/elevenlabs/usage'),
+        ]);
+        if (vRes.status === 400) { setElKeyMissing(true); return; }
+        const v = await vRes.json();
+        if (v.voices?.length) {
+          setElVoices(v.voices);
+          // Prefer a real estate-friendly female narrator if she hasn't picked
+          if (!elVoiceId) {
+            const preferred = v.voices.find(x => /rachel|bella|elli|grace|charlotte|sarah/i.test(x.name))
+                            || v.voices[0];
+            setElVoiceId(preferred.voice_id);
+          }
+        }
+        if (uRes.ok) setElUsage(await uRes.json());
+      } catch (e) { /* swallow, pro-voice will just fall through to F5/browser */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narration, voicePref]);
+
   // ── Async state ─────────────────────────────────────────────────────────────
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState(''); // 'curate'|'narrate'|'render'|'upload'|'post'
@@ -215,6 +249,7 @@ export default function AutoReel({ setPage, toast }) {
           const voiceRes = await synthesizeNarration({
             script: scriptOut.fullScript,
             preferred: voicePref,
+            elevenLabsVoiceId: elVoiceId,
             onLog: addLog,
           });
           if (voiceRes?.blob) {
@@ -646,6 +681,58 @@ export default function AutoReel({ setPage, toast }) {
                 </button>
               ))}
             </div>
+
+            {/* Pro Voice (ElevenLabs) voice picker */}
+            {voicePref === 'pro' && (
+              <div style={{marginBottom:12}}>
+                {elKeyMissing ? (
+                  <div style={{
+                    background:'rgba(245,158,11,.08)', borderLeft:'3px solid #f59e0b',
+                    padding:'10px 12px', borderRadius:6,
+                    fontSize:12, color:'#fbbf24', lineHeight:1.5,
+                  }}>
+                    <strong>ElevenLabs key needed.</strong> Grab a free key at <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noreferrer" style={{color:'#fbbf24', textDecoration:'underline'}}>elevenlabs.io</a> (free tier: 10k characters/month — ~30 reels). Then add <code style={{background:'rgba(0,0,0,.3)', padding:'1px 5px', borderRadius:3}}>ELEVENLABS_API_KEY</code> to Vercel env vars and redeploy. Until then, Pro Voice falls back to your cloned voice.
+                  </div>
+                ) : elVoices.length === 0 ? (
+                  <div style={{fontSize:11, color:'#94a3b8'}}>Loading voices…</div>
+                ) : (
+                  <>
+                    <div style={S.fieldLabel}>ElevenLabs voice ({elVoices.length} available)</div>
+                    <select
+                      value={elVoiceId}
+                      onChange={(e) => setElVoiceId(e.target.value)}
+                      style={{...S.input, width:'100%', marginTop:5}}
+                    >
+                      {elVoices.map(v => (
+                        <option key={v.voice_id} value={v.voice_id}>
+                          {v.name}{v.labels?.gender ? ` · ${v.labels.gender}` : ''}{v.labels?.accent ? ` · ${v.labels.accent}` : ''}{v.category && v.category !== 'premade' ? ` · ${v.category}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const picked = elVoices.find(v => v.voice_id === elVoiceId);
+                      return picked?.preview_url ? (
+                        <audio src={picked.preview_url} controls style={{width:'100%', marginTop:6, height:32}}/>
+                      ) : null;
+                    })()}
+                    {elUsage && elUsage.character_limit > 0 && (
+                      <div style={{marginTop:8, fontSize:11, color:'#94a3b8'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:3}}>
+                          <span>{elUsage.tier} tier · {elUsage.character_count.toLocaleString()} / {elUsage.character_limit.toLocaleString()} chars used this month</span>
+                          <span style={{color:'#b8864b', fontWeight:700}}>{Math.max(0, elUsage.character_limit - elUsage.character_count).toLocaleString()} left</span>
+                        </div>
+                        <div style={{height:4, background:'rgba(255,255,255,.06)', borderRadius:2, overflow:'hidden'}}>
+                          <div style={{
+                            width: `${Math.min(100, (elUsage.character_count / elUsage.character_limit) * 100)}%`,
+                            height:'100%', background:'#b8864b',
+                          }}/>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {voicePref === 'cloned' && !hasVoiceRef && (
               <div style={{
