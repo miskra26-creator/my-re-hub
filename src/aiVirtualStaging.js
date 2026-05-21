@@ -144,16 +144,19 @@ export async function stagePhoto({ photo, room = 'living', style = 'modern', cus
 
   // Resolve photo into a Blob
   const blob = photo instanceof Blob ? photo : (photo?.file || photo);
+  // Detect the input's aspect ratio so the staged output matches the original's
+  // framing (no awkward crop — important for MLS uploads).
+  const aspectRatio = await detectAspectRatio(blob);
   const downsized = await downscale(blob);
   const { base64, mimeType } = await fileToBase64(downsized);
-  log(`Sending ${(base64.length * 0.75 / 1024).toFixed(0)} KB to Gemini Image…`);
+  log(`Sending ${(base64.length * 0.75 / 1024).toFixed(0)} KB to Gemini Image · aspect ${aspectRatio}`);
 
   const prompt = buildPrompt({ room, style, customNotes });
 
   const r = await fetch('/api/gemini/image-edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64: base64, mimeType, prompt }),
+    body: JSON.stringify({ imageBase64: base64, mimeType, prompt, aspectRatio }),
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
@@ -207,4 +210,119 @@ async function base64ToBlob(base64, mime = 'image/png') {
   // Use fetch on a data URL — simplest cross-browser conversion
   const r = await fetch(`data:${mime};base64,${base64}`);
   return await r.blob();
+}
+
+// ─── Detect input aspect ratio → closest Gemini-supported value ──────────────
+// Gemini accepts a discrete set of aspect ratios for image generation. We pick
+// the closest match to the input so the staged output retains the original's
+// framing — critical for MLS uploads where photos have a consistent shape.
+async function detectAspectRatio(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    const ratio = img.naturalWidth / img.naturalHeight;
+    const candidates = [
+      { label: '1:1',  value: 1.0 },
+      { label: '4:3',  value: 4/3 },
+      { label: '3:4',  value: 3/4 },
+      { label: '16:9', value: 16/9 },
+      { label: '9:16', value: 9/16 },
+      { label: '3:2',  value: 3/2 },
+      { label: '2:3',  value: 2/3 },
+    ];
+    // Pick the candidate whose value is closest to the input's actual ratio
+    let best = candidates[0];
+    let bestDiff = Math.abs(ratio - best.value);
+    for (const c of candidates) {
+      const d = Math.abs(ratio - c.value);
+      if (d < bestDiff) { best = c; bestDiff = d; }
+    }
+    return best.label;
+  } catch (e) {
+    return '4:3'; // safe default for real estate photos
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+// ─── Stamp "VIRTUALLY STAGED" badge on an image ──────────────────────────────
+// Applied at download time only — the in-app preview stays clean for visual
+// review. Bottom-right corner, dark pill with white text, large enough to read
+// at MLS thumbnail size but unobtrusive.
+//
+// Per NAR's 2025 guidance, virtually staged photos should carry a visible
+// label. Realcomp's general "no watermark" rule appears aimed at branding,
+// not disclosure — when in doubt, leave the badge on or call Realcomp.
+export async function stampVirtuallyStaged(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.crossOrigin = 'anonymous';
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0);
+
+    // Badge sizing scales with image size — readable at MLS thumbnail (~250px wide)
+    const w = c.width;
+    const h = c.height;
+    const fontSize = Math.max(14, Math.floor(w * 0.022));
+    const padX = fontSize * 0.9;
+    const padY = fontSize * 0.55;
+    const text = 'VIRTUALLY STAGED';
+
+    ctx.font = `900 ${fontSize}px "Helvetica Neue", Arial, system-ui, sans-serif`;
+    const textW = ctx.measureText(text).width;
+    const pillW = textW + padX * 2;
+    const pillH = fontSize + padY * 2;
+    const margin = Math.floor(w * 0.018);
+    const pillX = w - pillW - margin;
+    const pillY = h - pillH - margin;
+
+    // Pill backdrop — semi-opaque black with subtle border
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    roundedRect(ctx, pillX, pillY, pillW, pillH, pillH * 0.18);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    // Text
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${fontSize}px "Helvetica Neue", Arial, system-ui, sans-serif`;
+    ctx.fillText(text, pillX + pillW / 2, pillY + pillH / 2 + 1);
+
+    return await new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.95));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
