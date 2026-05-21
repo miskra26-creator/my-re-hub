@@ -19,9 +19,13 @@ import { supabase, isCloudEnabled } from './supabase';
 import { useLS } from './cloudHooks';
 import {
   VIBES, VIBE_BY_ID, ROOM_ORDER,
-  curatePhotos, buildSceneOrder, generateNarrative,
+  curatePhotos, buildSceneOrder, generateNarrative, generateTourScript,
 } from './aiAutoReel';
 import { renderCinematicReel, REEL_MUSIC, pickRandomTrack } from './cinematicRender';
+import {
+  saveVoiceRef, loadVoiceRef, clearVoiceRef, hasVoiceRefSaved, getRefTranscript,
+  synthesizeNarration, probeAudioDuration,
+} from './autoReelVoice';
 
 // ── Tiny styled element helpers (match app's visual language) ─────────────────
 const S = {
@@ -68,6 +72,11 @@ export default function AutoReel({ setPage, toast }) {
   const [photos, setPhotos] = useState([]); // [{ id, file, url }]
   const [vibe, setVibe] = useState('luxury');
   const [aspect, setAspect] = useState('9:16');
+  const [narration, setNarration] = useLS('autoreel_narration', false);
+  const [voicePref, setVoicePref] = useLS('autoreel_voice_pref', 'cloned'); // 'cloned' | 'pro' | 'browser'
+  const [captions, setCaptions] = useLS('autoreel_captions', true);
+  const [hasVoiceRef, setHasVoiceRef] = useState(() => hasVoiceRefSaved());
+  const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
   // ── Async state ─────────────────────────────────────────────────────────────
   const [busy, setBusy] = useState(false);
@@ -188,26 +197,68 @@ export default function AutoReel({ setPage, toast }) {
         agentVoice, agent: profile,
       });
       addLog(`Hook: "${narrative.hook}"`);
-      setProgress(0.40);
+      setProgress(0.35);
+
+      // ── Phase 2b: Voiceover (optional) ─────────────────────────────────────
+      let voiceover = null;
+      if (narration) {
+        setPhase('voice');
+        setProgressLabel('Writing narration script…');
+        addLog('Generating tour narration script');
+        const scriptOut = await generateTourScript({
+          scenes, listing, vibe, agentVoice, agent: profile,
+        });
+        addLog(`Script: "${scriptOut.fullScript.slice(0, 80)}..."`);
+
+        setProgressLabel(`Synthesizing voice (${voicePref})…`);
+        try {
+          const voiceRes = await synthesizeNarration({
+            script: scriptOut.fullScript,
+            preferred: voicePref,
+            onLog: addLog,
+          });
+          if (voiceRes?.blob) {
+            const dur = await probeAudioDuration(voiceRes.blob);
+            voiceover = {
+              blob: voiceRes.blob,
+              mime: voiceRes.mime,
+              durationSec: dur,
+              perScene: scriptOut.perScene || [],
+              provider: voiceRes.provider,
+            };
+            addLog(`Voice rendered: ${dur.toFixed(1)}s via ${voiceRes.provider}`);
+          } else {
+            addLog('No audio blob returned — skipping narration in the video');
+          }
+        } catch (voiceErr) {
+          addLog(`Narration failed (continuing without): ${voiceErr.message}`);
+          toast?.warning?.('Narration failed — reel will render without voice');
+        }
+        setProgress(0.45);
+      }
 
       // ── Phase 3: Render ───────────────────────────────────────────────────
       setPhase('render');
       setProgressLabel('Rendering cinematic reel…');
       addLog('Starting cinematic render');
 
-      // Pick a music track matching the vibe's music category
+      // Pick a music track matching the vibe's music category. When narration
+      // is on, music gets ducked under the voiceover automatically.
       const music = pickRandomTrack(vibeDef.music);
       addLog(`Music: ${music?.name || '(silent)'}`);
 
       const renderRes = await renderCinematicReel({
         scenes, narrative, brand, vibe,
         music: music ? { url: music.url, volume: 0.7 } : null,
+        voiceover,
         opts: {
           aspect,
           quality: 'high',
+          captions,
           onProgress: (p, label) => {
-            // Render is 40-95% of overall
-            setProgress(0.40 + 0.55 * p);
+            // Render is 45-95% of overall when narration enabled, 40-95% when not
+            const base = narration ? 0.45 : 0.40;
+            setProgress(base + (1 - base - 0.05) * p);
             if (label) setProgressLabel(label);
           },
           onLog: addLog,
@@ -530,7 +581,7 @@ export default function AutoReel({ setPage, toast }) {
           ))}
         </div>
 
-        <div style={{display:'flex', gap:10, marginTop:14, flexWrap:'wrap'}}>
+        <div style={{display:'flex', gap:18, marginTop:14, flexWrap:'wrap', alignItems:'flex-end'}}>
           <div>
             <div style={S.fieldLabel}>Format</div>
             <div style={{display:'flex', gap:6, marginTop:5}}>
@@ -550,6 +601,93 @@ export default function AutoReel({ setPage, toast }) {
           </div>
         </div>
       </div>
+
+      {/* ── STEP 4: AI Narration (the VideoTour.AI feature) ── */}
+      <div style={{...S.card, borderColor: narration ? 'rgba(184,134,75,.35)' : 'rgba(255,255,255,.06)'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:10}}>
+          <div style={S.cardLabel}>④ AI Narration <span style={{color:'#94a3b8', fontWeight:600, letterSpacing:0, textTransform:'none'}}>· VideoTour-AI style</span></div>
+          <label style={{
+            display:'inline-flex', alignItems:'center', gap:8, cursor:'pointer',
+            fontSize:12, fontWeight:800, color: narration ? '#e0b370' : '#cbd5e1',
+          }}>
+            <input
+              type="checkbox"
+              checked={narration}
+              onChange={(e) => setNarration(e.target.checked)}
+              style={{width:18, height:18, accentColor:'#b8864b'}}
+            />
+            {narration ? 'AI voiceover ON' : 'AI voiceover OFF'}
+          </label>
+        </div>
+
+        {!narration && (
+          <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5}}>
+            Turn this on to have AI write a tour script and read it aloud over the reel — in your own cloned voice (free, via your Modal F5-TTS server). Music auto-ducks during narration. Optional subtitles bake in.
+          </div>
+        )}
+
+        {narration && (
+          <>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:10, marginBottom:12}}>
+              {[
+                { id:'cloned',  emoji:'🎙️', name:'My Voice',     desc:'F5-TTS clones from your saved reference recording' },
+                { id:'pro',     emoji:'🎬', name:'Pro Voice',    desc:'ElevenLabs studio voice (needs API key)' },
+                { id:'browser', emoji:'💻', name:'Browser TTS',  desc:'Free fallback · robotic but works offline' },
+              ].map(v => (
+                <button key={v.id} onClick={() => setVoicePref(v.id)} style={{
+                  background: voicePref === v.id ? 'linear-gradient(135deg, rgba(184,134,75,.25), rgba(212,160,23,.10))' : 'rgba(255,255,255,.03)',
+                  border: voicePref === v.id ? '2px solid #b8864b' : '1px solid rgba(255,255,255,.08)',
+                  borderRadius: 10, padding: '12px 10px', cursor: 'pointer',
+                  textAlign: 'left',
+                }}>
+                  <div style={{fontSize:18, marginBottom:4}}>{v.emoji}</div>
+                  <div style={{fontSize:12.5, fontWeight:800, color:'#f1f5f9'}}>{v.name}</div>
+                  <div style={{fontSize:10, color:'#94a3b8', lineHeight:1.4, marginTop:3}}>{v.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {voicePref === 'cloned' && !hasVoiceRef && (
+              <div style={{
+                background:'rgba(245,158,11,.08)', borderLeft:'3px solid #f59e0b',
+                padding:'10px 12px', borderRadius:6, marginBottom:10,
+                fontSize:12, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10,
+              }}>
+                <span>Record a 15-30 sec reference clip once. Every future reel uses YOUR voice.</span>
+                <button onClick={() => setVoiceSetupOpen(true)} style={{
+                  background:'#f59e0b', border:'none', borderRadius:6, padding:'6px 12px',
+                  color:'#0f172a', fontSize:11.5, fontWeight:900, cursor:'pointer', flexShrink:0,
+                }}>Set up voice</button>
+              </div>
+            )}
+
+            {voicePref === 'cloned' && hasVoiceRef && (
+              <div style={{fontSize:11.5, color:'#6ee7b7', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                <span>✓ Your reference voice is saved · used for every narration</span>
+                <button onClick={() => setVoiceSetupOpen(true)} style={{
+                  background:'transparent', border:'none', color:'#94a3b8', cursor:'pointer',
+                  fontSize:11, textDecoration:'underline',
+                }}>Re-record</button>
+              </div>
+            )}
+
+            <label style={{display:'flex', alignItems:'center', gap:8, fontSize:12, color:'#cbd5e1', cursor:'pointer'}}>
+              <input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} style={{accentColor:'#b8864b'}}/>
+              Burn in subtitles · TikTok-style captions matching the narration (recommended)
+            </label>
+          </>
+        )}
+      </div>
+
+      {/* ── Voice Setup Modal ── */}
+      {voiceSetupOpen && (
+        <VoiceSetupModal
+          onClose={() => setVoiceSetupOpen(false)}
+          onSaved={() => { setHasVoiceRef(true); setVoiceSetupOpen(false); toast?.success('Voice reference saved — every reel now uses your voice'); }}
+          onCleared={() => { setHasVoiceRef(false); toast?.info('Voice reference cleared'); }}
+          toast={toast}
+        />
+      )}
 
       {/* ── GENERATE ── */}
       <div style={S.card}>
@@ -710,6 +848,193 @@ function CopyCard({ label, text, multiline }) {
         wordBreak:'break-word',
       }}>
         {text || '—'}
+      </div>
+    </div>
+  );
+}
+
+// ── Voice setup modal ────────────────────────────────────────────────────────
+// Record once, save reference audio to IndexedDB. Every future reel uses it.
+function VoiceSetupModal({ onClose, onSaved, onCleared, toast }) {
+  const [recording, setRecording] = useState(false);
+  const [recorded, setRecorded] = useState(null); // { blob, url, name, durationSec }
+  const [transcript, setTranscript] = useState(getRefTranscript() || '');
+  const [busy, setBusy] = useState(false);
+  const mediaRef = useRef();
+  const chunksRef = useRef([]);
+  const fileInputRef = useRef();
+  const [stream, setStream] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        setStream(s);
+      } catch (e) {
+        toast?.error('Mic access denied');
+      }
+    })();
+    return () => { stream?.getTracks?.()?.forEach(t => t.stop()); };
+    // eslint-disable-next-line
+  }, []);
+
+  const startRec = () => {
+    if (!stream) return;
+    chunksRef.current = [];
+    const mime = ['audio/webm;codecs=opus','audio/webm','audio/mp4']
+      .find(m => MediaRecorder.isTypeSupported(m)) || 'audio/webm';
+    const rec = new MediaRecorder(stream, { mimeType: mime });
+    rec.ondataavailable = e => e.data && e.data.size && chunksRef.current.push(e.data);
+    rec.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: mime });
+      const url = URL.createObjectURL(blob);
+      const file = new File([blob], `voice_ref_${Date.now()}.webm`, { type: mime });
+      file.name = file.name; // ensure name is preserved
+      setRecorded({ blob: file, url, name: file.name });
+    };
+    mediaRef.current = rec;
+    rec.start();
+    setRecording(true);
+  };
+
+  const stopRec = () => {
+    try { mediaRef.current?.stop(); } catch (e) {/* */}
+    setRecording(false);
+  };
+
+  const onPickFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    e.target.value = '';
+    const url = URL.createObjectURL(f);
+    setRecorded({ blob: f, url, name: f.name });
+  };
+
+  const save = async () => {
+    if (!recorded?.blob) return;
+    setBusy(true);
+    try {
+      await saveVoiceRef(recorded.blob, transcript);
+      onSaved?.();
+    } catch (e) {
+      toast?.error('Save failed: ' + e.message);
+    }
+    setBusy(false);
+  };
+
+  const clear = async () => {
+    if (!window.confirm('Clear your saved voice reference?')) return;
+    await clearVoiceRef();
+    setRecorded(null);
+    onCleared?.();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'rgba(0,0,0,.75)', zIndex:1000,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    }}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:'#0f172a', borderRadius:14, padding:24, maxWidth:560, width:'100%',
+        border:'1px solid rgba(184,134,75,.3)', boxShadow:'0 20px 80px rgba(0,0,0,.5)',
+      }}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+          <div style={{fontSize:18, fontWeight:900, color:'#fff'}}>🎙️ Voice Setup</div>
+          <button onClick={onClose} style={{background:'transparent', border:'none', color:'#94a3b8', fontSize:22, cursor:'pointer'}}>×</button>
+        </div>
+
+        <div style={{fontSize:13, color:'#cbd5e1', marginBottom:18, lineHeight:1.5}}>
+          Record 15-30 seconds of yourself talking naturally. Read a few sentences out loud —
+          e.g. "Hi, I'm Monica with RE/MAX Classic. I help families find home in Livonia and Metro Detroit."
+          F5-TTS will clone your voice from this once and reuse it for every AutoReel narration.
+        </div>
+
+        <div style={{
+          background:'rgba(0,0,0,.3)', borderRadius:10, padding:16, marginBottom:14,
+          border:'1px solid rgba(255,255,255,.06)',
+        }}>
+          {!recorded ? (
+            <>
+              <div style={{textAlign:'center', marginBottom:14}}>
+                <div style={{
+                  width:80, height:80, borderRadius:'50%', margin:'0 auto 10px',
+                  background: recording ? '#ef4444' : 'rgba(184,134,75,.2)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  border:`3px solid ${recording ? '#fca5a5' : '#b8864b'}`,
+                  animation: recording ? 'pulse 1.4s ease-in-out infinite' : 'none',
+                }}>
+                  <div style={{fontSize:32}}>{recording ? '🔴' : '🎙️'}</div>
+                </div>
+                <div style={{fontSize:12, color:'#94a3b8'}}>
+                  {recording ? 'Recording… read 2-3 sentences' : stream ? 'Tap to record' : 'Mic permission needed'}
+                </div>
+              </div>
+              <div style={{display:'flex', gap:8, justifyContent:'center'}}>
+                {!recording ? (
+                  <button onClick={startRec} disabled={!stream} style={{
+                    ...S.primaryBtn, opacity: stream ? 1 : 0.4,
+                  }}>
+                    🎙️ Start Recording
+                  </button>
+                ) : (
+                  <button onClick={stopRec} style={{
+                    ...S.primaryBtn, background:'linear-gradient(135deg, #ef4444, #b91c1c)', color:'#fff',
+                  }}>
+                    ⏹ Stop
+                  </button>
+                )}
+                <button onClick={() => fileInputRef.current?.click()} style={S.ghostBtn}>
+                  ⬆ Upload audio file
+                </button>
+                <input ref={fileInputRef} type="file" accept="audio/*" style={{display:'none'}} onChange={onPickFile}/>
+              </div>
+            </>
+          ) : (
+            <>
+              <audio src={recorded.url} controls style={{width:'100%', marginBottom:10}}/>
+              <div style={{fontSize:11, color:'#94a3b8', marginBottom:10}}>{recorded.name}</div>
+              <div style={{display:'flex', gap:8}}>
+                <button onClick={() => setRecorded(null)} style={S.ghostBtn}>↻ Re-record</button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {recorded && (
+          <div style={{marginBottom:14}}>
+            <div style={S.fieldLabel}>Transcript (what you said — improves clone accuracy)</div>
+            <textarea
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              rows={3}
+              placeholder="Hi, I'm Monica with RE/MAX Classic…"
+              style={{...S.input, width:'100%', marginTop:5, resize:'vertical', fontFamily:'inherit'}}
+            />
+          </div>
+        )}
+
+        <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+          {hasVoiceRefSaved() && (
+            <button onClick={clear} style={{
+              ...S.ghostBtn, color:'#fca5a5', borderColor:'rgba(239,68,68,.3)',
+            }}>
+              Clear saved
+            </button>
+          )}
+          <button onClick={onClose} style={S.ghostBtn}>Cancel</button>
+          {recorded && (
+            <button onClick={save} disabled={busy} style={{...S.primaryBtn, opacity: busy ? 0.5 : 1}}>
+              {busy ? '…' : '✓ Save voice'}
+            </button>
+          )}
+        </div>
+
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(239,68,68,0); }
+          }
+        `}</style>
       </div>
     </div>
   );

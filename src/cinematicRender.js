@@ -542,6 +542,75 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
   const recordingDone = new Promise((resolve) => { rec.onstop = resolve; });
   rec.start();
 
+  // ── Voiceover scheduling ─────────────────────────────────────────────────────
+  // Start voiceover playback at introDur (when scenes begin). Music ducks to
+  // 25% volume during the narration and ramps back to full afterward.
+  let voiceStartedAt = null;
+  const baseMusicGain = music?.volume ?? 0.85;
+  const duckedMusicGain = baseMusicGain * 0.28;
+  if (hasVoiceover && voiceEl) {
+    setTimeout(() => {
+      try {
+        voiceEl.play().catch(() => {});
+        voiceStartedAt = performance.now();
+        if (musicGainNode && audioCtxObj) {
+          // Smooth ramp down to ducked level
+          const now = audioCtxObj.currentTime;
+          musicGainNode.gain.cancelScheduledValues(now);
+          musicGainNode.gain.linearRampToValueAtTime(duckedMusicGain, now + 0.4);
+          // Ramp back up after voiceover ends
+          const rampUpAt = now + (voiceover.durationSec || 30) + 0.2;
+          musicGainNode.gain.linearRampToValueAtTime(baseMusicGain, rampUpAt + 0.6);
+        }
+      } catch (e) { onLog(`Voiceover play failed: ${e.message}`); }
+    }, introDur * 1000);
+  }
+
+  // ── Subtitle helper ─────────────────────────────────────────────────────────
+  // Per-scene caption text rendered at bottom of frame during scenes when
+  // voiceover is active. Uses the AI's perScene chunks.
+  function drawSubtitle(text, sceneT, w, h, accent) {
+    if (!text || !showCaptions || !hasVoiceover) return;
+    // Show caption from 5% to 92% of scene, with quick fade in/out
+    if (sceneT < 0.03 || sceneT > 0.95) return;
+    const inP  = Math.min(1, sceneT / 0.12);
+    const outP = Math.min(1, (1 - sceneT) / 0.10);
+    const alpha = Math.min(inP, outP);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const fontSize = Math.floor(w * 0.038);
+    ctx.font = `800 ${fontSize}px "Cabinet Grotesk", "Helvetica Neue", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Wrap text to ~80% canvas width
+    const lines = wrapText(ctx, text, w * 0.84);
+    const lineH = fontSize * 1.15;
+    const pad   = fontSize * 0.5;
+    const blockH = lines.length * lineH + pad * 2;
+    const blockY = h * 0.82 - blockH / 2;
+    const blockW = Math.min(w * 0.92, Math.max(...lines.map(l => ctx.measureText(l).width)) + pad * 2);
+    const blockX = w / 2 - blockW / 2;
+
+    // Backdrop
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    roundedRect(ctx, blockX, blockY, blockW, blockH, 8);
+    ctx.fill();
+
+    // Accent left bar
+    ctx.fillStyle = accent || '#b8864b';
+    ctx.fillRect(blockX, blockY, 3, blockH);
+
+    // Text
+    ctx.fillStyle = '#fff';
+    lines.forEach((line, i) => {
+      const ly = blockY + pad + i * lineH + lineH / 2;
+      shadowedFill(ctx, line, w / 2, ly, { shadowBlur: 6 });
+    });
+    ctx.restore();
+  }
+
   // ── Render loop ─────────────────────────────────────────────────────────────
   const t0 = performance.now();
   let stopped = false;
@@ -640,6 +709,10 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
           ctx.restore();
         }
 
+        // Subtitle (only when voiceover is active)
+        const captionText = voiceover?.perScene?.[sceneIdx];
+        drawSubtitle(captionText, sceneT, w, h, accent);
+
         // Scene counter in corner
         ctx.save();
         ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -678,6 +751,7 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
   stopped = true;
   try { rec.stop(); } catch (e) { /* ignore */ }
   try { if (audioCtxNode?.musicEl) audioCtxNode.musicEl.pause(); } catch (e) {/* */}
+  try { if (voiceEl) { voiceEl.pause(); voiceEl.src = ''; } } catch (e) {/* */}
   await recordingDone;
 
   // Cleanup
