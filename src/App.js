@@ -5,6 +5,7 @@ import { useLeadsCloud } from './useLeadsCloud';
 import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
 import { draftSocialReply, looksLikeSpam, isLowSignalComment, DEFAULT_SOCIAL_SETTINGS } from './aiSocialAgent';
 import { scoreAllLeads, groupByBucket, BUCKET_META } from './aiDatabaseIntel';
+import { multiplyClosing } from './aiClosingMultiplier';
 import VideoAuto from './VideoAuto';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
@@ -909,6 +910,7 @@ const NAV = [
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
   { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
   { id:"social-agent",        label:"Social Engagement AI", icon:MessageSquare },
+  { id:"closing-mult",        label:"Closing Multiplier",  icon:Award },
   { id:"pipeline",            label:"Pipeline Board",      icon:Layout },
   { id:"tasks",               label:"Tasks",               icon:CheckCircle },
   { id:"action-plans",        label:"Action Plans",        icon:Zap },
@@ -5985,6 +5987,248 @@ const DatabaseIntel = ({setPage, toast}) => {
           )}
         </>
       )}
+    </div>
+  );
+};
+
+
+// ─── CLOSING MULTIPLIER — 1 closing → 6 marketing assets ─────────────────────
+// Top producers turn every closing into compounding social proof. Most agents
+// close and the marketing fades. This page generates 6 assets per deal:
+// IG reel script, FB post, sphere email, postcard copy, Google review request,
+// and a "lessons" teaching post. Pull data from Realcomp listings (auto-synced)
+// or enter manually.
+const ClosingMultiplier = ({setPage, toast}) => {
+  const [closing, setClosing] = useState({
+    address: "", neighborhood: "", dealType: "Listing side",
+    salePrice: "", listPrice: "", dom: "", beds: "", baths: "", sqft: "",
+    clientFirstName: "", notes: "",
+  });
+  const [generated, setGenerated] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [agentVoice] = useLS("agent_voice", "");
+  const [library, setLibrary] = useLS("closing_assets_library", []);
+
+  // Pull synced listings from Supabase so she can one-click "multiply this closing"
+  const [soldListings, setSoldListings] = useState([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("listings")
+          .select("*")
+          .ilike("status", "%sold%")
+          .order("close_date", { ascending: false })
+          .limit(20);
+        setSoldListings(data || []);
+      } catch {}
+    })();
+  }, []);
+
+  const loadListing = (l) => {
+    setClosing({
+      address: l.address || "",
+      neighborhood: l.city || "",
+      dealType: "Listing side",
+      salePrice: l.sale_price ? String(l.sale_price) : "",
+      listPrice: l.list_price ? String(l.list_price) : "",
+      dom: l.dom ? String(l.dom) : "",
+      beds: l.beds ? String(l.beds) : "",
+      baths: l.baths ? String(l.baths) : "",
+      sqft: l.sqft ? String(l.sqft) : "",
+      clientFirstName: "",
+      notes: "",
+    });
+    setGenerated(null);
+    toast.success(`Loaded ${l.address} — fill in notes and generate`);
+  };
+
+  const generate = async () => {
+    if (!closing.address.trim()) return toast.error("Address required");
+    setGenerating(true);
+    try {
+      const out = await multiplyClosing({
+        closing,
+        agent: { name: profile.name, brokerage: profile.brokerage },
+        agentVoice,
+      });
+      setGenerated(out);
+      toast.success("6 marketing assets generated");
+    } catch (e) {
+      toast.error("Generation failed: " + e.message);
+    }
+    setGenerating(false);
+  };
+
+  const saveToLibrary = () => {
+    if (!generated) return;
+    setLibrary(p => [{ id: uid(), createdAt: now(), closing, assets: generated }, ...p].slice(0, 50));
+    toast.success("Saved to library");
+  };
+
+  const copy = (text) => { navigator.clipboard?.writeText(text).catch(()=>{}); toast.success("Copied"); };
+
+  return (
+    <div className="page-content">
+      <PageHeader title="Closing Multiplier" sub="One closing → 6 marketing assets. Turn every win into compounding social proof." setPage={setPage} parent="dashboard"/>
+
+      <div className="grid-2" style={{gap:18,alignItems:"flex-start"}}>
+        {/* LEFT — Input */}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Pull from synced listings */}
+          {soldListings.length > 0 && (
+            <div className="glass-card" style={{padding:"14px 18px"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>📥 Pull from your synced Realcomp listings</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:240,overflowY:"auto"}}>
+                {soldListings.slice(0,15).map(l => (
+                  <button key={l.id} onClick={()=>loadListing(l)}
+                    style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:8,padding:"8px 12px",textAlign:"left",cursor:"pointer",color:"#cbd5e1",fontSize:12,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.address}, {l.city}</span>
+                    <span style={{fontWeight:700,color:"#6ee7b7"}}>{l.sale_price?`$${Number(l.sale_price).toLocaleString()}`:""}</span>
+                    <span style={{fontSize:10,color:"#475569"}}>{l.close_date||""}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{fontSize:11,color:"#475569",marginTop:8,fontStyle:"italic"}}>Click to auto-fill. You can edit anything before generating.</div>
+            </div>
+          )}
+
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:14}}>🏡 The Deal</div>
+            <div className="grid-2" style={{gap:12}}>
+              <div style={{gridColumn:"1/-1"}}><div className="label">Property address *</div><input className="input" value={closing.address} onChange={e=>setClosing(c=>({...c,address:e.target.value}))} placeholder="1234 Maple Ave, Plymouth MI"/></div>
+              <div><div className="label">Neighborhood / City</div><input className="input" value={closing.neighborhood} onChange={e=>setClosing(c=>({...c,neighborhood:e.target.value}))}/></div>
+              <div><div className="label">Deal type</div>
+                <select className="select" value={closing.dealType} onChange={e=>setClosing(c=>({...c,dealType:e.target.value}))}>
+                  {["Listing side","Buyer side","Dual / both"].map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div><div className="label">List price</div><input className="input" value={closing.listPrice} onChange={e=>setClosing(c=>({...c,listPrice:e.target.value}))} placeholder="425000"/></div>
+              <div><div className="label">Sale price</div><input className="input" value={closing.salePrice} onChange={e=>setClosing(c=>({...c,salePrice:e.target.value}))} placeholder="437500"/></div>
+              <div><div className="label">Days on market</div><input className="input" value={closing.dom} onChange={e=>setClosing(c=>({...c,dom:e.target.value}))} placeholder="8"/></div>
+              <div><div className="label">Beds</div><input className="input" value={closing.beds} onChange={e=>setClosing(c=>({...c,beds:e.target.value}))} placeholder="4"/></div>
+              <div><div className="label">Baths</div><input className="input" value={closing.baths} onChange={e=>setClosing(c=>({...c,baths:e.target.value}))} placeholder="2.5"/></div>
+              <div><div className="label">Sqft</div><input className="input" value={closing.sqft} onChange={e=>setClosing(c=>({...c,sqft:e.target.value}))} placeholder="2200"/></div>
+              <div><div className="label">Client first name <span style={{color:"#475569"}}>(review request only)</span></div><input className="input" value={closing.clientFirstName} onChange={e=>setClosing(c=>({...c,clientFirstName:e.target.value}))} placeholder="Sarah"/></div>
+              <div style={{gridColumn:"1/-1"}}><div className="label">What made this deal special?</div>
+                <textarea className="textarea" rows={3} value={closing.notes} onChange={e=>setClosing(c=>({...c,notes:e.target.value}))} placeholder="Multiple offers in 48 hours, 12% over asking, sellers downsizing after 22 years..." style={{resize:"vertical"}}/>
+              </div>
+            </div>
+            <button className="btn btn-blue" style={{marginTop:14,width:"100%"}} onClick={generate} disabled={generating}>
+              {generating ? <><Spinner s={13}/>Generating 6 assets…</> : <><Sparkles size={13}/>Multiply This Closing → 6 Marketing Assets</>}
+            </button>
+          </div>
+        </div>
+
+        {/* RIGHT — Generated assets */}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {!generated && !generating && (
+            <div className="glass-card" style={{padding:"40px 28px",textAlign:"center"}}>
+              <Sparkles size={42} color="#475569" style={{marginBottom:14}}/>
+              <div style={{fontSize:16,fontWeight:800,color:"#cbd5e1",marginBottom:6}}>Your 6 assets will appear here</div>
+              <div style={{fontSize:12,color:"#64748b",lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>
+                IG reel script + B-roll · FB post · Sphere email · Postcard copy · Google review request · "Lessons" teaching post.
+                <br/>All branded to your voice, all reference the specific deal stats.
+              </div>
+            </div>
+          )}
+
+          {generated && (
+            <>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button className="btn btn-ghost btn-sm" onClick={saveToLibrary}><Save size={12}/>Save to Library</button>
+              </div>
+
+              {/* Instagram Reel */}
+              <div className="glass-card" style={{padding:"18px 22px",borderLeft:"3px solid #DC2626"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#DC2626",textTransform:"uppercase",letterSpacing:".5px"}}>📱 INSTAGRAM REEL</div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>copy(`HOOK: ${generated.instagramReel.hook}\n\nSCRIPT: ${generated.instagramReel.script}\n\nB-ROLL: ${generated.instagramReel.broll}\n\nCAPTION: ${generated.instagramReel.caption}`)}><Copy size={11}/>Copy all</button>
+                </div>
+                <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:4}}>HOOK (on-screen text):</div>
+                <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14,padding:"8px 12px",background:"rgba(220,38,38,.08)",borderRadius:6}}>{generated.instagramReel.hook}</div>
+                <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:4}}>VOICEOVER SCRIPT:</div>
+                <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6,whiteSpace:"pre-wrap",marginBottom:14}}>{generated.instagramReel.script}</div>
+                <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:4}}>B-ROLL TO SHOOT:</div>
+                <div style={{fontSize:12,color:"#cbd5e1",fontStyle:"italic",marginBottom:14}}>{generated.instagramReel.broll}</div>
+                <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:4}}>CAPTION:</div>
+                <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{generated.instagramReel.caption}</div>
+              </div>
+
+              {/* Facebook Post */}
+              <div className="glass-card" style={{padding:"18px 22px",borderLeft:"3px solid #1A5AA0"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#1A5AA0",textTransform:"uppercase",letterSpacing:".5px"}}>📘 FACEBOOK POST</div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>copy(generated.facebookPost)}><Copy size={11}/>Copy</button>
+                </div>
+                <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{generated.facebookPost}</div>
+              </div>
+
+              {/* Sphere Email */}
+              <div className="glass-card" style={{padding:"18px 22px",borderLeft:"3px solid #16A34A"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#16A34A",textTransform:"uppercase",letterSpacing:".5px"}}>✉ SPHERE EMAIL</div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>copy(`Subject: ${generated.sphereEmail.subject}\n\n${generated.sphereEmail.body}`)}><Copy size={11}/>Copy</button>
+                </div>
+                <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:8}}>Subject: {generated.sphereEmail.subject}</div>
+                <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{generated.sphereEmail.body}</div>
+              </div>
+
+              {/* Postcard */}
+              <div className="glass-card" style={{padding:"18px 22px",borderLeft:"3px solid #C99A2C"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#C99A2C",textTransform:"uppercase",letterSpacing:".5px"}}>📮 JUST-SOLD POSTCARD</div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>copy(`${generated.postcard.headline}\n\n${generated.postcard.subhead}\n\n${generated.postcard.cta}`)}><Copy size={11}/>Copy</button>
+                </div>
+                <div style={{textAlign:"center",padding:"24px 20px",background:"linear-gradient(135deg, rgba(201,154,44,.10), rgba(220,38,38,.05))",borderRadius:10,border:"1px dashed rgba(201,154,44,.25)"}}>
+                  <div style={{fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'DM Serif Display',serif",marginBottom:10,lineHeight:1.2}}>{generated.postcard.headline}</div>
+                  <div style={{fontSize:13,color:"#cbd5e1",marginBottom:14,lineHeight:1.5}}>{generated.postcard.subhead}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#C99A2C",padding:"8px 16px",background:"rgba(201,154,44,.15)",borderRadius:6,display:"inline-block"}}>{generated.postcard.cta}</div>
+                </div>
+                <div style={{fontSize:11,color:"#475569",marginTop:10,fontStyle:"italic"}}>Send 200-500 around the property via Lob (postcard API) or your local printer. Geographic farming = compounding listings.</div>
+              </div>
+
+              {/* Google Review Request */}
+              <div className="glass-card" style={{padding:"18px 22px",borderLeft:"3px solid #fbbf24"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#fbbf24",textTransform:"uppercase",letterSpacing:".5px"}}>⭐ GOOGLE REVIEW REQUEST {closing.clientFirstName && `(to ${closing.clientFirstName})`}</div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>copy(`Subject: ${generated.googleReviewRequest.subject}\n\n${generated.googleReviewRequest.body}`)}><Copy size={11}/>Copy</button>
+                </div>
+                <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:8}}>Subject: {generated.googleReviewRequest.subject}</div>
+                <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{generated.googleReviewRequest.body}</div>
+                <div style={{fontSize:11,color:"#475569",marginTop:10,fontStyle:"italic"}}>Replace [REVIEW_LINK] with your Google Business review URL (find it in Google Business Profile manager → "Get more reviews").</div>
+              </div>
+
+              {/* Lessons Thread */}
+              <div className="glass-card" style={{padding:"18px 22px",borderLeft:"3px solid #a78bfa"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:".5px"}}>💡 "LESSONS" TEACHING POST</div>
+                  <button className="btn btn-ghost btn-xs" onClick={()=>copy(generated.lessonsThread)}><Copy size={11}/>Copy</button>
+                </div>
+                <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{generated.lessonsThread}</div>
+                <div style={{fontSize:11,color:"#475569",marginTop:10,fontStyle:"italic"}}>Great for LinkedIn, blog, or as the long-form caption on a carousel post.</div>
+              </div>
+            </>
+          )}
+
+          {/* Library */}
+          {library.length > 0 && (
+            <div className="glass-card" style={{padding:"16px 20px"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>📚 Library — Past Closings ({library.length})</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:200,overflowY:"auto"}}>
+                {library.slice(0,20).map(item => (
+                  <button key={item.id} onClick={()=>{setClosing(item.closing);setGenerated(item.assets);}}
+                    style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:8,padding:"8px 12px",textAlign:"left",cursor:"pointer",color:"#cbd5e1",fontSize:12,display:"flex",justifyContent:"space-between",gap:8}}>
+                    <span>{item.closing.address}</span>
+                    <span style={{fontSize:10,color:"#475569"}}>{new Date(item.createdAt).toLocaleDateString()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
