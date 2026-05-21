@@ -9,6 +9,7 @@ import { multiplyClosing } from './aiClosingMultiplier';
 import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
 import AutoReel from './AutoReel';
+import VirtualStaging from './VirtualStaging';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
 import GoogleBusiness from './GoogleBusiness';
@@ -895,6 +896,7 @@ const NAV = [
   { id:"listing-writer",      label:"AI Listing Writer",    icon:FileText },
   { id:"social-studio",       label:"Social Caption Studio",icon:MessageSquare },
   { id:"auto-reel",           label:"AutoReel · AI Reels",  icon:Sparkles },
+  { id:"virtual-staging",     label:"Virtual Staging",      icon:Wand2 },
   { id:"video-studio",        label:"Auto Video Maker",     icon:Video },
   { id:"ai-studio",           label:"AI Studio",            icon:Wand2 },
   { id:"viral-studio",        label:"Viral Studio",         icon:TrendingUp },
@@ -9151,6 +9153,7 @@ export default function App() {
     "listing-writer":     <ListingWriter {...props}/>,
     "social-studio":      <SocialStudio {...props}/>,
     "auto-reel":          <AutoReel {...props}/>,
+    "virtual-staging":    <VirtualStaging {...props}/>,
     "video-studio":       <VideoAuto {...props}/>,
     "ai-studio":          <AIStudio {...props}/>,
     "viral-studio":       <ViralStudio {...props}/>,

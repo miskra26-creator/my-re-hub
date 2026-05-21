@@ -26,6 +26,7 @@ import {
   saveVoiceRef, loadVoiceRef, clearVoiceRef, hasVoiceRefSaved, getRefTranscript,
   synthesizeNarration, probeAudioDuration,
 } from './autoReelVoice';
+import { stagePhoto, STAGING_STYLES, STYLE_BY_ID } from './aiVirtualStaging';
 
 // ── Tiny styled element helpers (match app's visual language) ─────────────────
 const S = {
@@ -75,6 +76,8 @@ export default function AutoReel({ setPage, toast }) {
   const [narration, setNarration] = useLS('autoreel_narration', false);
   const [voicePref, setVoicePref] = useLS('autoreel_voice_pref', 'cloned'); // 'cloned' | 'pro' | 'browser'
   const [captions, setCaptions] = useLS('autoreel_captions', true);
+  const [autoStage, setAutoStage] = useLS('autoreel_autostage', true);
+  const [stagingStyle, setStagingStyle] = useLS('autoreel_staging_style', 'modern');
   const [hasVoiceRef, setHasVoiceRef] = useState(() => hasVoiceRefSaved());
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
@@ -220,7 +223,48 @@ export default function AutoReel({ setPage, toast }) {
         room:  o.room,
         label: o.label,
         score: o.score,
+        vacancy: o.vacancy,
       }));
+
+      // ── Phase 1b: Auto-stage vacant rooms ──────────────────────────────────
+      // Vacant exterior / detail / outdoor shots are skipped (they don't need
+      // furnishing). Only interior vacant photos get staged.
+      const STAGEABLE_ROOMS = new Set(['living','primary','bedroom','dining','office','basement','kitchen','bath']);
+      const vacantScenes = scenes
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => s.vacancy === 'vacant' && STAGEABLE_ROOMS.has(s.room));
+
+      if (autoStage && vacantScenes.length > 0) {
+        setPhase('stage');
+        setProgressLabel(`Staging ${vacantScenes.length} vacant room${vacantScenes.length === 1 ? '' : 's'}…`);
+        addLog(`Auto-staging ${vacantScenes.length} vacant room(s) with Gemini Image · style=${stagingStyle}`);
+        for (let n = 0; n < vacantScenes.length; n++) {
+          const { s, i } = vacantScenes[n];
+          setProgressLabel(`Staging vacant ${s.room} (${n + 1} of ${vacantScenes.length})…`);
+          try {
+            const staged = await stagePhoto({
+              photo: s.photo.file || s.photo,
+              room: s.room,
+              style: stagingStyle,
+              onLog: addLog,
+            });
+            // Swap the scene's photo with the staged version
+            const stagedUrl = URL.createObjectURL(staged.blob);
+            scenes[i] = {
+              ...scenes[i],
+              photo: { url: stagedUrl, file: staged.blob, name: `staged-${s.room}.png` },
+              wasStaged: true,
+            };
+            addLog(`✓ Staged scene ${i + 1} (${s.room})`);
+          } catch (e) {
+            addLog(`Stage failed for scene ${i + 1}: ${e.message} — using original`);
+          }
+          setProgress(0.25 + (0.15 * (n + 1) / vacantScenes.length));
+        }
+        addLog(`Staging complete · ${vacantScenes.length} room(s) processed`);
+      } else if (vacantScenes.length > 0) {
+        addLog(`${vacantScenes.length} vacant room(s) detected but auto-stage is OFF`);
+      }
 
       // ── Phase 2: Narrative ────────────────────────────────────────────────
       setPhase('narrate');
@@ -636,6 +680,54 @@ export default function AutoReel({ setPage, toast }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── STEP 3.5: Virtual Staging (Gemini Image) ── */}
+      <div style={{...S.card, borderColor: autoStage ? 'rgba(184,134,75,.35)' : 'rgba(255,255,255,.06)'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:10}}>
+          <div style={S.cardLabel}>🛋 Auto-stage vacant rooms <span style={{color:'#94a3b8', fontWeight:600, letterSpacing:0, textTransform:'none'}}>· Gemini Image · free</span></div>
+          <label style={{
+            display:'inline-flex', alignItems:'center', gap:8, cursor:'pointer',
+            fontSize:12, fontWeight:800, color: autoStage ? '#e0b370' : '#cbd5e1',
+          }}>
+            <input
+              type="checkbox"
+              checked={autoStage}
+              onChange={(e) => setAutoStage(e.target.checked)}
+              style={{width:18, height:18, accentColor:'#b8864b'}}
+            />
+            {autoStage ? 'Auto-stage ON' : 'Auto-stage OFF'}
+          </label>
+        </div>
+
+        {!autoStage && (
+          <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5}}>
+            When ON, the AI checks each photo for vacancy and automatically furnishes empty rooms with photorealistic furniture before rendering the reel. Vacant exterior, outdoor, and detail shots are skipped (they don't need staging). Uses your free Gemini Image quota — ~5-10 photos per reel.
+          </div>
+        )}
+
+        {autoStage && (
+          <>
+            <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5, marginBottom:12}}>
+              AI auto-detects vacant interior rooms during photo curation, then stages them with the style you pick below. You'll see the staging progress before the reel renders. For full control over each photo, use the standalone <strong style={{color:'#e0b370'}}>Virtual Staging tab</strong>.
+            </div>
+
+            <div style={S.fieldLabel}>Style for auto-staging</div>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:8, marginTop:6}}>
+              {STAGING_STYLES.map(s => (
+                <button key={s.id} onClick={() => setStagingStyle(s.id)} style={{
+                  background: stagingStyle === s.id ? 'linear-gradient(135deg, rgba(184,134,75,.25), rgba(212,160,23,.10))' : 'rgba(255,255,255,.03)',
+                  border: stagingStyle === s.id ? '2px solid #b8864b' : '1px solid rgba(255,255,255,.08)',
+                  borderRadius: 10, padding: '10px 10px', cursor: 'pointer',
+                  textAlign: 'left',
+                }}>
+                  <div style={{fontSize:16, marginBottom:3}}>{s.emoji}</div>
+                  <div style={{fontSize:11.5, fontWeight:800, color:'#f1f5f9'}}>{s.name}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── STEP 4: AI Narration (the VideoTour.AI feature) ── */}

@@ -161,6 +161,7 @@ export async function curatePhotos(photos, listing = {}, opts = {}) {
 For each photo provided, return:
 - a quality score 1-10 (how visually compelling is it?)
 - a room type label, exactly one of: ${ROOM_ORDER.join(', ')}
+- a "vacancy" label: "vacant" (completely empty), "sparse" (few items), or "staged" (furnished). Floor plans and exterior shots are always "staged".
 - a one-sentence reason
 
 Quality criteria (what makes a HIGH-scoring photo):
@@ -192,7 +193,8 @@ Room categorization rules:
 Return STRICT JSON only (no markdown fences, no commentary):
 {
   "photos": [
-    { "index": 0, "score": 8, "room": "exterior", "reason": "Strong twilight curb appeal with warm window glow" },
+    { "index": 0, "score": 8, "room": "exterior", "vacancy": "staged", "reason": "Strong twilight curb appeal with warm window glow" },
+    { "index": 1, "score": 6, "room": "living", "vacancy": "vacant", "reason": "Empty living room — good light, but no furniture so could benefit from virtual staging" },
     ...one entry per photo, in order...
   ]
 }`;
@@ -224,6 +226,7 @@ Return STRICT JSON only (no markdown fences, no commentary):
     score: typeof p.score === 'number' ? p.score : 5,
     room:  ROOM_ORDER.includes(p.room) ? p.room : 'other',
     label: ROOM_LABEL[p.room] || '',
+    vacancy: ['vacant', 'sparse', 'staged'].includes(p.vacancy) ? p.vacancy : 'staged',
     reason: p.reason || '',
   }));
   return entries;
