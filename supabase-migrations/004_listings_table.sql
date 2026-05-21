@@ -34,10 +34,15 @@ create index if not exists listings_user_close     on public.listings (user_id, 
 
 alter table public.listings enable row level security;
 
+-- Ownership policy is restricted to `authenticated` role only — leaving
+-- `anon` to be governed by the webhook policies below. (Targeting `public`
+-- here would short-circuit the anon webhook INSERT.)
 drop policy if exists "Users manage their own listings" on public.listings;
-create policy "Users manage their own listings"
+drop policy if exists "Authenticated users manage their own listings" on public.listings;
+create policy "Authenticated users manage their own listings"
   on public.listings
   for all
+  to authenticated
   using  (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
@@ -60,6 +65,12 @@ drop policy if exists "Webhooks can update listings" on public.listings;
 create policy "Webhooks can update listings"
   on public.listings for update
   to anon using (true) with check (true);
+
+-- UPSERT needs SELECT too (PostgREST performs the conflict-check via SELECT)
+drop policy if exists "Webhooks can select listings" on public.listings;
+create policy "Webhooks can select listings"
+  on public.listings for select
+  to anon using (true);
 
 create or replace function public.listings_set_updated_at()
 returns trigger language plpgsql as $$
