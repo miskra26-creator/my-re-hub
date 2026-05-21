@@ -1412,27 +1412,39 @@ export default function AutoReel({ setPage, toast }) {
                         </label>
                       </div>
 
-                      {/* Per-scene custom lifestyle prompt — only shows when
-                          "Add people" is checked. Empty falls back to the
-                          global mood default. */}
-                      {lifeOn && (
-                        <div style={{display:'flex', flexDirection:'column', gap:3}}>
-                          <input
-                            type="text"
-                            value={reviewPlan.sceneLifestylePrompt?.[i] || ''}
-                            onChange={(e) => updateReviewLifestylePrompt(i, e.target.value)}
-                            placeholder={`e.g. "people swimming in the pool" · blank = ${lifestyleMood} default`}
-                            style={{...S.input, width:'100%', fontSize:11.5, padding:'5px 9px'}}
-                          />
-                          <div style={{fontSize:9.5, color:'#64748b', paddingLeft:2}}>
-                            Describe EXACTLY what the people should be doing — overrides the mood default for this photo only
-                          </div>
+                      {/* Per-scene custom lifestyle prompt — always visible
+                          so it's discoverable. Greyed out + disabled when
+                          "Add people" is unchecked, but the field shows so
+                          she knows it exists. */}
+                      <div style={{display:'flex', flexDirection:'column', gap:3, opacity: lifeOn ? 1 : 0.5}}>
+                        <div style={{fontSize:10, color: lifeOn ? '#e0b370' : '#64748b', fontWeight:700, paddingLeft:2}}>
+                          {lifeOn ? '✏️ WHAT THE PEOPLE ARE DOING' : '(check 👨‍👩‍👧 Add people above to enable this)'}
                         </div>
-                      )}
+                        <input
+                          type="text"
+                          value={reviewPlan.sceneLifestylePrompt?.[i] || ''}
+                          onChange={(e) => updateReviewLifestylePrompt(i, e.target.value)}
+                          disabled={!lifeOn}
+                          placeholder={lifeOn
+                            ? `e.g. "people swimming in the pool" · blank = ${lifestyleMood} default`
+                            : 'people swimming in the pool, teenagers cannonballing, couple grilling, etc.'}
+                          style={{
+                            ...S.input,
+                            width:'100%', fontSize:11.5, padding:'5px 9px',
+                            cursor: lifeOn ? 'text' : 'not-allowed',
+                          }}
+                        />
+                        <div style={{fontSize:9.5, color:'#64748b', paddingLeft:2}}>
+                          Describe EXACTLY what the people should be doing — when AI Motion is also ON, the people will be ACTIVELY moving (e.g. swimmers actually swimming)
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
               })}
+            </div>
+            <div style={{fontSize:11, color:'#94a3b8', marginTop:10, padding:'8px 10px', background:'rgba(184,134,75,.08)', borderLeft:'2px solid #b8864b', borderRadius:4, lineHeight:1.5}}>
+              <strong style={{color:'#e0b370'}}>💡 Pool / hot tub / fire pit / patio</strong> auto-suggest a relevant prompt. For other scenes you can type your own ("kids playing", "couple watching TV") — leave blank to use the global mood default.
             </div>
             <div style={{fontSize:10.5, color:'#64748b', marginTop:8}}>
               {(() => {
