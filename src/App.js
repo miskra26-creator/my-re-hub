@@ -3,6 +3,7 @@ import { supabase, isCloudEnabled } from './supabase';
 import { useLS, useIDB } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
 import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
+import { draftSocialReply, looksLikeSpam, isLowSignalComment, DEFAULT_SOCIAL_SETTINGS } from './aiSocialAgent';
 import VideoAuto from './VideoAuto';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
@@ -906,6 +907,7 @@ const NAV = [
   { section:"GROW" },
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
   { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
+  { id:"social-agent",        label:"Social Engagement AI", icon:MessageSquare },
   { id:"pipeline",            label:"Pipeline Board",      icon:Layout },
   { id:"tasks",               label:"Tasks",               icon:CheckCircle },
   { id:"action-plans",        label:"Action Plans",        icon:Zap },
@@ -5518,6 +5520,279 @@ const AILeadConcierge = ({setPage, toast}) => {
 };
 
 
+// ─── SOCIAL ENGAGEMENT AGENT — settings + activity ───────────────────────────
+// Companion to SocialEngagementWorker. Lets Monica toggle the agent on/off,
+// configure rules, and see what auto-replied, auto-liked, was DM-drafted, or
+// got escalated for her review.
+const SocialAgent = ({setPage, toast}) => {
+  const [settings, setSettings] = useLS("social_settings", DEFAULT_SOCIAL_SETTINGS);
+  const [integrations] = useLS("integrations", {});
+  const [tab, setTab] = useState("activity");
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [agentVoice] = useLS("agent_voice", "");
+  const [activity, setActivity] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("social_activity") || "[]"); } catch { return []; }
+  });
+  const [previewComment, setPreviewComment] = useState("How much is the home on Maple Ave? Looks gorgeous!");
+  const [previewPostCaption, setPreviewPostCaption] = useState("Just listed in Plymouth — 4BR/2.5BA, fully updated, walkable to downtown.");
+  const [previewResult, setPreviewResult] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => {
+      try { setActivity(JSON.parse(localStorage.getItem("social_activity") || "[]")); } catch {}
+    };
+    window.addEventListener("social-activity-updated", refresh);
+    const t = setInterval(refresh, 10000);
+    return () => { window.removeEventListener("social-activity-updated", refresh); clearInterval(t); };
+  }, []);
+
+  const set = (path, val) => {
+    setSettings(s => {
+      const next = { ...s };
+      const parts = path.split(".");
+      let cursor = next;
+      for (let i = 0; i < parts.length - 1; i++) {
+        cursor[parts[i]] = { ...(cursor[parts[i]] || {}) };
+        cursor = cursor[parts[i]];
+      }
+      cursor[parts[parts.length - 1]] = val;
+      return next;
+    });
+  };
+
+  const fbConnected = !!(integrations?.meta?.accessToken && integrations?.meta?.pageId);
+  const igConnected = !!(integrations?.meta?.accessToken && integrations?.meta?.igAccountId);
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayCount = (() => {
+    try { return JSON.parse(localStorage.getItem("social_daily_count") || "{}")[todayKey] || 0; } catch { return 0; }
+  })();
+  const todayActivity = activity.filter(a => a.createdAt?.startsWith(todayKey));
+  const stats = {
+    repliesToday: todayActivity.filter(a => a.type === "reply").length,
+    likesToday: todayActivity.filter(a => a.type === "like_only" || a.type === "reply").length,
+    dmsDraftedToday: todayActivity.filter(a => a.type === "dm_draft").length,
+    escalatedToday: todayActivity.filter(a => a.type === "escalate").length,
+  };
+
+  const runPreview = async () => {
+    setPreviewing(true);
+    try {
+      const out = await draftSocialReply({
+        comment: { id: "preview", message: previewComment, fromName: "Sarah J." },
+        post: { id: "preview", message: previewPostCaption, platform: "facebook" },
+        agent: { name: profile.name, brokerage: profile.brokerage },
+        agentVoice,
+      });
+      setPreviewResult(out);
+    } catch (e) { toast.error("Preview failed: " + e.message); }
+    setPreviewing(false);
+  };
+
+  return (
+    <div className="page-content">
+      <PageHeader title="Social Engagement Agent" sub="AI replies to your FB + IG comments in your voice — auto-likes, drafts DMs, escalates the hot ones" setPage={setPage} parent="dashboard"
+        action={
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:12,fontWeight:700,color:settings.enabled?"#6ee7b7":"#64748b"}}>
+              {settings.enabled ? "🟢 ON" : "⚪ OFF"}
+            </span>
+            <button
+              className={`btn ${settings.enabled?"btn-danger":"btn-blue"} btn-sm`}
+              onClick={()=>set("enabled", !settings.enabled)}
+              disabled={!fbConnected && !igConnected}>
+              {settings.enabled ? "Turn OFF" : "Turn ON"}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Connection status banner */}
+      {(!fbConnected && !igConnected) ? (
+        <div className="glass-card" style={{marginBottom:20,padding:"14px 18px",borderColor:"rgba(239,68,68,.25)",background:"rgba(239,68,68,.07)"}}>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <AlertCircle size={16} color="#ef4444"/>
+            <div>
+              <div style={{fontWeight:800,color:"#f87171"}}>Meta not connected</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>
+                Sidebar → Integrations → Meta. You need a Page Access Token with these scopes:
+                <code style={{background:"rgba(255,255,255,.08)",padding:"1px 5px",borderRadius:4,margin:"0 4px"}}>pages_manage_engagement</code>
+                <code style={{background:"rgba(255,255,255,.08)",padding:"1px 5px",borderRadius:4}}>pages_read_engagement</code>
+                + for IG <code style={{background:"rgba(255,255,255,.08)",padding:"1px 5px",borderRadius:4,margin:"0 4px"}}>instagram_manage_comments</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="info-banner info-green" style={{marginBottom:20}}>
+          <CheckCircle size={14} style={{flexShrink:0}}/>
+          Connected: {fbConnected && "📘 Facebook"}{fbConnected && igConnected && " + "}{igConnected && "📸 Instagram"}
+          {settings.enabled ? ` · Polling every ${settings.pollIntervalMinutes} min for new comments.` : " · Toggle ON above to start auto-engagement."}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="grid-4" style={{gap:14,marginBottom:22}}>
+        <div className="stat-card stat-card-1">
+          <MessageSquare size={20} className="stat-icon"/>
+          <div className="stat-label">Replies Today</div>
+          <div className="stat-number">{stats.repliesToday}</div>
+        </div>
+        <div className="stat-card stat-card-3">
+          <Heart size={20} className="stat-icon"/>
+          <div className="stat-label">Auto-Likes Today</div>
+          <div className="stat-number">{stats.likesToday}</div>
+        </div>
+        <div className="stat-card stat-card-2">
+          <Send size={20} className="stat-icon"/>
+          <div className="stat-label">DMs Drafted</div>
+          <div className="stat-number">{stats.dmsDraftedToday}</div>
+        </div>
+        <div className="stat-card stat-card-4">
+          <AlertCircle size={20} className="stat-icon"/>
+          <div className="stat-label">Escalated</div>
+          <div className="stat-number">{stats.escalatedToday}</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:18,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
+        {[["activity",`🔥 Activity (${activity.length})`],["settings","⚙ Settings"],["preview","🎭 Preview AI"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)}
+            style={{padding:"10px 16px",background:"none",border:"none",cursor:"pointer",fontWeight:700,fontSize:13,
+              color:tab===id?"#7eb8f7":"#475569",borderBottom:tab===id?"2px solid #1a5aa0":"2px solid transparent"}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ACTIVITY tab */}
+      {tab==="activity" && (
+        <>
+          {activity.length === 0 ? (
+            <div className="glass-card">
+              <EmptyState icon={MessageSquare} title="No activity yet"
+                desc={settings.enabled ? `Polling Meta every ${settings.pollIntervalMinutes} min for new comments on your last ${settings.postsToWatch} posts.` : "Turn the agent ON above to start auto-engaging."}/>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {activity.slice(0, 100).map(a => {
+                const icon = a.type==="reply"?"💬":a.type==="like_only"?"❤":a.type==="dm_draft"?"📩":a.type==="escalate"?"⚠":a.type==="skip"?"🚫":"❓";
+                const color = a.type==="reply"?"#6ee7b7":a.type==="dm_draft"?"#fbbf24":a.type==="escalate"?"#f87171":"#64748b";
+                return (
+                  <div key={a.id} className="glass-card" style={{padding:"12px 16px",borderLeft:`3px solid ${color}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,gap:10}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:11,fontWeight:800,color,textTransform:"uppercase",letterSpacing:".4px",marginBottom:3}}>
+                          {icon} {a.type.replace(/_/g," ")} · {a.platform === "facebook" ? "📘 FB" : "📸 IG"}
+                        </div>
+                        <div style={{fontSize:13,color:"#fff",fontWeight:700}}>{a.from || "Anonymous"}</div>
+                        <div style={{fontSize:12,color:"#94a3b8",marginTop:3,fontStyle:"italic"}}>"{(a.comment||"").slice(0,140)}"</div>
+                      </div>
+                      <div style={{fontSize:11,color:"#475569",whiteSpace:"nowrap"}}>{new Date(a.createdAt).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</div>
+                    </div>
+                    {a.reply && <div style={{fontSize:12,color:"#cbd5e1",marginTop:8,padding:"8px 12px",background:"rgba(110,231,183,.06)",borderRadius:7,borderLeft:"2px solid #6ee7b7"}}><strong style={{color:"#6ee7b7"}}>Auto-reply:</strong> {a.reply}</div>}
+                    {a.dm && <div style={{fontSize:12,color:"#cbd5e1",marginTop:6,padding:"8px 12px",background:"rgba(251,191,36,.06)",borderRadius:7,borderLeft:"2px solid #fbbf24"}}><strong style={{color:"#fbbf24"}}>DM drafted (review &amp; send):</strong> {a.dm}</div>}
+                    {a.reason && <div style={{fontSize:12,color:"#fda4af",marginTop:6}}>⚠ {a.reason}</div>}
+                    {a.error && <div style={{fontSize:11,color:"#f87171",marginTop:6}}>Error: {a.error}</div>}
+                  </div>
+                );
+              })}
+              {activity.length > 100 && (
+                <div style={{textAlign:"center",fontSize:12,color:"#475569",padding:14}}>Showing latest 100 of {activity.length} events</div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* SETTINGS tab */}
+      {tab==="settings" && (
+        <div style={{display:"flex",flexDirection:"column",gap:18,maxWidth:760}}>
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>📘 Facebook Page</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.facebook.enabled} onChange={e=>set("facebook.enabled",e.target.checked)} style={{width:16,height:16}}/><span>Watch Page for new comments</span></label>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.facebook.autoReply} onChange={e=>set("facebook.autoReply",e.target.checked)} style={{width:16,height:16}}/><span>Auto-reply to substantive comments</span></label>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.facebook.autoLike} onChange={e=>set("facebook.autoLike",e.target.checked)} style={{width:16,height:16}}/><span>Auto-like ALL comments (algorithm booster)</span></label>
+            </div>
+          </div>
+
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>📸 Instagram</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.instagram.enabled} onChange={e=>set("instagram.enabled",e.target.checked)} style={{width:16,height:16}}/><span>Watch IG Business account for new comments</span></label>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.instagram.autoReply} onChange={e=>set("instagram.autoReply",e.target.checked)} style={{width:16,height:16}}/><span>Auto-reply to substantive comments</span></label>
+              <div style={{fontSize:11,color:"#64748b",paddingLeft:26,marginTop:4}}>Note: IG Business API doesn't support liking comments — only replies.</div>
+            </div>
+          </div>
+
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>🛡 Rules &amp; Safety</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.rules.skipSpam} onChange={e=>set("rules.skipSpam",e.target.checked)} style={{width:16,height:16}}/><span>Skip obvious spam (crypto, OF, follow-back, etc.)</span></label>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.rules.likeOnlyForNoise} onChange={e=>set("rules.likeOnlyForNoise",e.target.checked)} style={{width:16,height:16}}/><span>Just like (don't reply to) generic noise like "🔥🔥🔥" or "love it!"</span></label>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.rules.enableDmFunnel} onChange={e=>set("rules.enableDmFunnel",e.target.checked)} style={{width:16,height:16}}/><span>Draft DM when commenter shows buyer/seller intent (review in Activity tab)</span></label>
+              <label style={{display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={settings.rules.escalateToInbox} onChange={e=>set("rules.escalateToInbox",e.target.checked)} style={{width:16,height:16}}/><span>Flag negative / legal / contractual comments for review</span></label>
+              <div style={{display:"flex",gap:14,marginTop:8}}>
+                <div><div className="label">Max replies/post</div><input className="input" type="number" min="1" value={settings.rules.maxRepliesPerPost} onChange={e=>set("rules.maxRepliesPerPost", parseInt(e.target.value)||50)} style={{width:90}}/></div>
+                <div><div className="label">Max replies/day</div><input className="input" type="number" min="1" value={settings.rules.maxRepliesPerDay} onChange={e=>set("rules.maxRepliesPerDay", parseInt(e.target.value)||200)} style={{width:90}}/></div>
+                <div><div className="label">Used today</div><div style={{padding:"7px 0",fontWeight:800,color:todayCount>=settings.rules.maxRepliesPerDay*.8?"#fbbf24":"#6ee7b7"}}>{todayCount} / {settings.rules.maxRepliesPerDay}</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>⚙ Polling</div>
+            <div style={{display:"flex",gap:14,alignItems:"flex-end"}}>
+              <div><div className="label">Watch the most recent ___ posts</div><input className="input" type="number" min="1" max="100" value={settings.postsToWatch} onChange={e=>set("postsToWatch", parseInt(e.target.value)||20)} style={{width:90}}/></div>
+              <div><div className="label">Check every ___ minutes</div><input className="input" type="number" min="1" max="60" value={settings.pollIntervalMinutes} onChange={e=>set("pollIntervalMinutes", parseInt(e.target.value)||5)} style={{width:90}}/></div>
+              <div style={{fontSize:11,color:"#64748b",paddingBottom:8}}>(More frequent = faster replies but more Meta API calls. 5 min is plenty for most.)</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PREVIEW tab */}
+      {tab==="preview" && (
+        <div style={{display:"flex",flexDirection:"column",gap:18,maxWidth:760}}>
+          <div className="glass-card" style={{padding:"18px 22px"}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",marginBottom:14}}>🎭 Test the AI on a fake comment</div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div><div className="label">Your post caption</div>
+                <textarea className="textarea" rows={2} value={previewPostCaption} onChange={e=>setPreviewPostCaption(e.target.value)} style={{resize:"vertical"}}/>
+              </div>
+              <div><div className="label">A comment on it</div>
+                <input className="input" value={previewComment} onChange={e=>setPreviewComment(e.target.value)}/>
+              </div>
+              <button className="btn btn-blue" onClick={runPreview} disabled={previewing}>
+                {previewing ? <><Spinner s={13}/>Drafting…</> : <><Wand2 size={13}/>What would the AI do?</>}
+              </button>
+            </div>
+          </div>
+
+          {previewResult && (
+            <div className="glass-card" style={{padding:"18px 22px"}}>
+              <div style={{fontSize:11,fontWeight:800,color:"#7eb8f7",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>AI DECISION</div>
+              <div style={{fontSize:18,fontWeight:800,color:"#fff",marginBottom:14}}>
+                {previewResult.action === "reply" && "💬 Auto-reply"}
+                {previewResult.action === "like_only" && "❤ Like only (skip reply)"}
+                {previewResult.action === "skip" && "🚫 Skip (spam/noise)"}
+                {previewResult.action === "escalate" && "⚠ Escalate to you"}
+              </div>
+              {previewResult.reply && <div style={{marginBottom:10,padding:"10px 14px",background:"rgba(110,231,183,.06)",borderRadius:8,borderLeft:"2px solid #6ee7b7"}}><div style={{fontSize:11,fontWeight:700,color:"#6ee7b7",marginBottom:4}}>PUBLIC REPLY</div><div style={{fontSize:13,color:"#cbd5e1"}}>{previewResult.reply}</div></div>}
+              {previewResult.dmFollowup && <div style={{marginBottom:10,padding:"10px 14px",background:"rgba(251,191,36,.06)",borderRadius:8,borderLeft:"2px solid #fbbf24"}}><div style={{fontSize:11,fontWeight:700,color:"#fbbf24",marginBottom:4}}>PRIVATE DM (drafted for review)</div><div style={{fontSize:13,color:"#cbd5e1"}}>{previewResult.dmFollowup}</div></div>}
+              {previewResult.escalateReason && <div style={{fontSize:13,color:"#fda4af",marginTop:8}}>Reason: {previewResult.escalateReason}</div>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // ─── INTEGRATIONS ─────────────────────────────────────────────────────────────
 const Integrations = ({setPage,toast}) => {
   const [settings,setSettings] = useLS("integrations",{});
@@ -6352,6 +6627,223 @@ const AILeadConciergeWorker = ({ notify, toast }) => {
   }, []);
 
   return null; // invisible worker
+};
+
+
+// ─── SOCIAL ENGAGEMENT WORKER ─────────────────────────────────────────────
+// Polls Meta Graph API every N minutes for new comments on Monica's recent
+// FB Page posts + IG Business posts. For each new comment that hasn't been
+// processed yet:
+//   • Pre-filter (skip spam / low-signal noise)
+//   • Auto-like (FB only — IG API doesn't support comment-likes)
+//   • AI decides: reply / like_only / skip / escalate
+//   • If reply: posts reply via Graph API
+//   • If buyer-intent: drafts a DM to send (review-and-send for safety)
+//   • If escalate: drops into a notification queue for Monica to review
+// All actions logged to localStorage `social_activity` for the Activity tab.
+const SocialEngagementWorker = ({ notify, toast }) => {
+  const [settings] = useLS("social_settings", DEFAULT_SOCIAL_SETTINGS);
+  const [integrations] = useLS("integrations", {});
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [agentVoice] = useLS("agent_voice", "");
+  const settingsRef = useRef(settings);
+  const integrationsRef = useRef(integrations);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { integrationsRef.current = integrations; }, [integrations]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fbApi = async (path, opts = {}) => {
+      const token = integrationsRef.current?.meta?.accessToken;
+      if (!token) throw new Error("Meta access token not set");
+      const url = `https://graph.facebook.com/v19.0/${path}${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`;
+      const r = await fetch(url, opts);
+      const j = await r.json();
+      if (j.error) throw new Error(`FB ${j.error.code}: ${j.error.message}`);
+      return j;
+    };
+
+    const logActivity = (entry) => {
+      const log = JSON.parse(localStorage.getItem("social_activity") || "[]");
+      log.unshift({ id: uid(), createdAt: new Date().toISOString(), ...entry });
+      // Keep last 500 entries
+      localStorage.setItem("social_activity", JSON.stringify(log.slice(0, 500)));
+      window.dispatchEvent(new CustomEvent("social-activity-updated"));
+    };
+
+    const bumpDailyCounter = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const c = JSON.parse(localStorage.getItem("social_daily_count") || "{}");
+      c[today] = (c[today] || 0) + 1;
+      localStorage.setItem("social_daily_count", JSON.stringify(c));
+      return c[today];
+    };
+    const todayCount = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const c = JSON.parse(localStorage.getItem("social_daily_count") || "{}");
+      return c[today] || 0;
+    };
+
+    const handledIds = () => {
+      try { return new Set(JSON.parse(localStorage.getItem("social_handled_ids") || "[]")); }
+      catch { return new Set(); }
+    };
+    const markHandled = (id) => {
+      const set = handledIds();
+      set.add(id);
+      // Keep last 5000 IDs
+      const arr = Array.from(set).slice(-5000);
+      localStorage.setItem("social_handled_ids", JSON.stringify(arr));
+    };
+
+    const processComment = async (comment, post) => {
+      const s = settingsRef.current;
+      if (handledIds().has(comment.id)) return;
+      // Skip comments from herself / her page
+      if (comment.fromId && (comment.fromId === post.pageId || comment.fromId === post.igUserId)) {
+        markHandled(comment.id);
+        return;
+      }
+      if (todayCount() >= s.rules.maxRepliesPerDay) {
+        console.log("[SocialAgent] daily cap reached");
+        return;
+      }
+      const text = comment.message || "";
+
+      // Spam pre-filter
+      if (s.rules.skipSpam && looksLikeSpam(text)) {
+        markHandled(comment.id);
+        logActivity({ type: "skip", platform: post.platform, postId: post.id, commentId: comment.id, from: comment.fromName, comment: text, action: "skip_spam" });
+        return;
+      }
+
+      // Auto-like (FB only)
+      if (post.platform === "facebook" && s.facebook.autoLike) {
+        try {
+          await fbApi(`${comment.id}/likes`, { method: "POST" });
+        } catch (e) { console.warn("[SocialAgent] like failed", e.message); }
+      }
+
+      // Low-signal noise — just like, don't reply
+      if (s.rules.likeOnlyForNoise && isLowSignalComment(text)) {
+        markHandled(comment.id);
+        logActivity({ type: "like_only", platform: post.platform, postId: post.id, commentId: comment.id, from: comment.fromName, comment: text, action: "auto_like_only" });
+        return;
+      }
+
+      // Ask AI what to do
+      let decision;
+      try {
+        decision = await draftSocialReply({
+          comment: { id: comment.id, message: text, fromName: comment.fromName },
+          post: { id: post.id, message: post.message, caption: post.caption, platform: post.platform },
+          agent: { name: profile.name, brokerage: profile.brokerage },
+          agentVoice,
+        });
+      } catch (e) {
+        console.warn("[SocialAgent] AI draft failed", e.message);
+        return; // try again next poll
+      }
+
+      // Reply
+      const wantsReply = decision.action === "reply" && decision.reply &&
+        ((post.platform === "facebook" && s.facebook.autoReply) || (post.platform === "instagram" && s.instagram.autoReply));
+
+      if (wantsReply) {
+        try {
+          if (post.platform === "facebook") {
+            await fbApi(`${comment.id}/comments`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: decision.reply }),
+            });
+          } else {
+            // Instagram reply via /{ig-comment-id}/replies
+            await fbApi(`${comment.id}/replies?message=${encodeURIComponent(decision.reply)}`, { method: "POST" });
+          }
+          bumpDailyCounter();
+          logActivity({ type: "reply", platform: post.platform, postId: post.id, commentId: comment.id, from: comment.fromName, comment: text, reply: decision.reply, dm: decision.dmFollowup || null });
+          notify?.("💬 Auto-reply sent", `Replied to ${comment.fromName || "comment"} on ${post.platform}`, "social-reply");
+        } catch (e) {
+          console.warn("[SocialAgent] reply failed", e.message);
+          logActivity({ type: "error", platform: post.platform, postId: post.id, commentId: comment.id, from: comment.fromName, comment: text, error: e.message });
+        }
+      }
+
+      // DM funnel
+      if (s.rules.enableDmFunnel && decision.dmFollowup && comment.fromId) {
+        // Don't actually auto-send DMs — they require pages_messaging scope and
+        // 24-hour messaging window. Queue for Monica's review instead.
+        logActivity({ type: "dm_draft", platform: post.platform, postId: post.id, commentId: comment.id, from: comment.fromName, fromId: comment.fromId, dm: decision.dmFollowup, status: "awaiting_send" });
+      }
+
+      // Escalate
+      if (decision.action === "escalate" && s.rules.escalateToInbox) {
+        logActivity({ type: "escalate", platform: post.platform, postId: post.id, commentId: comment.id, from: comment.fromName, comment: text, reason: decision.escalateReason });
+        toast?.info?.(`⚠ Comment flagged for review: ${decision.escalateReason}`);
+      }
+
+      markHandled(comment.id);
+    };
+
+    const fetchAndProcess = async () => {
+      const s = settingsRef.current;
+      const ints = integrationsRef.current;
+      if (!s.enabled || cancelled) return;
+      if (!ints?.meta?.accessToken) return;
+
+      try {
+        // ── Facebook Page comments ──────────────────────────────────────
+        if (s.facebook.enabled && ints.meta.pageId) {
+          const posts = await fbApi(`${ints.meta.pageId}/posts?limit=${s.postsToWatch}&fields=id,message,created_time`);
+          for (const p of (posts.data || [])) {
+            if (cancelled) return;
+            try {
+              const cs = await fbApi(`${p.id}/comments?limit=50&order=reverse_chronological&fields=id,message,from,created_time,parent`);
+              for (const c of (cs.data || [])) {
+                if (cancelled) return;
+                if (c.parent) continue; // skip nested replies
+                await processComment(
+                  { id: c.id, message: c.message, fromName: c.from?.name, fromId: c.from?.id },
+                  { id: p.id, message: p.message, platform: "facebook", pageId: ints.meta.pageId }
+                );
+              }
+            } catch (e) { console.warn(`[SocialAgent] FB post ${p.id} comments fetch failed`, e.message); }
+          }
+        }
+
+        // ── Instagram comments ──────────────────────────────────────────
+        if (s.instagram.enabled && ints.meta.igAccountId) {
+          const media = await fbApi(`${ints.meta.igAccountId}/media?limit=${s.postsToWatch}&fields=id,caption,timestamp,media_type`);
+          for (const m of (media.data || [])) {
+            if (cancelled) return;
+            try {
+              const cs = await fbApi(`${m.id}/comments?limit=50&fields=id,text,username,from,timestamp`);
+              for (const c of (cs.data || [])) {
+                if (cancelled) return;
+                await processComment(
+                  { id: c.id, message: c.text, fromName: c.username || c.from?.username, fromId: c.from?.id },
+                  { id: m.id, caption: m.caption, platform: "instagram", igUserId: ints.meta.igAccountId }
+                );
+              }
+            } catch (e) { console.warn(`[SocialAgent] IG media ${m.id} comments fetch failed`, e.message); }
+          }
+        }
+      } catch (e) {
+        console.warn("[SocialAgent] fetch error", e.message);
+      }
+    };
+
+    fetchAndProcess();
+    const intervalMs = Math.max(60, (settings.pollIntervalMinutes || 5)) * 60 * 1000;
+    const t = setInterval(fetchAndProcess, intervalMs);
+
+    return () => { cancelled = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
 };
 
 
@@ -8012,6 +8504,7 @@ export default function App() {
     "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
     "ai-concierge":       <AILeadConcierge {...props}/>,
+    "social-agent":       <SocialAgent {...props}/>,
     "pipeline":           <PipelineBoard {...props}/>,
     "tasks":              <TaskManager {...props}/>,
     "action-plans":       <ActionPlans {...props}/>,
@@ -8081,6 +8574,7 @@ export default function App() {
       <GmailSyncWorker notify={notify} toast={toast}/>
       <ScheduledPostsWorker notify={notify} toast={toast}/>
       <AILeadConciergeWorker notify={notify} toast={toast}/>
+      <SocialEngagementWorker notify={notify} toast={toast}/>
       <Toast toasts={toasts} remove={remove}/>
 
       {/* PWA Install Banner */}
