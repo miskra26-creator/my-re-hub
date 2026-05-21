@@ -277,84 +277,32 @@ export default function AutoReel({ setPage, toast }) {
         vacancy: o.vacancy,
       }));
 
-      // ── Phase 1b: Auto-stage vacant rooms ──────────────────────────────────
-      // Vacant exterior / detail / outdoor shots are skipped (they don't need
-      // furnishing). Only interior vacant photos get staged.
+      // ── Defer staging + lifestyle to render-time ──────────────────────────
+      // Both are expensive Gemini Image calls. Don't burn quota in the plan
+      // step — instead compute SMART DEFAULT checkboxes for which scenes
+      // should be staged / get lifestyle people. User reviews and toggles
+      // each one in the review panel, then we only run AI on the checked
+      // photos when she hits Render Final Reel.
       const STAGEABLE_ROOMS = new Set(['living','primary','bedroom','dining','office','basement','kitchen','bath']);
-      const vacantScenes = scenes
-        .map((s, i) => ({ s, i }))
-        .filter(({ s }) => s.vacancy === 'vacant' && STAGEABLE_ROOMS.has(s.room));
+      const LIFESTYLE_PRIORITY = ['kitchen','living','outdoor','dining','primary'];
 
-      if (autoStage && vacantScenes.length > 0) {
-        setPhase('stage');
-        setProgressLabel(`Staging ${vacantScenes.length} vacant room${vacantScenes.length === 1 ? '' : 's'}…`);
-        addLog(`Auto-staging ${vacantScenes.length} vacant room(s) with Gemini Image · style=${stagingStyle}`);
-        for (let n = 0; n < vacantScenes.length; n++) {
-          const { s, i } = vacantScenes[n];
-          setProgressLabel(`Staging vacant ${s.room} (${n + 1} of ${vacantScenes.length})…`);
-          try {
-            const staged = await stagePhoto({
-              photo: s.photo.file || s.photo,
-              room: s.room,
-              style: stagingStyle,
-              onLog: addLog,
-            });
-            // Swap the scene's photo with the staged version
-            const stagedUrl = URL.createObjectURL(staged.blob);
-            scenes[i] = {
-              ...scenes[i],
-              photo: { url: stagedUrl, file: staged.blob, name: `staged-${s.room}.png` },
-              wasStaged: true,
-            };
-            addLog(`✓ Staged scene ${i + 1} (${s.room})`);
-          } catch (e) {
-            addLog(`Stage failed for scene ${i + 1}: ${e.message} — using original`);
-          }
-          setProgress(0.25 + (0.15 * (n + 1) / vacantScenes.length));
-        }
-        addLog(`Staging complete · ${vacantScenes.length} room(s) processed`);
-      } else if (vacantScenes.length > 0) {
-        addLog(`${vacantScenes.length} vacant room(s) detected but auto-stage is OFF`);
-      }
-
-      // ── Phase 1c: Lifestyle people (VideoTour-AI feature) ────────────────
-      // Add photorealistic people to up to 3 standout scenes — the lived-in
-      // feel that makes the reel emotional, not just architectural.
+      // Default Stage = ON for interior vacant rooms (only if autoStage toggle is on)
+      const stageDefaults = scenes.map(s =>
+        autoStage && s.vacancy === 'vacant' && STAGEABLE_ROOMS.has(s.room)
+      );
+      // Default Lifestyle = ON for the top-3 priority rooms (only if lifestyle toggle is on)
+      const lifestyleDefaults = scenes.map(() => false);
       if (lifestyle) {
-        const LIFESTYLE_PRIORITY = ['kitchen','living','outdoor','dining','primary'];
-        // Find up to 3 best-scoring scenes matching priority rooms
-        const candidates = scenes
-          .map((s, i) => ({ s, i }))
-          .filter(({ s }) => LIFESTYLE_PRIORITY.includes(s.room))
-          .sort((a, b) => LIFESTYLE_PRIORITY.indexOf(a.s.room) - LIFESTYLE_PRIORITY.indexOf(b.s.room))
+        const ranked = scenes
+          .map((s, i) => ({ s, i, rank: LIFESTYLE_PRIORITY.indexOf(s.room) }))
+          .filter(x => x.rank !== -1)
+          .sort((a, b) => a.rank - b.rank)
           .slice(0, 3);
-        if (candidates.length > 0) {
-          setPhase('lifestyle');
-          addLog(`Adding lifestyle people (${lifestyleMood}) to ${candidates.length} scene(s)`);
-          for (let n = 0; n < candidates.length; n++) {
-            const { s, i } = candidates[n];
-            setProgressLabel(`Adding lifestyle people to ${s.room} (${n + 1} of ${candidates.length})…`);
-            try {
-              const out = await addLifestylePeople({
-                photo: s.photo.file || s.photo,
-                room: s.room,
-                mood: lifestyleMood,
-                onLog: addLog,
-              });
-              const lifeUrl = URL.createObjectURL(out.blob);
-              scenes[i] = {
-                ...scenes[i],
-                photo: { url: lifeUrl, file: out.blob, name: `lifestyle-${s.room}.png` },
-                hasLifestyle: true,
-              };
-              addLog(`✓ Lifestyle added to scene ${i + 1}`);
-            } catch (e) {
-              addLog(`Lifestyle gen failed for scene ${i + 1}: ${e.message} — using original`);
-            }
-            setProgress(0.40 + 0.10 * (n + 1) / candidates.length);
-          }
-        }
+        ranked.forEach(({ i }) => { lifestyleDefaults[i] = true; });
       }
+
+      const vacantCount = scenes.filter(s => s.vacancy === 'vacant').length;
+      addLog(`${vacantCount} vacant room(s) detected · staging will run only on photos you check in the review panel`);
 
       // ── Phase 2: Narrative ────────────────────────────────────────────────
       setPhase('narrate');
@@ -393,7 +341,13 @@ export default function AutoReel({ setPage, toast }) {
       // ── PAUSE FOR REVIEW ──────────────────────────────────────────────────
       // Monica can now edit hook / scene labels / closing CTA / narration
       // script before we burn money on voice synthesis + AI motion + render.
-      setReviewPlan({ scenes, narrative, tourScript, music });
+      // She also picks per-scene which photos get staged + which get lifestyle
+      // people — staging only runs on her selections at render time.
+      setReviewPlan({
+        scenes, narrative, tourScript, music,
+        sceneStage: stageDefaults,       // boolean per scene
+        sceneLifestyle: lifestyleDefaults, // boolean per scene
+      });
       setProgress(1.0);
       setProgressLabel('Plan ready — review labels below, edit anything wrong, then hit Render');
       setPhase('review');
@@ -417,9 +371,72 @@ export default function AutoReel({ setPage, toast }) {
     setBusy(true);
     setResult(null);
     const addLog = (m) => setLog(l => [...l, m]);
-    const { scenes, narrative, tourScript, music } = reviewPlan;
+    // Shallow-clone scenes so we can swap photos for the ones being staged/lifestyle'd
+    // without mutating reviewPlan directly.
+    const scenes = reviewPlan.scenes.map(s => ({ ...s }));
+    const { narrative, tourScript, music, sceneStage, sceneLifestyle } = reviewPlan;
 
     try {
+      // ── Phase 0a: Apply per-photo virtual staging (only on checked scenes) ─
+      const stagingIdx = sceneStage.map((on, i) => on ? i : -1).filter(i => i >= 0);
+      if (stagingIdx.length > 0) {
+        setPhase('stage');
+        addLog(`Staging ${stagingIdx.length} selected photo(s) · style=${stagingStyle}`);
+        for (let n = 0; n < stagingIdx.length; n++) {
+          const i = stagingIdx[n];
+          const s = scenes[i];
+          setProgressLabel(`Staging ${s.room} (${n + 1} of ${stagingIdx.length})…`);
+          try {
+            const staged = await stagePhoto({
+              photo: s.photo.file || s.photo,
+              room: s.room,
+              style: stagingStyle,
+              onLog: addLog,
+            });
+            const stagedUrl = URL.createObjectURL(staged.blob);
+            scenes[i] = {
+              ...scenes[i],
+              photo: { url: stagedUrl, file: staged.blob, name: `staged-${s.room}.png` },
+              wasStaged: true,
+            };
+            addLog(`✓ Staged scene ${i + 1}`);
+          } catch (e) {
+            addLog(`Stage failed for scene ${i + 1}: ${e.message} — using original`);
+          }
+          setProgress(0.02 + 0.10 * (n + 1) / stagingIdx.length);
+        }
+      }
+
+      // ── Phase 0b: Apply lifestyle people (only on checked scenes) ─────────
+      const lifestyleIdx = sceneLifestyle.map((on, i) => on ? i : -1).filter(i => i >= 0);
+      if (lifestyleIdx.length > 0) {
+        setPhase('lifestyle');
+        addLog(`Adding lifestyle people (${lifestyleMood}) to ${lifestyleIdx.length} scene(s)`);
+        for (let n = 0; n < lifestyleIdx.length; n++) {
+          const i = lifestyleIdx[n];
+          const s = scenes[i];
+          setProgressLabel(`Adding lifestyle people to ${s.room} (${n + 1} of ${lifestyleIdx.length})…`);
+          try {
+            const out = await addLifestylePeople({
+              photo: s.photo.file || s.photo,
+              room: s.room,
+              mood: lifestyleMood,
+              onLog: addLog,
+            });
+            const lifeUrl = URL.createObjectURL(out.blob);
+            scenes[i] = {
+              ...scenes[i],
+              photo: { url: lifeUrl, file: out.blob, name: `lifestyle-${s.room}.png` },
+              hasLifestyle: true,
+            };
+            addLog(`✓ Lifestyle added to scene ${i + 1}`);
+          } catch (e) {
+            addLog(`Lifestyle failed for scene ${i + 1}: ${e.message} — using original`);
+          }
+          setProgress(0.12 + 0.08 * (n + 1) / lifestyleIdx.length);
+        }
+      }
+
       // ── Phase 2b: Synthesize the voiceover (using possibly-edited script) ──
       let voiceover = null;
       if (narration && tourScript?.fullScript) {
@@ -556,6 +573,22 @@ export default function AutoReel({ setPage, toast }) {
   };
   const updateReviewScript = (newScript) => {
     setReviewPlan(p => p ? { ...p, tourScript: { ...p.tourScript, fullScript: newScript } } : p);
+  };
+  const toggleReviewStage = (sceneIdx) => {
+    setReviewPlan(p => {
+      if (!p) return p;
+      const arr = [...(p.sceneStage || [])];
+      arr[sceneIdx] = !arr[sceneIdx];
+      return { ...p, sceneStage: arr };
+    });
+  };
+  const toggleReviewLifestyle = (sceneIdx) => {
+    setReviewPlan(p => {
+      if (!p) return p;
+      const arr = [...(p.sceneLifestyle || [])];
+      arr[sceneIdx] = !arr[sceneIdx];
+      return { ...p, sceneLifestyle: arr };
+    });
   };
 
   const cancelPlan = () => {
@@ -1281,44 +1314,89 @@ export default function AutoReel({ setPage, toast }) {
             />
           </div>
 
-          {/* Per-scene labels */}
+          {/* Per-scene controls: label + stage toggle + lifestyle toggle */}
           <div style={{marginBottom:14}}>
-            <div style={S.fieldLabel}>Per-scene labels (the text that pops up on each photo)</div>
-            <div style={{fontSize:10.5, color:'#64748b', marginTop:4, marginBottom:8}}>
-              Empty = no label shows (often best). Use ALL-CAPS 2-4 words describing the feature visible ("WHITE QUARTZ ISLAND", "VAULTED CEILINGS"). NOT generic room names.
+            <div style={S.fieldLabel}>Per-scene controls</div>
+            <div style={{fontSize:10.5, color:'#64748b', marginTop:4, marginBottom:8, lineHeight:1.5}}>
+              For each photo: edit the on-screen label, pick which ones get virtually staged (AI furniture) and/or get lifestyle people added. We pre-check vacant rooms for staging and the top-3 priority rooms for lifestyle — uncheck anything you don't want. Staging + lifestyle only runs on CHECKED photos when you hit Render.
             </div>
             <div style={{display:'flex', flexDirection:'column', gap:8}}>
               {reviewPlan.scenes.map((s, i) => {
                 const label = reviewPlan.narrative.sceneLabels?.[i] || '';
                 const url = s.photo?.url || (s.photo?.file ? URL.createObjectURL(s.photo.file) : '');
+                const stageOn = !!reviewPlan.sceneStage?.[i];
+                const lifeOn  = !!reviewPlan.sceneLifestyle?.[i];
                 return (
                   <div key={i} style={{
-                    display:'flex', gap:10, alignItems:'center',
-                    padding:'8px 10px', background:'rgba(0,0,0,.25)', borderRadius:8,
+                    display:'flex', gap:10, alignItems:'flex-start',
+                    padding:'10px 12px', background:'rgba(0,0,0,.25)', borderRadius:8,
                   }}>
+                    {/* Photo thumbnail */}
                     <div style={{
-                      width:60, height:60, borderRadius:6, overflow:'hidden', flexShrink:0,
-                      background:'#000',
+                      width:64, height:64, borderRadius:6, overflow:'hidden', flexShrink:0,
+                      background:'#000', position:'relative',
                     }}>
                       {url && <img src={url} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}}/>}
+                      {s.vacancy === 'vacant' && (
+                        <div style={{
+                          position:'absolute', bottom:0, left:0, right:0,
+                          background:'rgba(220,38,38,.85)', color:'#fff',
+                          fontSize:8, fontWeight:800, textAlign:'center', padding:'1px 2px',
+                          letterSpacing:0.5,
+                        }}>VACANT</div>
+                      )}
                     </div>
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{fontSize:10, color:'#94a3b8', marginBottom:3, display:'flex', gap:8, alignItems:'center'}}>
-                        <span style={{fontWeight:700}}>Scene {i + 1}</span>
+
+                    {/* Right side: scene metadata + label + toggles */}
+                    <div style={{flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:6}}>
+                      <div style={{fontSize:10, color:'#94a3b8', display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+                        <span style={{fontWeight:700, color:'#cbd5e1'}}>Scene {i + 1}</span>
                         <span style={{color:'#64748b'}}>· {s.room}</span>
-                        {s.wasStaged && <span style={{color:'#b8864b', fontWeight:700}}>· virtually staged</span>}
+                        <span style={{color:'#64748b'}}>· score {s.score}/10</span>
                       </div>
+
                       <input
                         type="text"
                         value={label}
                         onChange={(e) => updateReviewSceneLabel(i, e.target.value.toUpperCase())}
-                        placeholder='Leave blank to show NO label (often best) · or "WHITE QUARTZ ISLAND"'
-                        style={{...S.input, width:'100%', fontSize:12.5, padding:'7px 10px'}}
+                        placeholder='Leave blank to show NO label · or "WHITE QUARTZ ISLAND"'
+                        style={{...S.input, width:'100%', fontSize:12.5, padding:'6px 10px'}}
                       />
+
+                      <div style={{display:'flex', gap:14, alignItems:'center', flexWrap:'wrap'}}>
+                        <label style={{
+                          display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
+                          fontSize:11.5, fontWeight:700,
+                          color: stageOn ? '#e0b370' : '#94a3b8',
+                        }}>
+                          <input type="checkbox" checked={stageOn}
+                            onChange={() => toggleReviewStage(i)}
+                            style={{accentColor:'#b8864b', width:14, height:14}}/>
+                          🛋 Stage this photo
+                          {s.vacancy === 'vacant' && <span style={{color:'#fca5a5', fontSize:10, fontWeight:600}}>(detected vacant)</span>}
+                        </label>
+                        <label style={{
+                          display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
+                          fontSize:11.5, fontWeight:700,
+                          color: lifeOn ? '#e0b370' : '#94a3b8',
+                        }}>
+                          <input type="checkbox" checked={lifeOn}
+                            onChange={() => toggleReviewLifestyle(i)}
+                            style={{accentColor:'#b8864b', width:14, height:14}}/>
+                          👨‍👩‍👧 Add people ({lifestyleMood})
+                        </label>
+                      </div>
                     </div>
                   </div>
                 );
               })}
+            </div>
+            <div style={{fontSize:10.5, color:'#64748b', marginTop:8}}>
+              {(() => {
+                const stageN = (reviewPlan.sceneStage || []).filter(Boolean).length;
+                const lifeN  = (reviewPlan.sceneLifestyle || []).filter(Boolean).length;
+                return `Will use ~${stageN + lifeN} Gemini Image calls this render (you have 500/day free).`;
+              })()}
             </div>
           </div>
 
