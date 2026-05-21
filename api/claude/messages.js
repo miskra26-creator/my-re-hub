@@ -51,15 +51,41 @@ export default async function handler(req, res) {
   if (GEMINI_API_KEY) {
     try {
       const body = req.body || {};
-      // Translate Anthropic messages → Gemini contents
+      // Translate Anthropic messages → Gemini contents.
+      // Handles both string content and structured content arrays — the latter
+      // supports vision: { type:'image', source:{ type:'base64', media_type, data } }
+      // ↔ Gemini's parts: [{ inlineData: { mimeType, data } }, { text }]
       const contents = [];
-      if (body.system) {
-        // Gemini has a separate systemInstruction field on the request body
-      }
       (body.messages || []).forEach((m) => {
+        const parts = [];
+        const content = m.content;
+        if (typeof content === 'string') {
+          parts.push({ text: content });
+        } else if (Array.isArray(content)) {
+          content.forEach((block) => {
+            if (block.type === 'text') {
+              parts.push({ text: block.text || '' });
+            } else if (block.type === 'image' && block.source) {
+              if (block.source.type === 'base64') {
+                parts.push({
+                  inlineData: {
+                    mimeType: block.source.media_type || 'image/jpeg',
+                    data: block.source.data,
+                  },
+                });
+              } else if (block.source.type === 'url') {
+                // Gemini doesn't accept URLs directly in inlineData — caller
+                // should pre-fetch and base64-encode. Fallback: skip the image.
+                parts.push({ text: `[image url: ${block.source.url}]` });
+              }
+            }
+          });
+        } else {
+          parts.push({ text: JSON.stringify(content) });
+        }
         contents.push({
           role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+          parts,
         });
       });
 
