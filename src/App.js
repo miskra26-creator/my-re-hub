@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { supabase } from './supabase';
+import { supabase, isCloudEnabled } from './supabase';
 import { useLS, useIDB } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
 import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
