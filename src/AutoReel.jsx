@@ -27,6 +27,8 @@ import {
   synthesizeNarration, probeAudioDuration,
 } from './autoReelVoice';
 import { stagePhoto, STAGING_STYLES, STYLE_BY_ID } from './aiVirtualStaging';
+import { generateClipsForScenes, probeVideoMotionServer, getVideoMotionUrl, setVideoMotionUrl } from './aiVideoMotion';
+import { stitchReel } from './aiReelStitch';
 
 // ── Tiny styled element helpers (match app's visual language) ─────────────────
 const S = {
@@ -78,6 +80,30 @@ export default function AutoReel({ setPage, toast }) {
   const [captions, setCaptions] = useLS('autoreel_captions', true);
   const [autoStage, setAutoStage] = useLS('autoreel_autostage', true);
   const [stagingStyle, setStagingStyle] = useLS('autoreel_staging_style', 'modern');
+  // AI motion: when ON, use Modal-hosted LTX-Video for real camera motion
+  // per scene. When OFF, fall back to the Ken Burns canvas pipeline.
+  const [aiMotion, setAiMotion] = useLS('autoreel_ai_motion', false);
+  const [motionUrlInput, setMotionUrlInput] = useState('');
+  const [motionServerStatus, setMotionServerStatus] = useState('unchecked'); // 'unchecked'|'checking'|'online'|'offline'
+  const [motionServerInfo, setMotionServerInfo] = useState(null);
+
+  const probeMotion = useCallback(async () => {
+    setMotionServerStatus('checking');
+    const info = await probeVideoMotionServer();
+    if (info) {
+      setMotionServerStatus('online');
+      setMotionServerInfo(info);
+    } else {
+      setMotionServerStatus('offline');
+      setMotionServerInfo(null);
+    }
+  }, []);
+
+  // Auto-probe once on mount if AI motion is enabled
+  useEffect(() => {
+    if (aiMotion) probeMotion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [hasVoiceRef, setHasVoiceRef] = useState(() => hasVoiceRefSaved());
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
 
@@ -320,32 +346,73 @@ export default function AutoReel({ setPage, toast }) {
       }
 
       // ── Phase 3: Render ───────────────────────────────────────────────────
+      // Two paths:
+      //   - aiMotion=true:  LTX-Video generates real camera motion per scene,
+      //                     FFmpeg stitches the clips together with audio
+      //   - aiMotion=false: Canvas Ken Burns pipeline (legacy slideshow mode)
       setPhase('render');
-      setProgressLabel('Rendering cinematic reel…');
-      addLog('Starting cinematic render');
 
       // Pick a music track matching the vibe's music category. When narration
       // is on, music gets ducked under the voiceover automatically.
       const music = pickRandomTrack(vibeDef.music);
       addLog(`Music: ${music?.name || '(silent)'}`);
 
-      const renderRes = await renderCinematicReel({
-        scenes, narrative, brand, vibe,
-        music: music ? { url: music.url, volume: 0.7 } : null,
-        voiceover,
-        opts: {
-          aspect,
-          quality: 'high',
-          captions,
+      let renderRes;
+
+      if (aiMotion) {
+        addLog('Using AI image-to-video motion (LTX-Video on Modal)');
+        setProgressLabel('Generating AI camera motion per scene…');
+        const renderBase = narration ? 0.45 : 0.40;
+
+        // Step A: generate one AI clip per scene via the Modal endpoint
+        const aiClips = await generateClipsForScenes(scenes, {
           onProgress: (p, label) => {
-            // Render is 45-95% of overall when narration enabled, 40-95% when not
-            const base = narration ? 0.45 : 0.40;
-            setProgress(base + (1 - base - 0.05) * p);
+            setProgress(renderBase + 0.40 * p);
             if (label) setProgressLabel(label);
           },
           onLog: addLog,
-        },
-      });
+        });
+        const okClips = aiClips.filter(c => c.blob);
+        if (!okClips.length) {
+          throw new Error('All AI motion clips failed — check Modal server is deployed and the URL is correct');
+        }
+        addLog(`✓ Got ${okClips.length}/${scenes.length} AI clips back`);
+
+        // Step B: stitch the clips together with audio + intro/outro cards
+        setProgressLabel('Stitching final reel…');
+        renderRes = await stitchReel({
+          clips: aiClips, scenes, narrative, brand, vibe,
+          music: music ? { url: music.url, volume: 0.7 } : null,
+          voiceover,
+          opts: {
+            aspect,
+            onProgress: (p, label) => {
+              setProgress(renderBase + 0.40 + 0.55 * p);
+              if (label) setProgressLabel(label);
+            },
+            onLog: addLog,
+          },
+        });
+      } else {
+        addLog('Using Ken Burns canvas pipeline (no AI motion)');
+        setProgressLabel('Rendering cinematic reel…');
+        renderRes = await renderCinematicReel({
+          scenes, narrative, brand, vibe,
+          music: music ? { url: music.url, volume: 0.7 } : null,
+          voiceover,
+          opts: {
+            aspect,
+            quality: 'high',
+            captions,
+            onProgress: (p, label) => {
+              const base = narration ? 0.45 : 0.40;
+              setProgress(base + (1 - base - 0.05) * p);
+              if (label) setProgressLabel(label);
+            },
+            onLog: addLog,
+          },
+        });
+      }
       addLog(`Rendered ${renderRes.durationSec.toFixed(1)}s at ${renderRes.dimensions.w}×${renderRes.dimensions.h}`);
 
       const blobUrl = URL.createObjectURL(renderRes.blob);
@@ -682,6 +749,89 @@ export default function AutoReel({ setPage, toast }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── STEP 3.25: AI Camera Motion (LTX-Video on Modal) ── */}
+      <div style={{...S.card, borderColor: aiMotion ? 'rgba(184,134,75,.5)' : 'rgba(255,255,255,.06)', background: aiMotion ? 'linear-gradient(135deg, rgba(184,134,75,.08), rgba(15,20,38,.6))' : S.card.background}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:10}}>
+          <div style={S.cardLabel}>🎬 AI Camera Motion <span style={{color:'#94a3b8', fontWeight:600, letterSpacing:0, textTransform:'none'}}>· real cinematic motion · LTX-Video on your Modal</span></div>
+          <label style={{
+            display:'inline-flex', alignItems:'center', gap:8, cursor:'pointer',
+            fontSize:12, fontWeight:800, color: aiMotion ? '#e0b370' : '#cbd5e1',
+          }}>
+            <input
+              type="checkbox"
+              checked={aiMotion}
+              onChange={(e) => { setAiMotion(e.target.checked); if (e.target.checked) probeMotion(); }}
+              style={{width:18, height:18, accentColor:'#b8864b'}}
+            />
+            {aiMotion ? 'AI motion ON' : 'AI motion OFF (slideshow mode)'}
+          </label>
+        </div>
+
+        {!aiMotion && (
+          <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5}}>
+            <strong style={{color:'#cbd5e1'}}>OFF</strong> = Ken Burns slideshow (free, in-browser). Photos zoom and pan but don't have real depth. This is the basic version.
+            <br/><br/>
+            <strong style={{color:'#e0b370'}}>ON</strong> = each photo gets sent to your Modal-deployed LTX-Video server, which generates a 4-second AI video clip with real cinematic camera motion (push-ins, pans, parallax, depth). Stitched together with FFmpeg-wasm in your browser. ~$0.30-0.50/month at your usage.
+          </div>
+        )}
+
+        {aiMotion && (
+          <>
+            <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5, marginBottom:14}}>
+              Each photo → AI clip with real camera motion (push-ins, pans, orbits, parallax). Renders take longer (~10-15 sec per scene + stitching) but the output feels like a real walkthrough, not a slideshow.
+            </div>
+
+            {/* Server status */}
+            <div style={{
+              background: motionServerStatus === 'online' ? 'rgba(16,185,129,.08)' :
+                         motionServerStatus === 'offline' ? 'rgba(239,68,68,.08)' : 'rgba(255,255,255,.03)',
+              borderLeft: `3px solid ${motionServerStatus === 'online' ? '#10b981' : motionServerStatus === 'offline' ? '#ef4444' : '#94a3b8'}`,
+              padding: '10px 12px', borderRadius: 6, marginBottom: 12,
+            }}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                <div style={{fontSize:12, color:'#e2e8f0'}}>
+                  Modal endpoint: <code style={{background:'rgba(0,0,0,.3)', padding:'1px 6px', borderRadius:3, fontSize:11}}>{getVideoMotionUrl()}</code>
+                </div>
+                <div style={{display:'flex', gap:6, alignItems:'center', fontSize:11, fontWeight:700}}>
+                  {motionServerStatus === 'checking' && <span style={{color:'#94a3b8'}}>Checking…</span>}
+                  {motionServerStatus === 'online' && <span style={{color:'#6ee7b7'}}>✓ Online · {motionServerInfo?.model}</span>}
+                  {motionServerStatus === 'offline' && <span style={{color:'#fca5a5'}}>✗ Offline / not deployed</span>}
+                  <button onClick={probeMotion} style={{...S.ghostBtn, padding:'4px 10px', fontSize:11}}>↻ Recheck</button>
+                </div>
+              </div>
+
+              {motionServerStatus === 'offline' && (
+                <div style={{marginTop:8, fontSize:11, color:'#fca5a5', lineHeight:1.5}}>
+                  Your LTX-Video Modal app isn't deployed yet. Run this once on your machine to deploy it:
+                  <pre style={{
+                    background:'rgba(0,0,0,.4)', padding:'8px 10px', borderRadius:4, marginTop:6,
+                    fontFamily:'monospace', fontSize:11, color:'#e0b370', overflow:'auto', whiteSpace:'pre-wrap',
+                  }}>{`cd C:\\Users\\miskr\\Documents\\my-re-hub\\tools\\video-motion-server
+..\\voice-clone-server\\venv\\Scripts\\python.exe -m modal deploy modal_deploy.py`}</pre>
+                  Modal will print a URL like <code style={{background:'rgba(0,0,0,.3)', padding:'1px 5px', borderRadius:3}}>https://miskra26--ltx-motion-api.modal.run</code>. The default in this app matches that pattern — if yours differs, paste it below.
+                </div>
+              )}
+
+              <div style={{marginTop:10, display:'flex', gap:6, alignItems:'center'}}>
+                <input
+                  type="text"
+                  value={motionUrlInput}
+                  onChange={(e) => setMotionUrlInput(e.target.value)}
+                  placeholder="(Optional) Custom Modal URL if yours differs from default"
+                  style={{...S.input, flex:1, fontSize:11, padding:'6px 10px'}}
+                />
+                <button onClick={() => { if (motionUrlInput.trim()) { setVideoMotionUrl(motionUrlInput.trim()); setMotionUrlInput(''); probeMotion(); } }}
+                  style={{...S.ghostBtn, padding:'6px 12px', fontSize:11}}>Save URL</button>
+              </div>
+            </div>
+
+            <div style={{fontSize:11, color:'#64748b', lineHeight:1.5}}>
+              <strong>Per-reel cost on your Modal:</strong> ~$0.02-0.04 (about 8 scenes × $0.003 each). Modal's $30 free signup credit covers years.
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── STEP 3.5: Virtual Staging (Gemini Image) ── */}
