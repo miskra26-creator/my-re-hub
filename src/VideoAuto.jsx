@@ -218,10 +218,13 @@ const ASPECTS = {
 };
 
 // Quality presets — scale factor applied to the canvas + bitrate cap.
+// Bitrates tuned for IG/TikTok recompression headroom: source needs to be
+// sharper than the platform's target or it looks soft after re-encode.
 export const QUALITY = {
-  fast:     { name:'Fast',     emoji:'⚡', scale: 0.50, bitrate: 2_000_000, desc:'540p · smallest file · max browser compatibility' },
-  standard: { name:'Standard', emoji:'🎯', scale: 0.75, bitrate: 4_000_000, desc:'810p · balanced (recommended)' },
-  high:     { name:'High',     emoji:'💎', scale: 1.00, bitrate: 6_000_000, desc:'1080p · best quality · larger file' },
+  fast:     { name:'Fast',     emoji:'⚡', scale: 0.67, bitrate:  4_000_000, desc:'720p · smallest file · quick share' },
+  standard: { name:'Standard', emoji:'🎯', scale: 1.00, bitrate:  8_000_000, desc:'1080p · balanced' },
+  high:     { name:'High',     emoji:'💎', scale: 1.00, bitrate: 14_000_000, desc:'1080p · crisp · IG/Reels-grade (recommended)' },
+  max:      { name:'Max',      emoji:'🚀', scale: 1.00, bitrate: 24_000_000, desc:'1080p · maximum bitrate · largest file' },
 };
 
 // ─── FILTERS ──────────────────────────────────────────────────────────────────
@@ -459,6 +462,10 @@ async function renderVideo({
   canvas.style.cssText = 'position:fixed;left:-99999px;top:-99999px;pointer-events:none;opacity:0;';
   document.body.appendChild(canvas);
   const ctx = canvas.getContext('2d', { alpha: false });
+  // High-quality downsampling for photos — default browser smoothing is 'low'
+  // which causes the "soft / unclear" look on uploaded pictures.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   // Paint one frame immediately so the stream has data when we start recording.
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
@@ -1502,6 +1509,8 @@ function PreviewThumbnail({ clips, focusedClipId, fields, aspect, filter, tpl, b
     c.width  = Math.round(target.w * scale);
     c.height = Math.round(target.h * scale);
     const ctx = c.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const w = c.width, h = c.height;
 
     // Background
@@ -1604,6 +1613,8 @@ function PreviewThumbnail({ clips, focusedClipId, fields, aspect, filter, tpl, b
 
     const c = canvasRef.current;
     const ctx = c.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const w = c.width, h = c.height;
     const baseScene = 1.6; // faster than real render
     const introDur = 1.0;
@@ -1763,7 +1774,7 @@ export default function VideoAuto({ setPage, toast }) {
   const [aspect, setAspect] = useLS('va_aspect', '9:16');
   const [filter, setFilter] = useLS('va_filter', 'auto');
   const [transition, setTransition] = useLS('va_transition', 'fade');
-  const [quality, setQuality] = useLS('va_quality', 'standard');
+  const [quality, setQuality] = useLS('va_quality', 'high');
   const [cta, setCta] = useLS('va_cta', {
     enabled: false,
     text: 'DM ME 📩',
@@ -1804,10 +1815,10 @@ export default function VideoAuto({ setPage, toast }) {
     phone: '',
     email: '',
     website: '',
-    logoUrl: '',
-    primaryColor: '#1a5aa0',
-    accentColor:  '#d4a017',
-    useBrandColors: false,
+    logoUrl: '/logo-transparent.png',
+    primaryColor: '#0f172a',   // deep navy/charcoal — frames the gold logo
+    accentColor:  '#b8864b',   // gold/bronze pulled from the MI monogram
+    useBrandColors: true,
     watermark: false,
     watermarkPos: 'bottom-right',
     show: true,
@@ -1838,6 +1849,24 @@ export default function VideoAuto({ setPage, toast }) {
       return next;
     });
   }, [tplId, tpl]);
+
+  // One-time migration: pre-fill Monica's MI brand assets if the brand kit is
+  // still empty / on the old blue+gold defaults. Won't touch anything she has
+  // intentionally customized.
+  useEffect(() => {
+    setBrand(b => {
+      const updates = {};
+      if (!b.logoUrl) updates.logoUrl = '/logo-transparent.png';
+      if (b.primaryColor === '#1a5aa0' || !b.primaryColor) updates.primaryColor = '#0f172a';
+      if (b.accentColor  === '#d4a017' || !b.accentColor)  updates.accentColor  = '#b8864b';
+      // If we're filling in a logo for the first time, also flip useBrandColors on
+      if (updates.logoUrl && b.useBrandColors === false) updates.useBrandColors = true;
+      return Object.keys(updates).length ? { ...b, ...updates } : b;
+    });
+    // Bump video quality default if she's still on the old soft 810p preset
+    if (quality === 'standard') setQuality('high');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cleanup blob URLs
   useEffect(() => () => {
