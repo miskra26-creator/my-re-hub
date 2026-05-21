@@ -74,8 +74,9 @@ export default async function handler(req, res) {
         geminiBody.systemInstruction = { parts: [{ text: body.system }] };
       }
 
-      // Use Gemini 2.0 Flash by default (free tier, fast, solid quality)
-      const model = 'gemini-2.0-flash';
+      // gemini-1.5-flash-latest is the most universally-available free model
+      // (gemini-2.0-flash sometimes shows quota 0 for new projects).
+      const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
       const upstream = await fetch(url, {
         method: 'POST',
