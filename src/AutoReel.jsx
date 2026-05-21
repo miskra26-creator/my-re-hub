@@ -214,7 +214,7 @@ export default function AutoReel({ setPage, toast }) {
   }, [toast]);
 
   // ── Auto-import from MLS# or Realtor.com URL ────────────────────────────────
-  // Calls /api/listings-import which scrapes Realtor.com and returns photo URLs
+  // Calls /api/mls-lookup which scrapes Realtor.com and returns photo URLs
   // + listing data. Photos are then fetched through the same endpoint's proxy
   // mode to bypass CORS and converted to Files so the rest of the flow treats
   // them like manual uploads.
@@ -233,7 +233,7 @@ export default function AutoReel({ setPage, toast }) {
         throw new Error('Paste a Realtor.com listing URL OR an MLS# (6-10 digits, optionally with a letter prefix)');
       }
 
-      const r = await fetch('/api/listings-import', {
+      const r = await fetch('/api/mls-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(isUrl ? { url: q } : { mlsNum: q }),
@@ -263,7 +263,7 @@ export default function AutoReel({ setPage, toast }) {
       for (let i = 0; i < data.photos.length; i++) {
         setImportMsg(`Downloading photo ${i + 1}/${data.photos.length}…`);
         try {
-          const proxyUrl = `/api/listings-import?proxy=${encodeURIComponent(data.photos[i])}`;
+          const proxyUrl = `/api/mls-lookup?proxy=${encodeURIComponent(data.photos[i])}`;
           const photoResp = await fetch(proxyUrl);
           if (!photoResp.ok) continue;
           const blob = await photoResp.blob();
