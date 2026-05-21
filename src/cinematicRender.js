@@ -924,16 +924,9 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
           drawFeatureSticker(ctx, w, h, sceneT, { label, sceneIdx, accent });
         }
 
-        // 5. Address lower-third bar — slides in mid-reel
-        //    Appears on a mid-tour scene so viewers see exactly which address
-        if (sceneIdx === Math.floor(scenes.length / 2) && listing?.address) {
-          drawAddressBar(ctx, w, h, sceneT * sceneDur, {
-            address: listing.address,
-            city: listing.city,
-            windowStartSec: 0.3,
-            accent,
-          });
-        }
+        // (Address bar removed — it was popping up randomly mid-reel and
+        //  reading as janky. Address belongs on the intro stats card and
+        //  the closing CTA card, which are stronger contexts.)
 
         // 6. Persistent brand watermark (corner logo + agent name)
         drawBrandWatermark(ctx, w, h, t, {

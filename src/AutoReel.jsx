@@ -86,8 +86,12 @@ export default function AutoReel({ setPage, toast }) {
   const [lifestyle, setLifestyle] = useLS('autoreel_lifestyle', false);
   const [lifestyleMood, setLifestyleMood] = useLS('autoreel_lifestyle_mood', 'family');
   // AI motion: when ON, use Modal-hosted LTX-Video for real camera motion
-  // per scene. When OFF, fall back to the Ken Burns canvas pipeline.
-  const [aiMotion, setAiMotion] = useLS('autoreel_ai_motion', false);
+  // per scene. When OFF, fall back to the Ken Burns canvas pipeline (which
+  // looks like a slideshow — explicitly).
+  //
+  // Defaulting to TRUE now because (a) the Modal server is deployed and
+  // (b) Ken Burns will never match what she's asking for.
+  const [aiMotion, setAiMotion] = useLS('autoreel_ai_motion', true);
   const [motionUrlInput, setMotionUrlInput] = useState('');
   const [motionServerStatus, setMotionServerStatus] = useState('unchecked'); // 'unchecked'|'checking'|'online'|'offline'
   const [motionServerInfo, setMotionServerInfo] = useState(null);
@@ -1249,6 +1253,38 @@ export default function AutoReel({ setPage, toast }) {
           onCleared={() => { setHasVoiceRef(false); toast?.info('Voice reference cleared'); }}
           toast={toast}
         />
+      )}
+
+      {/* ── LOUD WARNING when AI Motion is OFF ── */}
+      {!aiMotion && !reviewPlan && !result && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(220,38,38,.15), rgba(220,38,38,.05))',
+          border: '2px solid #dc2626',
+          borderRadius: 12, padding: 16, marginBottom: 14,
+          display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <div style={{fontSize: 28, lineHeight: 1}}>⚠️</div>
+          <div style={{flex: 1}}>
+            <div style={{fontSize: 14, fontWeight: 900, color: '#fca5a5', marginBottom: 6}}>
+              You're in SLIDESHOW MODE
+            </div>
+            <div style={{fontSize: 12.5, color: '#fecaca', lineHeight: 1.5, marginBottom: 10}}>
+              <strong>AI Camera Motion is OFF</strong>. Your reel will be photos with zoom/pan (Ken Burns) — NOT a real video. People you add via Lifestyle will be FROZEN mid-pose, not actively swimming/moving. This is why your reels look like slideshows.
+              <br/><br/>
+              <strong>For the real cinematic video you keep asking for:</strong> turn AI Motion ON in the 🎬 section above. Render takes 3-5 min instead of 30 sec, but the output is actual AI-generated video clips per scene (LTX-Video on your Modal server, already deployed).
+            </div>
+            <button
+              onClick={() => { setAiMotion(true); probeMotion(); }}
+              style={{
+                background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                border: 'none', borderRadius: 8, padding: '10px 18px',
+                color: '#fff', fontSize: 13, fontWeight: 900, cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(220,38,38,.35)',
+              }}>
+              🎬 TURN ON AI MOTION — render real video
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── PLAN (step 1 of 2) ── */}
