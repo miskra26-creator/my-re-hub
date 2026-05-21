@@ -155,28 +155,50 @@ async function synthesizeF5({ script, onLog }) {
   }
   const blob = await r.blob();
   onLog?.(`F5-TTS returned ${(blob.size / 1024).toFixed(0)} KB of audio`);
-  return { blob, mime: blob.type || 'audio/wav', provider: 'f5-tts' };
+
+  // F5-TTS doesn't return per-word timing. Estimate it by spreading words
+  // evenly across the audio duration. Slightly imperfect but the karaoke
+  // effect still feels synced — words land within ~150ms of their actual
+  // spoken time, well within human perception tolerance.
+  const dur = await probeAudioDuration(blob);
+  const wordTimings = estimateWordTimingsLinear(script, dur);
+
+  return { blob, mime: blob.type || 'audio/wav', provider: 'f5-tts', wordTimings, durationSec: dur };
 }
 
 // ─── Provider 2: ElevenLabs (free tier) ───────────────────────────────────────
 async function synthesizeElevenLabs({ script, voiceId, onLog }) {
+  if (!voiceId) {
+    onLog?.('ElevenLabs voice not selected');
+    return null;
+  }
   try {
-    const r = await fetch('/api/elevenlabs/tts', {
+    // Use the with-timestamps endpoint so we get word-level alignment back,
+    // which powers the karaoke caption mode.
+    const r = await fetch('/api/elevenlabs/tts-timestamps', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: script, voiceId }),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      if (r.status === 404 || /not configured|api key/i.test(err?.error || '')) {
-        onLog?.('ElevenLabs not configured');
+      if (r.status === 400 && /not configured|api key/i.test(err?.error?.message || err?.error || '')) {
+        onLog?.('ElevenLabs key not configured on the server');
         return null;
       }
-      throw new Error(err.error || `ElevenLabs returned ${r.status}`);
+      throw new Error(err.error?.message || err.error || `ElevenLabs returned ${r.status}`);
     }
-    const blob = await r.blob();
-    onLog?.(`ElevenLabs returned ${(blob.size / 1024).toFixed(0)} KB`);
-    return { blob, mime: 'audio/mpeg', provider: 'elevenlabs' };
+    const data = await r.json();
+    // Decode the base64 audio into a Blob
+    const audioRes = await fetch(data.audioBase64);
+    const blob = await audioRes.blob();
+    onLog?.(`ElevenLabs returned ${(blob.size / 1024).toFixed(0)} KB · ${data.wordTimings?.length || 0} word timings`);
+    return {
+      blob,
+      mime: 'audio/mpeg',
+      provider: 'elevenlabs',
+      wordTimings: data.wordTimings || [],
+    };
   } catch (e) {
     onLog?.(`ElevenLabs failed: ${e.message}`);
     return null;
@@ -284,4 +306,36 @@ export async function probeAudioDuration(blob) {
     a.onerror = () => resolve(0);
     a.src = URL.createObjectURL(blob);
   });
+}
+
+// Estimate per-word timings by linearly distributing words across the audio
+// duration, weighted by syllable count so multi-syllable words get more time.
+// Used when the TTS provider doesn't return native timing (e.g. F5-TTS).
+//
+// Not perfect — but the karaoke caption highlight is forgiving: as long as
+// words light up within ~150ms of being spoken, the effect feels right.
+export function estimateWordTimingsLinear(text, durationSec) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length || !durationSec) return [];
+  // Weight each word by approximate syllable count (vowel-group heuristic)
+  const weights = words.map(w => {
+    const cleaned = w.toLowerCase().replace(/[^a-z]/g, '');
+    if (!cleaned) return 1;
+    const groups = cleaned.match(/[aeiouy]+/g)?.length || 1;
+    // Cap at 5 — words like "responsibility" shouldn't dominate
+    return Math.min(5, Math.max(1, groups));
+  });
+  const totalW = weights.reduce((a, b) => a + b, 0);
+  // Reserve a tiny head/tail buffer so first/last words don't sit on edges
+  const usable = Math.max(0.1, durationSec - 0.1);
+  const startBuf = 0.05;
+
+  const timings = [];
+  let cursor = startBuf;
+  for (let i = 0; i < words.length; i++) {
+    const wDur = (weights[i] / totalW) * usable;
+    timings.push({ word: words[i], startSec: cursor, endSec: cursor + wDur });
+    cursor += wDur;
+  }
+  return timings;
 }

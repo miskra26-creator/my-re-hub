@@ -253,15 +253,16 @@ export default function AutoReel({ setPage, toast }) {
             onLog: addLog,
           });
           if (voiceRes?.blob) {
-            const dur = await probeAudioDuration(voiceRes.blob);
+            const dur = voiceRes.durationSec || await probeAudioDuration(voiceRes.blob);
             voiceover = {
               blob: voiceRes.blob,
               mime: voiceRes.mime,
               durationSec: dur,
               perScene: scriptOut.perScene || [],
+              wordTimings: voiceRes.wordTimings || [],
               provider: voiceRes.provider,
             };
-            addLog(`Voice rendered: ${dur.toFixed(1)}s via ${voiceRes.provider}`);
+            addLog(`Voice rendered: ${dur.toFixed(1)}s via ${voiceRes.provider}${voiceRes.wordTimings?.length ? ` · ${voiceRes.wordTimings.length} word timings for karaoke captions` : ''}`);
           } else {
             addLog('No audio blob returned — skipping narration in the video');
           }
@@ -760,7 +761,7 @@ export default function AutoReel({ setPage, toast }) {
 
             <label style={{display:'flex', alignItems:'center', gap:8, fontSize:12, color:'#cbd5e1', cursor:'pointer'}}>
               <input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} style={{accentColor:'#b8864b'}}/>
-              Burn in subtitles · TikTok-style captions matching the narration (recommended)
+              Burn in karaoke subtitles · words light up as spoken · TikTok-grade engagement (recommended)
             </label>
           </>
         )}

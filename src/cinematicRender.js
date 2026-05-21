@@ -566,12 +566,113 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
     }, introDur * 1000);
   }
 
-  // ── Subtitle helper ─────────────────────────────────────────────────────────
-  // Per-scene caption text rendered at bottom of frame during scenes when
-  // voiceover is active. Uses the AI's perScene chunks.
-  function drawSubtitle(text, sceneT, w, h, accent) {
+  // ── Pre-compute per-scene karaoke caption windows ───────────────────────────
+  // If we have word-level timings from the TTS, slice them into per-scene
+  // groups so each scene shows ONLY the words spoken during that scene,
+  // highlighting the active one as it's spoken (TikTok karaoke style).
+  // Voiceover starts at introDur, so word timings are offset by that.
+  const hasWordTimings = !!(voiceover?.wordTimings?.length);
+  const wordTimings    = voiceover?.wordTimings || [];
+  const sceneWordGroups = [];
+  if (hasWordTimings) {
+    for (let i = 0; i < scenes.length; i++) {
+      const sceneStartVoTime = i * sceneDur;       // scene start in voiceover-time
+      const sceneEndVoTime   = (i + 1) * sceneDur;
+      sceneWordGroups.push(
+        wordTimings.filter(wt => wt.startSec >= sceneStartVoTime && wt.startSec < sceneEndVoTime)
+      );
+    }
+  }
+
+  // ── Caption helpers ─────────────────────────────────────────────────────────
+  // Two modes:
+  //   1. Karaoke mode — word-by-word highlight, used when wordTimings present
+  //   2. Block mode   — entire per-scene sentence with fade in/out, fallback
+
+  function drawKaraokeCaption(words, voTime, sceneT, w, h, accent) {
+    if (!words?.length || !showCaptions) return;
+    // Hide right at scene edges to avoid clipping during transitions
+    if (sceneT < 0.02 || sceneT > 0.97) return;
+
+    const fontSize = Math.floor(w * 0.042);
+    ctx.font = `900 ${fontSize}px "Cabinet Grotesk", "Helvetica Neue", system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    // Wrap words into lines based on available width
+    const maxLineWidth = w * 0.84;
+    const spaceW = ctx.measureText(' ').width;
+    const lines = [];
+    let curLine = [];
+    let curWidth = 0;
+    for (const wt of words) {
+      const ww = ctx.measureText(wt.word).width;
+      const proposed = curWidth + (curLine.length ? spaceW : 0) + ww;
+      if (proposed > maxLineWidth && curLine.length) {
+        lines.push({ words: curLine, width: curWidth });
+        curLine = [{ ...wt, width: ww }];
+        curWidth = ww;
+      } else {
+        curWidth = proposed;
+        curLine.push({ ...wt, width: ww });
+      }
+    }
+    if (curLine.length) lines.push({ words: curLine, width: curWidth });
+
+    const lineH = fontSize * 1.2;
+    const pad   = fontSize * 0.5;
+    const blockH = lines.length * lineH + pad * 2;
+    const blockY = h * 0.78 - blockH / 2;
+    const blockW = Math.min(w * 0.94, Math.max(...lines.map(l => l.width)) + pad * 2);
+    const blockX = w / 2 - blockW / 2;
+
+    // Caption backdrop — semi-opaque dark pill
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    roundedRect(ctx, blockX, blockY, blockW, blockH, 10);
+    ctx.fill();
+    ctx.restore();
+
+    // Draw each word, highlighting the active one
+    lines.forEach((line, li) => {
+      const lineY = blockY + pad + li * lineH + lineH / 2;
+      let x = w / 2 - line.width / 2;
+      line.words.forEach((word) => {
+        const isActive = voTime >= word.startSec && voTime <= word.endSec;
+        const wasActive = voTime > word.endSec;
+        const willBeActive = voTime < word.startSec;
+
+        ctx.save();
+        // Active word: scale up, accent color, glow
+        if (isActive) {
+          const ageT = (voTime - word.startSec) / Math.max(0.05, word.endSec - word.startSec);
+          const pulse = 1.0 + 0.18 * Math.sin(ageT * Math.PI); // gentle pulse
+          ctx.translate(x + word.width / 2, lineY);
+          ctx.scale(pulse, pulse);
+          ctx.translate(-(x + word.width / 2), -lineY);
+          ctx.shadowColor = accent;
+          ctx.shadowBlur = 16;
+          ctx.fillStyle = accent;
+        } else if (wasActive) {
+          ctx.fillStyle = 'rgba(255,255,255,0.95)';
+          ctx.shadowColor = 'rgba(0,0,0,0.7)';
+          ctx.shadowBlur = 4;
+        } else if (willBeActive) {
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.shadowColor = 'rgba(0,0,0,0.6)';
+          ctx.shadowBlur = 4;
+        } else {
+          ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        }
+        ctx.fillText(word.word, x, lineY);
+        ctx.restore();
+        x += word.width + spaceW;
+      });
+    });
+  }
+
+  function drawBlockCaption(text, sceneT, w, h, accent) {
     if (!text || !showCaptions || !hasVoiceover) return;
-    // Show caption from 5% to 92% of scene, with quick fade in/out
     if (sceneT < 0.03 || sceneT > 0.95) return;
     const inP  = Math.min(1, sceneT / 0.12);
     const outP = Math.min(1, (1 - sceneT) / 0.10);
@@ -584,7 +685,6 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Wrap text to ~80% canvas width
     const lines = wrapText(ctx, text, w * 0.84);
     const lineH = fontSize * 1.15;
     const pad   = fontSize * 0.5;
@@ -593,16 +693,11 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
     const blockW = Math.min(w * 0.92, Math.max(...lines.map(l => ctx.measureText(l).width)) + pad * 2);
     const blockX = w / 2 - blockW / 2;
 
-    // Backdrop
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
     roundedRect(ctx, blockX, blockY, blockW, blockH, 8);
     ctx.fill();
-
-    // Accent left bar
     ctx.fillStyle = accent || '#b8864b';
     ctx.fillRect(blockX, blockY, 3, blockH);
-
-    // Text
     ctx.fillStyle = '#fff';
     lines.forEach((line, i) => {
       const ly = blockY + pad + i * lineH + lineH / 2;
@@ -709,9 +804,15 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
           ctx.restore();
         }
 
-        // Subtitle (only when voiceover is active)
-        const captionText = voiceover?.perScene?.[sceneIdx];
-        drawSubtitle(captionText, sceneT, w, h, accent);
+        // Caption (only when voiceover is active)
+        // Karaoke mode when we have word-level timings; block mode otherwise.
+        if (hasWordTimings) {
+          // voTime = elapsed time since voiceover started (voice starts at introDur)
+          const voTime = t - introDur;
+          drawKaraokeCaption(sceneWordGroups[sceneIdx], voTime, sceneT, w, h, accent);
+        } else {
+          drawBlockCaption(voiceover?.perScene?.[sceneIdx], sceneT, w, h, accent);
+        }
 
         // Scene counter in corner
         ctx.save();
