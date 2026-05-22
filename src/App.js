@@ -10,6 +10,7 @@ import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
 import AutoReel from './AutoReel';
 import VirtualStaging from './VirtualStaging';
+import PastClientAgent, { PastClientAgentWorker } from './PastClientAgent';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
 import GoogleBusiness from './GoogleBusiness';
@@ -911,6 +912,7 @@ const NAV = [
   { section:"GROW" },
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
   { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
+  { id:"past-client-agent",   label:"🏡 Past Client Care Agent", icon:Heart },
   { id:"social-agent",        label:"Social Engagement AI", icon:MessageSquare },
   { id:"closing-mult",        label:"Closing Multiplier",  icon:Award },
   { id:"pipeline",            label:"Pipeline Board",      icon:Layout },
@@ -9287,6 +9289,7 @@ export default function App() {
     "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
     "ai-concierge":       <AILeadConcierge {...props}/>,
+    "past-client-agent":  <PastClientAgent {...props}/>,
     "social-agent":       <SocialAgent {...props}/>,
     "db-intel":           <DatabaseIntel {...props}/>,
     "closing-mult":       <ClosingMultiplier {...props}/>,
@@ -9360,6 +9363,7 @@ export default function App() {
       <GmailSyncWorker notify={notify} toast={toast}/>
       <ScheduledPostsWorker notify={notify} toast={toast}/>
       <AILeadConciergeWorker notify={notify} toast={toast}/>
+      <PastClientAgentWorker notify={notify} toast={toast}/>
       <SocialEngagementWorker notify={notify} toast={toast}/>
       <Toast toasts={toasts} remove={remove}/>
 
