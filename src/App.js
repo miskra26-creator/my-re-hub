@@ -2472,7 +2472,11 @@ Return STRICT JSON only (no markdown fences, no explanation):
     <div className="lt-detail" style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
       <div className="lt-detail-backdrop" style={{flex:1,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)"}} onClick={onClose}/>
       <div className="lt-detail-panel" style={{
-        width:520,height:"100vh",overflowY:"auto",display:"flex",flexDirection:"column",
+        // FUB-style wide pane — was 520, now scales with viewport so it feels
+        // like a full contact view, not a side drawer. Min 720px on small
+        // screens, max 1100px on huge monitors, ~58% of viewport otherwise.
+        width:"min(1100px, max(720px, 58vw))",
+        height:"100vh",overflowY:"auto",display:"flex",flexDirection:"column",
         // Solid background so the page underneath doesn't bleed through.
         // (The CSS class .lt-detail-panel only has a background when wrapped in
         //  .lead-tracker-v2 — without it, the panel was transparent, which is
@@ -2484,7 +2488,7 @@ Return STRICT JSON only (no markdown fences, no explanation):
             FUB-style: name + initials avatar on top, then a row of source / agent
             / lender chips so Monica can scan + edit those in one glance. */}
         <div className="lt-detail-header" style={{
-          padding:"18px 22px 14px",display:"flex",flexDirection:"column",gap:12,
+          padding:"22px 32px 18px",display:"flex",flexDirection:"column",gap:14,
           position:"sticky",top:0,zIndex:10,
           background:"#0d1117",
           borderBottom:"1px solid rgba(255,255,255,.06)",
@@ -2494,16 +2498,16 @@ Return STRICT JSON only (no markdown fences, no explanation):
             <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
               {/* Initials avatar — FUB has photo, we use color-coded initials */}
               <div style={{
-                width:44,height:44,borderRadius:"50%",flexShrink:0,
+                width:60,height:60,borderRadius:"50%",flexShrink:0,
                 background:`linear-gradient(135deg, ${sourceColor}, ${sourceColor}aa)`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontFamily:"'DM Serif Display',serif",fontSize:18,fontWeight:900,color:"#fff",
-                boxShadow:"0 2px 8px rgba(0,0,0,.3)",
+                fontFamily:"'DM Serif Display',serif",fontSize:24,fontWeight:900,color:"#fff",
+                boxShadow:"0 2px 10px rgba(0,0,0,.3)",
               }}>
                 {(lead.name||"?").split(/\s+/).map(s=>s[0]).filter(Boolean).slice(0,2).join("").toUpperCase()}
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,fontWeight:900,color:"#fff",lineHeight:1.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.name}</div>
+                <div style={{fontFamily:"'DM Serif Display',serif",fontSize:28,fontWeight:900,color:"#fff",lineHeight:1.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.name}</div>
                 <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
                   <span className={`badge ${statusColors[lead.status]||"badge-gray"}`} style={{fontSize:10}}>{lead.status}</span>
                   <span className="badge badge-gray" style={{fontSize:10}}>{lead.type}</span>
@@ -2638,7 +2642,7 @@ Return STRICT JSON only (no markdown fences, no explanation):
           </div>
         )}
 
-        <div style={{padding:"0 24px",flex:1}}>
+        <div style={{padding:"0 32px",flex:1}}>
           {/* Contact Info */}
           <div style={{padding:"16px 0",borderBottom:"1px solid rgba(255,255,255,.06)"}}>
             {editing ? (
