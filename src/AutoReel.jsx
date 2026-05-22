@@ -27,6 +27,7 @@ import {
   synthesizeNarration, probeAudioDuration,
 } from './autoReelVoice';
 import { stagePhoto, addLifestylePeople, STAGING_STYLES, STYLE_BY_ID } from './aiVirtualStaging';
+import { generateDepthMapsBatch } from './aiDepthMap';
 import { generateClipsForScenes, probeVideoMotionServer, getVideoMotionUrl, setVideoMotionUrl } from './aiVideoMotion';
 import { stitchReel } from './aiReelStitch';
 
@@ -95,6 +96,11 @@ export default function AutoReel({ setPage, toast }) {
   // is the actually-usable path right now. Pika ($8/mo) is the upgrade path
   // when she wants real cinematic AI motion.
   const [aiMotion, setAiMotion] = useLS('autoreel_ai_motion', false);
+  // 3D Depth Parallax: uses Depth-Anything in-browser to generate depth maps
+  // per photo, then renders 3-layer parallax (foreground/midground/background
+  // each move at different speeds). Real 2.5D feel without paying for AI video.
+  // Default ON since it's the headline upgrade over flat Ken Burns.
+  const [parallax3D, setParallax3D] = useLS('autoreel_parallax_3d', true);
   const [motionUrlInput, setMotionUrlInput] = useState('');
   const [motionServerStatus, setMotionServerStatus] = useState('unchecked'); // 'unchecked'|'checking'|'online'|'offline'
   const [motionServerInfo, setMotionServerInfo] = useState(null);
@@ -631,6 +637,36 @@ export default function AutoReel({ setPage, toast }) {
         });
       } else {
         addLog('Using Ken Burns canvas pipeline (no AI motion)');
+
+        // ── Phase 2c: Depth parallax map gen (when toggle is ON) ─────────────
+        // For each scene, run Depth-Anything in browser to produce a depth
+        // map, then attach it to the scene object. cinematicRender uses it
+        // for 3-layer parallax. First call downloads the ~50MB model
+        // (cached in IndexedDB after); subsequent reels reuse the model.
+        if (parallax3D) {
+          setPhase('depth');
+          setProgressLabel('Computing 3D depth maps…');
+          try {
+            const depthMaps = await generateDepthMapsBatch(
+              scenes.map(s => ({ photo: s.photo.file || s.photo })),
+              {
+                onProgress: (p, label) => {
+                  setProgress(0.20 + 0.15 * p);
+                  if (label) setProgressLabel(label);
+                },
+                onLog: addLog,
+              }
+            );
+            // Attach to scenes
+            for (let i = 0; i < scenes.length; i++) {
+              if (depthMaps[i]) scenes[i].depthCanvas = depthMaps[i].depthCanvas;
+            }
+            addLog(`✓ Depth maps ready for ${depthMaps.filter(Boolean).length}/${scenes.length} scenes`);
+          } catch (e) {
+            addLog(`Depth gen failed (continuing without parallax): ${e.message}`);
+          }
+        }
+
         setProgressLabel('Rendering cinematic reel…');
         renderRes = await renderCinematicReel({
           scenes, narrative, brand, vibe, listing,
@@ -641,7 +677,7 @@ export default function AutoReel({ setPage, toast }) {
             quality: 'high',
             captions,
             onProgress: (p, label) => {
-              setProgress(0.20 + 0.75 * p);
+              setProgress(0.35 + 0.60 * p);
               if (label) setProgressLabel(label);
             },
             onLog: addLog,
@@ -1077,6 +1113,30 @@ export default function AutoReel({ setPage, toast }) {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── 3D Depth Parallax (recommended path, free) ── */}
+      <div style={{...S.card, borderColor: parallax3D ? 'rgba(184,134,75,.5)' : 'rgba(255,255,255,.06)', background: parallax3D ? 'linear-gradient(135deg, rgba(184,134,75,.10), rgba(15,20,38,.6))' : S.card.background}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:10}}>
+          <div style={S.cardLabel}>🎭 3D Depth Parallax <span style={{color:'#94a3b8', fontWeight:600, letterSpacing:0, textTransform:'none'}}>· real 2.5D camera-through-space feel · free, in-browser</span></div>
+          <label style={{
+            display:'inline-flex', alignItems:'center', gap:8, cursor:'pointer',
+            fontSize:12, fontWeight:800, color: parallax3D ? '#e0b370' : '#cbd5e1',
+          }}>
+            <input
+              type="checkbox"
+              checked={parallax3D}
+              onChange={(e) => setParallax3D(e.target.checked)}
+              style={{width:18, height:18, accentColor:'#b8864b'}}
+            />
+            {parallax3D ? '3D Parallax ON' : '3D Parallax OFF (flat Ken Burns)'}
+          </label>
+        </div>
+        <div style={{fontSize:11.5, color:'#94a3b8', lineHeight:1.5}}>
+          AI generates a depth map per photo (which pixels are foreground vs background), then renders 3 layers (FG / MG / BG) at DIFFERENT speeds. The result feels like the camera is actually moving through 3D space, not panning over a flat picture. First render downloads a ~50 MB model (one-time, cached forever). Each photo adds ~3-5 sec of depth analysis. Total render still under 2 minutes for 8 scenes.
+          <br/><br/>
+          <strong style={{color:'#e0b370'}}>This is the headline upgrade over basic slideshow Ken Burns.</strong> No paid API, no Modal, no LTX-Video — just smart use of an open-source depth model running in your browser.
         </div>
       </div>
 

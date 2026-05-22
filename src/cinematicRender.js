@@ -2,6 +2,7 @@ import {
   getBadgeForStatus, drawStatusBadge, drawStatStickers, drawFeatureSticker,
   drawAddressBar, drawBrandWatermark, drawLightLeak, buildStatStickers,
 } from './aiReelOverlays';
+import { depthMapToLayerMasks } from './aiDepthMap';
 
 /**
  * cinematicRender — purpose-built renderer for the AutoReel feature.
@@ -88,6 +89,58 @@ function pickMotion(sceneIdx, motionScale = 0.2, isHero = false) {
       return { sScale: 1.00 + mag * 0.5, eScale: 1.00 + mag * 0.5, sX: 0, eX: 0, sY: mag * 0.40, eY: -mag * 0.40 };
     default:
       return { sScale: 1.00, eScale: 1.00 + mag, sX: 0, eX: 0, sY: 0, eY: 0 };
+  }
+}
+
+// ── Depth-aware parallax draw ────────────────────────────────────────────────
+// Renders a photo as 3 layered slices (foreground / midground / background)
+// using a precomputed depth map. Each layer is moved at a DIFFERENT speed
+// per frame, creating a real 2.5D parallax illusion — like the camera is
+// moving through 3D space, not panning over a flat picture.
+//
+// This is the differentiator vs. plain Ken Burns. Closes a real chunk of
+// the gap to AutoReel's "camera through the room" look without paying for
+// a generative video model.
+function drawDepthParallax(ctx, img, layerMasks, cx, cy, w, h, scale, panX, panY) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+  if (!layerMasks) return drawCoverWithMotion(ctx, img, cx, cy, w, h, scale, panX, panY);
+
+  // Layer parallax multipliers: foreground moves fastest, background slowest
+  // These multiply BOTH the pan offset AND a tiny scale bump per layer to
+  // simulate the foreground being closer to the camera.
+  const layers = [
+    { mask: layerMasks.backgroundMask, panMul: 0.30, scaleMul: 0.985 },
+    { mask: layerMasks.midgroundMask, panMul: 0.60, scaleMul: 1.000 },
+    { mask: layerMasks.foregroundMask, panMul: 1.00, scaleMul: 1.015 },
+  ];
+
+  for (const layer of layers) {
+    const layerScale = scale * layer.scaleMul;
+    const layerPanX = panX * layer.panMul;
+    const layerPanY = panY * layer.panMul;
+    const baseScale = Math.max(w / iw, h / ih);
+    const finalScale = baseScale * layerScale;
+    const dw = iw * finalScale;
+    const dh = ih * finalScale;
+    const dx = cx - dw / 2 + layerPanX * (dw - w) * 0.5;
+    const dy = cy - dh / 2 + layerPanY * (dh - h) * 0.5;
+
+    // Composite this layer = photo masked by the depth alpha mask
+    // We use an offscreen canvas to do the masking cleanly.
+    const off = document.createElement('canvas');
+    off.width = w; off.height = h;
+    const octx = off.getContext('2d');
+    octx.imageSmoothingQuality = 'high';
+    octx.drawImage(img, dx, dy, dw, dh);
+    // Apply the depth mask as alpha — keeps only this depth slice's pixels
+    octx.globalCompositeOperation = 'destination-in';
+    // The mask is at the original photo's dims; draw it scaled to the
+    // CANVAS dims (so its alpha channel filters the already-drawn photo)
+    octx.drawImage(layer.mask, dx, dy, dw, dh);
+
+    ctx.drawImage(off, 0, 0);
   }
 }
 
@@ -536,6 +589,17 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
     try { logoEl = await loadImage(brand.logoUrl); } catch (e) { /* ignore */ }
   }
 
+  // Pre-compute per-scene depth layer masks from any depth maps passed in.
+  // Scenes without a depth map fall back to flat Ken Burns automatically.
+  const sceneLayerMasks = scenes.map(s => {
+    if (s.depthCanvas) {
+      try { return depthMapToLayerMasks(s.depthCanvas); }
+      catch (e) { onLog(`Layer mask gen failed for one scene: ${e.message}`); return null; }
+    }
+    return null;
+  });
+  onLog(`Depth parallax active on ${sceneLayerMasks.filter(Boolean).length}/${scenes.length} scenes`);
+
   // Pick the closing-card backdrop: the highest-scoring loaded photo, or the
   // first available. Used as a blurred full-bleed background under the
   // overlay card on the closing slide.
@@ -845,7 +909,16 @@ export async function renderCinematicReel({ scenes, narrative, brand, vibe = 'lu
         if (img) {
           ctx.save();
           ctx.filter = cfg.filterCss || 'none';
-          drawCoverWithMotion(ctx, img, w/2, h/2, w, h, sScale, sX, sY);
+          // When a precomputed depth-parallax mask set is available for this
+          // scene, use the 3-layer parallax draw — foreground / midground /
+          // background each move at different speeds, giving real 2.5D feel.
+          // Otherwise fall back to flat Ken Burns.
+          const masks = sceneLayerMasks[sceneIdx];
+          if (masks) {
+            drawDepthParallax(ctx, img, masks, w/2, h/2, w, h, sScale, sX, sY);
+          } else {
+            drawCoverWithMotion(ctx, img, w/2, h/2, w, h, sScale, sX, sY);
+          }
           ctx.filter = 'none';
           ctx.restore();
         }
