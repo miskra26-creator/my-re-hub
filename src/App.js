@@ -11,6 +11,7 @@ import VideoAuto from './VideoAuto';
 import AutoReel from './AutoReel';
 import VirtualStaging from './VirtualStaging';
 import PastClientAgent, { PastClientAgentWorker } from './PastClientAgent';
+import SmartLists from './SmartLists';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
 import GoogleBusiness from './GoogleBusiness';
@@ -25,7 +26,8 @@ import {
   Send, Bell, Save, Zap, ChevronDown, ChevronUp, Menu, ArrowLeft,
   RotateCcw, Wand2, Camera, ThumbsUp, Activity, Home, Play, Star,
   CheckCircle, AlertCircle, Info, List, Bookmark, TrendingUp, MapPin,
-  Phone, Building, Key, FileText, UserCheck, Briefcase, Target, Award
+  Phone, Building, Key, FileText, UserCheck, Briefcase, Target, Award,
+  Filter
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -911,6 +913,7 @@ const NAV = [
   { id:"market-report",       label:"Market Report Builder",icon:BarChart3 },
   { section:"GROW" },
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
+  { id:"smart-lists",         label:"🎯 Smart Lists + Bulk Actions", icon:Filter },
   { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
   { id:"past-client-agent",   label:"🏡 Past Client Care Agent", icon:Heart },
   { id:"social-agent",        label:"Social Engagement AI", icon:MessageSquare },
@@ -9288,6 +9291,7 @@ export default function App() {
     "showing-calendar":   <ShowingCalendar {...props}/>,
     "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
+    "smart-lists":        <SmartLists {...props}/>,
     "ai-concierge":       <AILeadConcierge {...props}/>,
     "past-client-agent":  <PastClientAgent {...props}/>,
     "social-agent":       <SocialAgent {...props}/>,
