@@ -2088,11 +2088,48 @@ Return STRICT JSON only (no markdown fences, no explanation):
           messages: [{ role: "user", content: prompt }],
         }),
       });
-      const d = await r.json();
+
+      // Defensive parsing: if the API returns HTML (e.g. 404/500 page), r.json()
+      // throws a useless "Unexpected token <" error. Read as text first, then
+      // try to JSON-parse so we can surface a useful message.
+      const raw = await r.text();
+      let d;
+      try { d = JSON.parse(raw); }
+      catch (e) {
+        if (raw.includes("could not be found") || raw.includes("NOT_FOUND")) {
+          throw new Error("AI proxy not deployed (404). Check /api/claude/messages is live on Vercel.");
+        }
+        if (raw.includes("Internal Server Error") || raw.includes("FUNCTION_INVOCATION_FAILED")) {
+          throw new Error("AI proxy crashed (500). Likely missing GOOGLE_GEMINI_API_KEY or ANTHROPIC_API_KEY on Vercel env vars.");
+        }
+        throw new Error(`AI proxy returned non-JSON (HTTP ${r.status}). Response started with: ${raw.slice(0, 80)}`);
+      }
       if (d.error) throw new Error(d.error.message || "AI proxy error");
       const text = (d.content?.[0]?.text || "").trim();
-      const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-      const parsed = JSON.parse(jsonText);
+
+      // Robust JSON extraction — sometimes the model returns prose around the JSON.
+      // Strip code fences first, then try parsing.
+      let jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+
+      // If model didn't return JSON at all, try to extract the first {...} block
+      let parsed;
+      try { parsed = JSON.parse(jsonText); }
+      catch (e) {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { parsed = JSON.parse(match[0]); }
+          catch { /* still bad */ }
+        }
+        if (!parsed) {
+          // Final fallback: if the model returned plain prose, use it as the body
+          // and synthesize a subject line so Monica isn't blocked.
+          const firstLine = text.split("\n").find(line => line.trim()) || `Following up — ${firstName}`;
+          parsed = {
+            subject: firstLine.slice(0, 60),
+            body: text.length > 50 ? text : `Hi ${firstName},\n\nI wanted to follow up on your interest. When's a good time to chat for 10 minutes?\n\n${profile.name?.split(" ")[0] || "Monica"}`,
+          };
+        }
+      }
       setAiDraft({ busy: false, subject: parsed.subject || "", body: parsed.body || "", error: null, sending: false });
     } catch (e) {
       console.error("[AI draft]", e);
