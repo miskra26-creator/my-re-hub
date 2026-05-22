@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useLS } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
+import { ContactDetail } from './App';
 
 // ─── Style tokens ────────────────────────────────────────────────────────────
 const S = {
@@ -147,6 +148,9 @@ export default function SmartLists({ setPage, toast }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [search, setSearch] = useState('');
   const [bulkModal, setBulkModal] = useState(null); // 'tag'|'status'|'email'|'sms'|'campaign'|'export'|'delete'
+  // When set, opens the full ContactDetail modal for this lead — shows the
+  // unified Timeline (every email/text/call/AI-touch chronologically).
+  const [viewingLead, setViewingLead] = useState(null);
 
   const allLists = useMemo(() => [...BUILT_IN_LISTS, ...savedLists], [savedLists]);
 
@@ -350,26 +354,28 @@ export default function SmartLists({ setPage, toast }) {
                       gridTemplateColumns: '20px 1fr auto auto auto',
                       gap: 12, alignItems: 'center',
                       background: checked ? 'rgba(184,134,75,.08)' : 'transparent',
-                      cursor: 'pointer',
-                    }} onClick={() => toggleSelected(lead.id)}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleSelected(lead.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ accentColor: '#b8864b', width: 14, height: 14 }} />
-                      <div style={{ minWidth: 0 }}>
+                    }}>
+                      {/* Checkbox = select for bulk action (separate click target) */}
+                      <input type="checkbox" checked={checked}
+                        onChange={() => toggleSelected(lead.id)}
+                        style={{ accentColor: '#b8864b', width: 14, height: 14, cursor: 'pointer' }} />
+                      {/* Body = click to OPEN full ContactDetail modal */}
+                      <div style={{ minWidth: 0, cursor: 'pointer' }}
+                        onClick={() => setViewingLead(lead)}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {lead.name || '(no name)'}
                         </div>
                         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {[lead.phone, lead.email, lead.area].filter(Boolean).join(' · ') || '—'}
+                          {[lead.phone, lead.email, lead.area].filter(Boolean).join(' · ') || '—'} — <span style={{color:'#b8864b'}}>click to open</span>
                         </div>
                       </div>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,.04)', borderRadius: 5, padding: '2px 7px' }}>
+                      <span onClick={() => setViewingLead(lead)} style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,.04)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
                         {lead.type || '—'}
                       </span>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#e0b370', background: 'rgba(184,134,75,.12)', borderRadius: 5, padding: '2px 7px' }}>
+                      <span onClick={() => setViewingLead(lead)} style={{ fontSize: 10.5, fontWeight: 700, color: '#e0b370', background: 'rgba(184,134,75,.12)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
                         {lead.status || '—'}
                       </span>
-                      <span style={{ fontSize: 10.5, color: '#64748b' }}>
+                      <span onClick={() => setViewingLead(lead)} style={{ fontSize: 10.5, color: '#64748b', cursor: 'pointer' }}>
                         {lead.source || ''}
                       </span>
                     </div>
@@ -436,6 +442,20 @@ export default function SmartLists({ setPage, toast }) {
           setLeads={setLeads}
           onClose={() => setBulkModal(null)}
           onComplete={() => { setBulkModal(null); clearSelection(); }}
+          toast={toast}
+        />
+      )}
+
+      {/* Full ContactDetail modal — shows the unified Timeline (every email/
+          text/call/AI-touch chronologically), plus tasks + notes tabs. */}
+      {viewingLead && (
+        <ContactDetail
+          lead={viewingLead}
+          onClose={() => setViewingLead(null)}
+          onUpdate={(updated) => {
+            setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
+            setViewingLead(updated);
+          }}
           toast={toast}
         />
       )}

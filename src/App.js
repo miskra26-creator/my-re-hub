@@ -1880,7 +1880,7 @@ const ACTIVITY_TYPES = [
   {id:"note",label:"Note",icon:"📝",color:"#94a3b8"},
 ];
 
-const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
+export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [activities, setActivities] = useLS(`activities_${lead.id}`, []);
   const [noteText, setNoteText] = useState("");
   const [actType, setActType] = useState("call");
