@@ -1856,20 +1856,185 @@ const MarketReport = ({setPage,toast}) => {
 };
 
 // ─── FUB HELPERS ──────────────────────────────────────────────────────────────
-const fubToLead = (p) => ({
-  id: `fub_${p.id}`,
-  fubId: p.id,
-  name: (p.name || `${p.firstName||""} ${p.lastName||""}`.trim() || "Unknown").slice(0,60),
-  email: (p.emails?.[0]?.value || "").slice(0,80),
-  phone: (p.phones?.[0]?.value || "").slice(0,20),
-  type: "Buyer",
-  status: p.stage || "Hot Prospect",
-  budget: "",
-  area: (p.addresses?.[0]?.city || "").slice(0,40),
-  notes: "",
-  createdAt: p.created || new Date().toISOString(),
-  source: "fub"
-});
+// Maps a FUB /people record into our lead schema. CAPTURES EVERYTHING we
+// can pull from a single /people call — multiple emails/phones, addresses,
+// tags, custom fields, source URL, assigned agent, etc. The rich stuff
+// (notes, activities) requires per-lead API calls and is fetched lazily
+// when ContactDetail opens via fetchFubLeadDetail().
+const fubToLead = (p) => {
+  // Coalesce all emails into a primary string + keep the full list in meta
+  const emails = (p.emails || []).map(e => e.value).filter(Boolean);
+  const phones = (p.phones || []).map(ph => ph.value).filter(Boolean);
+  const tags   = (p.tags || []).map(t => typeof t === 'string' ? t : (t.name || t)).filter(Boolean);
+  const addr   = (p.addresses || [])[0] || {};
+  const addrStr = [addr.street, addr.city, addr.state, addr.postalCode].filter(Boolean).join(', ');
+  // FUB custom fields come as customField1, customField2... or as a customFields object
+  const customFields = {};
+  for (const key of Object.keys(p || {})) {
+    if (/^customField/.test(key) && p[key] != null) customFields[key] = p[key];
+  }
+  if (p.customFields && typeof p.customFields === 'object') Object.assign(customFields, p.customFields);
+
+  // Try to detect a close date from custom fields (FUB users typically name
+  // a custom field like "Close Date", "Closing Date", "Anniversary").
+  const closeDate = findFieldValue(customFields, /close.?date|closing.?date|anniversary|sold.?date/i);
+  const birthday  = findFieldValue(customFields, /birthday|bday|dob/i);
+
+  return {
+    id: `fub_${p.id}`,
+    fubId: p.id,
+    name: (p.name || `${p.firstName||""} ${p.lastName||""}`.trim() || "Unknown").slice(0,80),
+    email: (emails[0] || "").slice(0, 120),
+    phone: (phones[0] || "").slice(0, 30),
+    type: deriveLeadType(p, tags),
+    status: p.stage || "Hot Prospect",
+    budget: findFieldValue(customFields, /budget|price.?range|max.?price/i) || "",
+    area: (addr.city || "").slice(0, 60),
+    address: addrStr.slice(0, 200),
+    notes: "", // populated by fetchFubLeadDetail on demand
+    source: "fub",
+    tags,
+    createdAt: p.created || new Date().toISOString(),
+    // Stash everything else in meta so nothing is lost:
+    meta: {
+      fubSourceName: p.source || null,
+      fubSourceUrl:  p.sourceUrl || null,
+      fubAssignedUserId: p.assignedUserId || null,
+      fubAssignedTo:     p.assignedTo || null,
+      fubLastActivity:   p.lastActivity || null,
+      fubLastCommunication: p.lastCommunication || null,
+      allEmails: emails,
+      allPhones: phones,
+      addresses: p.addresses || [],
+      customFields,
+      closeDate: closeDate || null,
+      birthday: birthday || null,
+      fubCreated: p.created || null,
+      fubUpdated: p.updated || null,
+      // Filled in later by fetchFubLeadDetail():
+      fubNotes: null,
+      fubActivities: null,
+      fubLastDetailFetch: null,
+    },
+  };
+};
+
+// Find a value in customFields by matching the key against a regex
+function findFieldValue(customFields, regex) {
+  if (!customFields) return null;
+  for (const k of Object.keys(customFields)) {
+    if (regex.test(k)) return customFields[k];
+  }
+  return null;
+}
+
+// Guess Buyer / Seller / Both from FUB tags
+function deriveLeadType(p, tags) {
+  const all = (tags || []).map(t => String(t).toLowerCase()).join(' ');
+  const hasBuyer = /buyer|buying/.test(all);
+  const hasSeller = /seller|selling|listing/.test(all);
+  if (hasBuyer && hasSeller) return "Both";
+  if (hasSeller) return "Seller";
+  return "Buyer";
+}
+
+// ─── Lazy per-lead FUB detail fetcher ────────────────────────────────────────
+// Pulls notes + activities (emails / calls / texts logged in FUB) for ONE
+// lead. Called when ContactDetail opens — caches result for 30 min so re-opens
+// don't spam the FUB API. Returns { notes: [...], activities: [...] } merged
+// into the lead's `meta` so the unified timeline can render them.
+async function fetchFubLeadDetail(fubId) {
+  const fubKey = (JSON.parse(localStorage.getItem("integrations") || "{}")?.fub?.apiKey)
+    || (typeof process !== 'undefined' && process.env?.REACT_APP_FUB_API_KEY)
+    || "";
+  if (!fubKey) throw new Error("FUB API key not configured");
+  const headers = { "x-fub-key": fubKey };
+
+  // Fetch in parallel — different endpoints
+  const [notesRes, eventsRes, textsRes, callsRes, emailsRes] = await Promise.all([
+    fetch(`/api/fub/notes?personIds=${fubId}&limit=50`,  { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`/api/fub/events?personIds=${fubId}&limit=50`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`/api/fub/textMessages?personIds=${fubId}&limit=50`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`/api/fub/calls?personIds=${fubId}&limit=50`,  { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`/api/fub/emails?personIds=${fubId}&limit=50`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+
+  const notes = (notesRes?.notes || []).map(n => ({
+    id: 'fubnote_' + n.id,
+    ts: new Date(n.created || n.updated).getTime(),
+    type: 'note',
+    source: 'FUB note',
+    icon: '📝',
+    color: '#94a3b8',
+    title: (n.subject || n.body || '').slice(0, 80) || 'Note',
+    body: n.body || '',
+    direction: null,
+    status: null,
+    raw: n,
+  }));
+
+  const events = (eventsRes?.events || []).map(ev => ({
+    id: 'fubevt_' + ev.id,
+    ts: new Date(ev.created || ev.occurredAt).getTime(),
+    type: 'task',
+    source: `FUB: ${ev.type || 'event'}`,
+    icon: '✓',
+    color: '#b8864b',
+    title: ev.description || ev.type || 'Event',
+    body: null,
+    direction: null,
+    status: ev.completed ? 'completed' : 'open',
+    raw: ev,
+  }));
+
+  const texts = (textsRes?.textMessages || []).map(t => ({
+    id: 'fubsms_' + t.id,
+    ts: new Date(t.created || t.sent).getTime(),
+    type: 'text',
+    source: 'FUB SMS',
+    icon: '💬',
+    color: '#3b82f6',
+    title: `SMS ${t.direction === 'outbound' ? 'sent' : 'received'}`,
+    body: t.message || '',
+    direction: t.direction || null,
+    status: 'sent',
+    raw: t,
+  }));
+
+  const calls = (callsRes?.calls || []).map(c => ({
+    id: 'fubcall_' + c.id,
+    ts: new Date(c.created || c.occurredAt).getTime(),
+    type: 'call',
+    source: `FUB call · ${c.duration ? c.duration + 's' : ''}`,
+    icon: '📞',
+    color: '#10b981',
+    title: c.outcome || c.note || `Call ${c.direction === 'outbound' ? 'made' : 'received'}`,
+    body: c.note || null,
+    direction: c.direction || null,
+    status: c.outcome || null,
+    raw: c,
+  }));
+
+  const emails = (emailsRes?.emails || []).map(e => ({
+    id: 'fubeml_' + e.id,
+    ts: new Date(e.created || e.sent).getTime(),
+    type: 'email',
+    source: 'FUB email',
+    icon: '📧',
+    color: '#ea4335',
+    title: e.subject || `Email ${e.direction === 'outbound' ? 'sent' : 'received'}`,
+    body: e.body || e.snippet || null,
+    direction: e.direction || null,
+    status: 'sent',
+    raw: e,
+  }));
+
+  return {
+    notes,
+    activities: [...events, ...texts, ...calls, ...emails].sort((a, b) => b.ts - a.ts),
+    fetchedAt: Date.now(),
+  };
+}
 
 // ─── CONTACT DETAIL ───────────────────────────────────────────────────────────
 const ACTIVITY_TYPES = [
@@ -1892,6 +2057,38 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [allPlans] = useLS("action_plans",[]);
   // Unified timeline sources — read once, memoize the aggregated events.
   const [agentActivity] = useLS("past_client_agent_activity", []);
+  // FUB lazy-fetch state — notes + activities pulled on demand for FUB leads
+  const [fubDetail, setFubDetail] = useState(null);
+  const [fubLoading, setFubLoading] = useState(false);
+  const [fubError, setFubError] = useState(null);
+
+  // Auto-fetch FUB detail when the modal opens for a FUB-sourced lead.
+  // Caches in memory — closes + reopens don't refetch unless the user clicks
+  // "Re-sync from FUB". Skips silently if no FUB key configured.
+  useEffect(() => {
+    if (!lead.fubId || fubDetail || fubLoading) return;
+    setFubLoading(true);
+    fetchFubLeadDetail(lead.fubId)
+      .then(d => { setFubDetail(d); setFubError(null); })
+      .catch(e => { setFubError(e.message); console.warn('[FUB detail]', e); })
+      .finally(() => setFubLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.fubId]);
+
+  const resyncFub = async () => {
+    if (!lead.fubId) return toast.error('Not a FUB-sourced lead');
+    setFubLoading(true);
+    setFubError(null);
+    try {
+      const d = await fetchFubLeadDetail(lead.fubId);
+      setFubDetail(d);
+      toast.success(`Re-synced from FUB · ${d.notes.length} notes · ${d.activities.length} activities`);
+    } catch (e) {
+      setFubError(e.message);
+      toast.error('FUB sync failed: ' + e.message);
+    }
+    setFubLoading(false);
+  };
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskType, setNewTaskType] = useState("Call");
   const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().slice(0,10));
@@ -2272,7 +2469,71 @@ Return STRICT JSON only (no markdown fences, no explanation):
                     <a href={`mailto:${lead.email}`} style={{fontSize:14,color:"#7eb8f7",fontWeight:600,textDecoration:"none"}}>{lead.email}</a>
                   </div>}
                   {lead.area&&<div style={{display:"flex",gap:10}}><span style={{fontSize:14}}>📍</span><span style={{fontSize:14,color:"#cbd5e1"}}>{lead.area}</span></div>}
+                  {lead.address && lead.address !== lead.area && (
+                    <div style={{display:"flex",gap:10}}>
+                      <span style={{fontSize:14}}>🏠</span>
+                      <span style={{fontSize:13,color:"#94a3b8"}}>{lead.address}</span>
+                    </div>
+                  )}
                   {lead.budget&&<div style={{display:"flex",gap:10}}><span style={{fontSize:14}}>💰</span><span style={{fontSize:14,color:"#cbd5e1"}}>{fmtMoney(lead.budget)}</span></div>}
+                  {/* Show ALL emails/phones from FUB, not just the first */}
+                  {(lead.meta?.allEmails || []).length > 1 && (
+                    <div style={{display:"flex",gap:10,flexDirection:"column",fontSize:11.5,color:"#94a3b8"}}>
+                      {lead.meta.allEmails.slice(1).map(em => (
+                        <div key={em}>✉️ <a href={`mailto:${em}`} style={{color:"#94a3b8"}}>{em}</a> <span style={{color:"#475569"}}>(alt)</span></div>
+                      ))}
+                    </div>
+                  )}
+                  {(lead.meta?.allPhones || []).length > 1 && (
+                    <div style={{display:"flex",gap:10,flexDirection:"column",fontSize:11.5,color:"#94a3b8"}}>
+                      {lead.meta.allPhones.slice(1).map(ph => (
+                        <div key={ph}>📞 <a href={`tel:${ph}`} style={{color:"#94a3b8"}}>{ph}</a> <span style={{color:"#475569"}}>(alt)</span></div>
+                      ))}
+                    </div>
+                  )}
+                  {/* FUB-specific metadata: source URL + close/birthday + custom fields */}
+                  {lead.source === 'fub' && (
+                    <div style={{
+                      marginTop:6,padding:"8px 10px",background:"rgba(184,134,75,.06)",
+                      borderLeft:"2px solid #b8864b",borderRadius:5,
+                      fontSize:11,color:"#cbd5e1",lineHeight:1.6,
+                    }}>
+                      {lead.meta?.fubSourceName && (
+                        <div><strong style={{color:"#e0b370"}}>From FUB source:</strong> {lead.meta.fubSourceName}
+                          {lead.meta.fubSourceUrl && (
+                            <> · <a href={lead.meta.fubSourceUrl} target="_blank" rel="noreferrer" style={{color:"#7eb8f7"}}>view</a></>
+                          )}
+                        </div>
+                      )}
+                      {lead.meta?.closeDate && (
+                        <div><strong style={{color:"#e0b370"}}>Close date:</strong> {lead.meta.closeDate}</div>
+                      )}
+                      {lead.meta?.birthday && (
+                        <div><strong style={{color:"#e0b370"}}>Birthday:</strong> {lead.meta.birthday}</div>
+                      )}
+                      {Object.entries(lead.meta?.customFields || {}).filter(([k,v]) => v && !/^customField\d+$/.test(k)).slice(0,8).map(([k,v]) => (
+                        <div key={k}><strong style={{color:"#e0b370"}}>{k}:</strong> {String(v).slice(0,80)}</div>
+                      ))}
+                      <div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
+                        <button onClick={resyncFub} disabled={fubLoading}
+                          style={{
+                            background:"rgba(184,134,75,.15)",border:"1px solid rgba(184,134,75,.35)",
+                            borderRadius:5,padding:"3px 8px",color:"#e0b370",fontSize:10,
+                            fontWeight:800,cursor:fubLoading?"wait":"pointer",
+                          }}>
+                          {fubLoading ? '↻ Syncing…' : '↻ Re-sync notes + activity from FUB'}
+                        </button>
+                        {fubDetail && (
+                          <span style={{fontSize:10,color:"#10b981"}}>
+                            ✓ {fubDetail.notes.length} notes · {fubDetail.activities.length} activities
+                          </span>
+                        )}
+                        {fubError && (
+                          <span style={{fontSize:10,color:"#f87171"}}>⚠ {fubError}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div style={{marginTop:4}}>
                     <div className="label" style={{marginBottom:6}}>Follow-up Date</div>
                     <input className="input" type="date" value={followUp} onChange={e=>{setFollowUp(e.target.value);onUpdate({...lead,followUp:e.target.value});}}/>
@@ -2398,12 +2659,20 @@ Return STRICT JSON only (no markdown fences, no explanation):
                  campaign enrollments, and the lead-created event.
                  See src/leadActivity.js for the aggregator. */}
               {(() => {
+                // Build the unified timeline, including FUB notes + activities
+                // when they've been lazy-fetched. FUB events have their own
+                // shape (already pre-formatted in fetchFubLeadDetail) so we
+                // append them post-hoc.
                 const events = getLeadTimeline(lead, {
                   manualActivities: activities,
                   tasks,
                   emailQueue,
                   agentActivity,
                 });
+                if (fubDetail) {
+                  events.push(...fubDetail.notes, ...fubDetail.activities);
+                  events.sort((a, b) => b.ts - a.ts);
+                }
                 const summary = summarizeTimeline(events);
 
                 if (events.length === 0) {
