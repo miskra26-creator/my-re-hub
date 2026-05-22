@@ -1982,15 +1982,34 @@ async function fetchFubLeadDetail(fubId) {
     }
   };
 
+  // FUB filters by `personId` (singular). `personIds=` is silently ignored and
+  // returns ALL notes/calls/emails account-wide — which is exactly what was
+  // happening: ~150 random events bleeding across every lead's timeline.
   const [notesRes, eventsRes, textsRes, callsRes, emailsRes] = await Promise.all([
-    safeFetch(`/api/fub/notes?personIds=${fubId}&limit=50`),
-    safeFetch(`/api/fub/events?personIds=${fubId}&limit=50`),
-    safeFetch(`/api/fub/textMessages?personIds=${fubId}&limit=50`),
-    safeFetch(`/api/fub/calls?personIds=${fubId}&limit=50`),
-    safeFetch(`/api/fub/emails?personIds=${fubId}&limit=50`),
+    safeFetch(`/api/fub/notes?personId=${fubId}&limit=50`),
+    safeFetch(`/api/fub/events?personId=${fubId}&limit=50`),
+    safeFetch(`/api/fub/textMessages?personId=${fubId}&limit=50`),
+    safeFetch(`/api/fub/calls?personId=${fubId}&limit=50`),
+    safeFetch(`/api/fub/emails?personId=${fubId}&limit=50`),
   ]);
 
-  const notes = (notesRes?.notes || []).map(n => ({
+  // Defensive client-side filter: drop ONLY records whose personId is
+  // explicitly set to a different lead. If the record has no person info
+  // at all, trust the server-side filter and keep it (FUB sometimes omits
+  // the field when responding to a personId-scoped query).
+  const wantedId = String(fubId);
+  const belongsToLead = (rec) => {
+    if (!rec) return false;
+    const candidates = [];
+    if (rec.personId != null) candidates.push(String(rec.personId));
+    if (Array.isArray(rec.personIds)) candidates.push(...rec.personIds.map(String));
+    if (Array.isArray(rec.persons)) candidates.push(...rec.persons.map(p => String(p.id || p)));
+    // No association info — assume FUB already filtered correctly
+    if (candidates.length === 0) return true;
+    return candidates.includes(wantedId);
+  };
+
+  const notes = (notesRes?.notes || []).filter(belongsToLead).map(n => ({
     id: 'fubnote_' + n.id,
     ts: new Date(n.created || n.updated).getTime(),
     type: 'note',
@@ -2004,7 +2023,7 @@ async function fetchFubLeadDetail(fubId) {
     raw: n,
   }));
 
-  const events = (eventsRes?.events || []).map(ev => ({
+  const events = (eventsRes?.events || []).filter(belongsToLead).map(ev => ({
     id: 'fubevt_' + ev.id,
     ts: new Date(ev.created || ev.occurredAt).getTime(),
     type: 'task',
@@ -2018,7 +2037,7 @@ async function fetchFubLeadDetail(fubId) {
     raw: ev,
   }));
 
-  const texts = (textsRes?.textMessages || []).map(t => ({
+  const texts = (textsRes?.textMessages || []).filter(belongsToLead).map(t => ({
     id: 'fubsms_' + t.id,
     ts: new Date(t.created || t.sent).getTime(),
     type: 'text',
@@ -2032,7 +2051,7 @@ async function fetchFubLeadDetail(fubId) {
     raw: t,
   }));
 
-  const calls = (callsRes?.calls || []).map(c => ({
+  const calls = (callsRes?.calls || []).filter(belongsToLead).map(c => ({
     id: 'fubcall_' + c.id,
     ts: new Date(c.created || c.occurredAt).getTime(),
     type: 'call',
@@ -2046,7 +2065,7 @@ async function fetchFubLeadDetail(fubId) {
     raw: c,
   }));
 
-  const emails = (emailsRes?.emails || []).map(e => ({
+  const emails = (emailsRes?.emails || []).filter(belongsToLead).map(e => ({
     id: 'fubeml_' + e.id,
     ts: new Date(e.created || e.sent).getTime(),
     type: 'email',
