@@ -7680,15 +7680,27 @@ async function gmailRequestToken(clientId){
     }catch(e){ reject(e); }
   });
 }
-async function gmailFetchNewEmails(token,sinceMs){
+async function gmailFetchNewEmails(token,sinceMs,opts={}){
+  // Paginates through Gmail's list API — gmail caps each page at 500 max.
+  // hardCap protects against runaway backfills; default 1000 messages keeps
+  // localStorage manageable. Caller can pass {hardCap: 3000} for first-sync.
+  const hardCap = opts.hardCap || 1000;
   const after=Math.floor((sinceMs||Date.now()-3600000)/1000);
-  const r=await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${after}&maxResults=100`,
-    {headers:{Authorization:`Bearer ${token}`}}
-  );
-  if(!r.ok) throw new Error(`Gmail ${r.status}`);
-  const d=await r.json();
-  return d.messages||[];
+  const all=[];
+  let pageToken=null;
+  while(all.length<hardCap){
+    const url=new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+    url.searchParams.set('q',`after:${after}`);
+    url.searchParams.set('maxResults','500');
+    if(pageToken) url.searchParams.set('pageToken',pageToken);
+    const r=await fetch(url.toString(),{headers:{Authorization:`Bearer ${token}`}});
+    if(!r.ok) throw new Error(`Gmail ${r.status}`);
+    const d=await r.json();
+    all.push(...(d.messages||[]));
+    if(!d.nextPageToken) break;
+    pageToken=d.nextPageToken;
+  }
+  return all.slice(0,hardCap);
 }
 async function gmailGetMessage(token,msgId){
   // format=full returns headers AND the full MIME body. Previously we asked
@@ -7928,13 +7940,40 @@ const GmailSyncWorker = ({notify, toast}) => {
       const expiry=parseInt(localStorage.getItem('gmail_token_expiry')||'0');
       if(!token||Date.now()>expiry) return;
       try{
-        const since=parseInt(localStorage.getItem('gmail_last_sync')||'0')||Date.now()-3600000;
-        const msgs=await gmailFetchNewEmails(token,since);
+        // First sync (no previous timestamp): look back 90 DAYS so the contact
+        // timelines pre-populate with historical email. Subsequent syncs use
+        // the saved timestamp (incremental, fast). Backfill caps at 3000 msgs
+        // total — enough for normal volumes, prevents runaway on huge accounts.
+        const lastSync=parseInt(localStorage.getItem('gmail_last_sync')||'0');
+        const isFirstSync=!lastSync;
+        const since=lastSync||(Date.now()-90*24*3600*1000); // 90 days ago
+        if(isFirstSync){
+          toast.info('📧 First Gmail sync — backfilling last 90 days. This may take a minute…');
+        }
+        const msgs=await gmailFetchNewEmails(token,since,{hardCap:isFirstSync?3000:1000});
         let logged=0;
-        for(const msg of msgs){
+        // Drop already-synced messages BEFORE the parallel detail fetch so we
+        // don't waste API calls on duplicates (matters for first-sync backfill).
+        const newMsgs=msgs.filter(m=>!localStorage.getItem(`gmail_synced_${m.id}`));
+        if(isFirstSync){
+          toast.info(`📧 Found ${newMsgs.length} new emails to process…`);
+        }
+        // Parallel detail fetches in batches of 10 — ~10x faster than the
+        // sequential loop. Writes still happen synchronously inside the
+        // sequential `for` below to avoid localStorage race conditions on
+        // the same activities_<leadId> key.
+        const BATCH=10;
+        const details=[];
+        for(let i=0;i<newMsgs.length;i+=BATCH){
+          const slice=newMsgs.slice(i,i+BATCH);
+          const got=await Promise.all(slice.map(m=>gmailGetMessage(token,m.id).then(d=>({msg:m,detail:d}))));
+          details.push(...got);
+          if(isFirstSync && i%100===0 && i>0){
+            console.log(`[Gmail sync] ${i}/${newMsgs.length} fetched`);
+          }
+        }
+        for(const {msg,detail} of details){
           const syncKey=`gmail_synced_${msg.id}`;
-          if(localStorage.getItem(syncKey)) continue;
-          const detail=await gmailGetMessage(token,msg.id);
           if(!detail) continue;
           const headers=detail.payload?.headers||[];
           const from=headers.find(h=>h.name==='From')?.value||'';
@@ -7970,7 +8009,10 @@ const GmailSyncWorker = ({notify, toast}) => {
           });
         }
         localStorage.setItem('gmail_last_sync',String(Date.now()));
-        if(logged>0){
+        if(isFirstSync){
+          toast.success(`✅ Gmail backfill complete — ${logged} email${logged===1?'':'s'} logged on contact timelines from the last 90 days`);
+          notify('📧 Gmail backfill done',`${logged} email${logged===1?'':'s'} logged from last 90 days`,'gmail-sync');
+        } else if(logged>0){
           toast.info(`📧 ${logged} email${logged>1?'s':''} logged from Gmail`);
           notify('📧 Gmail Sync',`${logged} email${logged>1?'s':''} logged on contact timelines`,'gmail-sync');
         }
