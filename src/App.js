@@ -2902,16 +2902,48 @@ Return STRICT JSON only (no markdown fences, no explanation):
                       }}>{e.status}</span>
                     )}
                   </div>
-                  {e.body && (
-                    <div style={{fontSize:11.5,color:"#94a3b8",marginTop:3,whiteSpace:"pre-wrap",
-                      wordBreak:"break-word",maxHeight:60,overflow:"hidden",
-                      lineHeight:1.4,
-                    }}>
-                      {e.body.length > 240 ? e.body.slice(0,240)+'…' : e.body}
-                    </div>
-                  )}
-                  <div style={{fontSize:10.5,color:"#475569",marginTop:4}}>
-                    {e.source} · {formatTs(e.ts)} · {timeAgo(e.ts)}
+                  {(() => {
+                    // FUB redacts bodies for emails that came in via external
+                    // integrations (Realtor.com, Zillow forwards, etc.) — they
+                    // return "[content hidden]" or null. Detect that and show
+                    // a friendlier explanation + jump-to-FUB link instead of a
+                    // useless placeholder.
+                    const bodyRaw = e.body || '';
+                    const isHidden = !bodyRaw
+                      || /^\[?content hidden\]?$/i.test(bodyRaw.trim())
+                      || /content (is )?hidden/i.test(bodyRaw.trim());
+                    const isFub = e.id.startsWith('fub');
+                    if (isHidden && isFub) {
+                      return (
+                        <div style={{fontSize:11,color:"#64748b",marginTop:4,fontStyle:"italic"}}>
+                          🔒 FUB hides bodies for {e.type==='email'?'forwarded emails':'this record type'} —
+                          {lead.fubId && (
+                            <> <a href={`https://app.followupboss.com/2/people/view/${lead.fubId}`} target="_blank" rel="noreferrer" style={{color:"#7eb8f7",fontStyle:"normal",fontWeight:700,textDecoration:"none"}}>open in FUB ↗</a></>
+                          )}
+                        </div>
+                      );
+                    }
+                    if (bodyRaw) {
+                      // Strip HTML tags for cleaner inline display
+                      const clean = bodyRaw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                      return (
+                        <div style={{fontSize:11.5,color:"#94a3b8",marginTop:3,whiteSpace:"pre-wrap",
+                          wordBreak:"break-word",maxHeight:60,overflow:"hidden",lineHeight:1.4,
+                        }}>
+                          {clean.length > 240 ? clean.slice(0,240)+'…' : clean}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <div style={{fontSize:10.5,color:"#475569",marginTop:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    <span>{e.source} · {formatTs(e.ts)} · {timeAgo(e.ts)}</span>
+                    {e.id.startsWith('fub') && lead.fubId && (
+                      <a href={`https://app.followupboss.com/2/people/view/${lead.fubId}`} target="_blank" rel="noreferrer"
+                        style={{color:"#7eb8f7",fontWeight:700,textDecoration:"none",fontSize:10}}>
+                        view in FUB ↗
+                      </a>
+                    )}
                   </div>
                 </div>
                 {e.id.startsWith('man_') && (
