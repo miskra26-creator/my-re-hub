@@ -12,6 +12,7 @@ import AutoReel from './AutoReel';
 import VirtualStaging from './VirtualStaging';
 import PastClientAgent, { PastClientAgentWorker } from './PastClientAgent';
 import SmartLists from './SmartLists';
+import { getLeadTimeline, summarizeTimeline, timeAgo, formatTs } from './leadActivity';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
 import GoogleBusiness from './GoogleBusiness';
@@ -1889,6 +1890,8 @@ const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [tab, setTab] = useState("activity");
   const [tasks, setTasks] = useLS("tasks",[]);
   const [allPlans] = useLS("action_plans",[]);
+  // Unified timeline sources — read once, memoize the aggregated events.
+  const [agentActivity] = useLS("past_client_agent_activity", []);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskType, setNewTaskType] = useState("Call");
   const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().slice(0,10));
@@ -2339,27 +2342,98 @@ Return STRICT JSON only (no markdown fences, no explanation):
                 </div>
               </div>
 
-              {/* Activity feed */}
-              {activities.length===0
-                ? <div style={{textAlign:"center",padding:"30px 0",color:"#374151",fontSize:13}}>No activity yet — log your first interaction above</div>
-                : <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {activities.map(a=>{
-                    const t = a.type==='gmail'
-                      ? {id:'gmail',label:'Gmail',icon:'📧',color:'#ea4335'}
-                      : (ACTIVITY_TYPES.find(x=>x.id===a.type)||ACTIVITY_TYPES[4]);
-                    return (
-                      <div key={a.id} style={{display:"flex",gap:10,padding:"10px 12px",background:"rgba(255,255,255,.03)",borderRadius:10,border:"1px solid rgba(255,255,255,.05)"}}>
-                        <span style={{fontSize:16,flexShrink:0}}>{t.icon}</span>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:13,color:"#fff",fontWeight:600}}>{a.note}</div>
-                          <div style={{fontSize:11,color:"#475569",marginTop:3}}>{t.label} · {fmt(a.createdAt)}</div>
+              {/* ── UNIFIED TIMELINE — pulls from every source ────────────
+                 Aggregates manual activities, tasks (open + completed),
+                 email queue, Past Client Agent log, status changes,
+                 campaign enrollments, and the lead-created event.
+                 See src/leadActivity.js for the aggregator. */}
+              {(() => {
+                const events = getLeadTimeline(lead, {
+                  manualActivities: activities,
+                  tasks,
+                  emailQueue,
+                  agentActivity,
+                });
+                const summary = summarizeTimeline(events);
+
+                if (events.length === 0) {
+                  return <div style={{textAlign:"center",padding:"30px 0",color:"#374151",fontSize:13}}>No history yet — log your first interaction above</div>;
+                }
+
+                return (
+                  <>
+                    {/* Summary header */}
+                    <div style={{
+                      display:"flex",gap:8,flexWrap:"wrap",marginBottom:14,
+                      padding:"10px 12px",background:"rgba(184,134,75,.08)",borderRadius:10,
+                      border:"1px solid rgba(184,134,75,.2)",
+                    }}>
+                      <span style={{fontSize:11,fontWeight:800,color:"#e0b370",letterSpacing:1,textTransform:"uppercase"}}>
+                        {events.length} event{events.length===1?'':'s'}
+                      </span>
+                      {summary.lastTouch && (
+                        <span style={{fontSize:11,color:"#94a3b8"}}>
+                          · last touch {timeAgo(summary.lastTouch)}
+                        </span>
+                      )}
+                      {Object.entries(summary.counts).map(([type, count]) => (
+                        <span key={type} style={{fontSize:11,color:"#cbd5e1"}}>
+                          · <strong style={{color:"#fff"}}>{count}</strong> {type}{count===1?'':'s'}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Timeline */}
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {events.map(e => (
+                        <div key={e.id} style={{
+                          display:"flex",gap:10,padding:"10px 12px",
+                          background:"rgba(255,255,255,.03)",borderRadius:10,
+                          border:"1px solid rgba(255,255,255,.05)",
+                          borderLeft:`3px solid ${e.color}`,
+                        }}>
+                          <span style={{fontSize:16,flexShrink:0,lineHeight:1.4}}>{e.icon}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,color:"#fff",fontWeight:600,wordBreak:"break-word"}}>
+                              {e.title}
+                              {e.status && e.status !== 'open' && (
+                                <span style={{
+                                  marginLeft:8,fontSize:9.5,fontWeight:800,letterSpacing:.5,
+                                  textTransform:"uppercase",padding:"1px 6px",borderRadius:4,
+                                  background: e.status==='sent'||e.status==='completed' ? "rgba(16,185,129,.15)"
+                                            : e.status==='error' ? "rgba(239,68,68,.15)"
+                                            : "rgba(184,134,75,.15)",
+                                  color: e.status==='sent'||e.status==='completed' ? "#6ee7b7"
+                                       : e.status==='error' ? "#fca5a5"
+                                       : "#e0b370",
+                                }}>{e.status}</span>
+                              )}
+                            </div>
+                            {e.body && (
+                              <div style={{fontSize:11.5,color:"#94a3b8",marginTop:3,whiteSpace:"pre-wrap",
+                                wordBreak:"break-word",maxHeight:60,overflow:"hidden",
+                                lineHeight:1.4,
+                              }}>
+                                {e.body.length > 240 ? e.body.slice(0,240)+'…' : e.body}
+                              </div>
+                            )}
+                            <div style={{fontSize:10.5,color:"#475569",marginTop:4}}>
+                              {e.source} · {formatTs(e.ts)} · {timeAgo(e.ts)}
+                            </div>
+                          </div>
+                          {/* Delete only allowed for manual-log entries */}
+                          {e.id.startsWith('man_') && (
+                            <button style={{background:"none",border:"none",color:"#374151",cursor:"pointer",padding:2,height:'fit-content'}}
+                              onClick={()=>setActivities(p=>p.filter(x=>('man_'+(x.id||x.createdAt))!==e.id))}>
+                              <X size={12}/>
+                            </button>
+                          )}
                         </div>
-                        <button style={{background:"none",border:"none",color:"#374151",cursor:"pointer",padding:2}} onClick={()=>setActivities(p=>p.filter(x=>x.id!==a.id))}><X size={12}/></button>
-                      </div>
-                    );
-                  })}
-                </div>
-              }
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </>
           )}
 
