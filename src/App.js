@@ -7691,12 +7691,42 @@ async function gmailFetchNewEmails(token,sinceMs){
   return d.messages||[];
 }
 async function gmailGetMessage(token,msgId){
+  // format=full returns headers AND the full MIME body. Previously we asked
+  // for metadata-only which gave us From/To/Subject but no body — meaning
+  // contact timelines could show "📨 Email from John" with zero content.
   const r=await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
     {headers:{Authorization:`Bearer ${token}`}}
   );
   if(!r.ok) return null;
   return r.json();
+}
+// Recursively walk Gmail's MIME tree to find the most useful body part.
+// Prefers text/plain (clean), falls back to text/html (we strip tags
+// downstream in ContactDetail). Returns "" if nothing renderable found.
+function gmailExtractBody(payload){
+  if(!payload) return '';
+  const findPart=(p,mime)=>{
+    if(p.mimeType===mime && p.body?.data) return p.body.data;
+    if(Array.isArray(p.parts)){
+      for(const sub of p.parts){
+        const found=findPart(sub,mime);
+        if(found) return found;
+      }
+    }
+    return null;
+  };
+  // Top-level body (simple messages with no parts)
+  let data = payload.body?.data
+          || findPart(payload,'text/plain')
+          || findPart(payload,'text/html');
+  if(!data) return '';
+  try{
+    // base64url → standard base64 → bytes → UTF-8 string
+    const decoded=atob(data.replace(/-/g,'+').replace(/_/g,'/'));
+    try{ return decodeURIComponent(escape(decoded)); }
+    catch{ return decoded; }
+  }catch{ return ''; }
 }
 function gmailExtractEmail(str){
   if(!str) return '';
@@ -7912,6 +7942,9 @@ const GmailSyncWorker = ({notify, toast}) => {
           const subject=headers.find(h=>h.name==='Subject')?.value||'(no subject)';
           const fromEmail=gmailExtractEmail(from);
           const toEmails=(to||'').split(',').map(gmailExtractEmail);
+          // Extract the actual email body — this is what FUB redacts and what
+          // Monica actually wants to read on the contact timeline.
+          const body=gmailExtractBody(detail.payload).slice(0,5000);
           leads.forEach(lead=>{
             if(!lead.email) return;
             const le=lead.email.toLowerCase().trim();
@@ -7922,7 +7955,16 @@ const GmailSyncWorker = ({notify, toast}) => {
             const actKey=`activities_${lead.id}`;
             const existing=JSON.parse(localStorage.getItem(actKey)||'[]');
             if(existing.find(a=>a.gmailId===msg.id)) return;
-            existing.unshift({id:uid(),type:'gmail',direction:isIn?'inbound':'outbound',subject,note:`${isIn?'📨 Email from':'📤 Email to'} ${lead.name}: "${subject}"`,gmailId:msg.id,createdAt:new Date().toISOString()});
+            existing.unshift({
+              id:uid(),
+              type:'gmail',
+              direction:isIn?'inbound':'outbound',
+              subject,
+              note:`${isIn?'📨 Email from':'📤 Email to'} ${lead.name}: "${subject}"`,
+              detail:body, // ← body shows in timeline (leadActivity.js maps detail → body)
+              gmailId:msg.id,
+              createdAt:new Date().toISOString(),
+            });
             localStorage.setItem(actKey,JSON.stringify(existing));
             logged++;
           });
@@ -8592,9 +8634,15 @@ const SettingsPage = ({setPage,toast}) => {
                       <li style={{fontSize:12,color:"#94a3b8"}}><strong style={{color:"#fff"}}>OAuth consent screen</strong> → External → App name: "RE Hub" → your email → Save & Continue through all steps</li>
                       <li style={{fontSize:12,color:"#94a3b8"}}><strong style={{color:"#fff"}}>Test users</strong> (on consent screen) → Add your Gmail address</li>
                       <li style={{fontSize:12,color:"#94a3b8"}}><strong style={{color:"#fff"}}>Credentials → Create Credentials → OAuth client ID</strong> → Web application</li>
-                      <li style={{fontSize:12,color:"#94a3b8"}}>Under <strong style={{color:"#fff"}}>"Authorized JavaScript origins"</strong> add: <code style={{background:"rgba(255,255,255,.06)",padding:"1px 6px",borderRadius:4}}>http://localhost:3000</code></li>
+                      <li style={{fontSize:12,color:"#94a3b8"}}>Under <strong style={{color:"#fff"}}>"Authorized JavaScript origins"</strong> add BOTH:<br/>
+                        <code style={{background:"rgba(255,255,255,.06)",padding:"1px 6px",borderRadius:4,display:"inline-block",marginTop:4}}>http://localhost:3000</code><br/>
+                        <code style={{background:"rgba(255,255,255,.06)",padding:"1px 6px",borderRadius:4,display:"inline-block",marginTop:4}}>https://my-re-hub.vercel.app</code>
+                      </li>
                       <li style={{fontSize:12,color:"#94a3b8"}}>Copy the <strong style={{color:"#fff"}}>Client ID</strong> (ends in .apps.googleusercontent.com) → paste above → click Connect</li>
                     </ol>
+                    <div style={{marginTop:12,padding:"10px 12px",background:"rgba(16,185,129,.06)",border:"1px solid rgba(16,185,129,.2)",borderRadius:8,fontSize:11,color:"#6ee7b7"}}>
+                      💡 Once connected, full email bodies (not just headers) will appear on every contact's Emails tab — same as FUB but without the "[content hidden]" redactions.
+                    </div>
                   </div>
                 </>
               )}
