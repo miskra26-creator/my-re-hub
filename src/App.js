@@ -2155,7 +2155,15 @@ Return STRICT JSON only (no markdown fences, no explanation):
   return (
     <div className="lt-detail" style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
       <div className="lt-detail-backdrop" style={{flex:1,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)"}} onClick={onClose}/>
-      <div className="lt-detail-panel" style={{width:520,height:"100vh",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      <div className="lt-detail-panel" style={{
+        width:520,height:"100vh",overflowY:"auto",display:"flex",flexDirection:"column",
+        // Solid background so the page underneath doesn't bleed through.
+        // (The CSS class .lt-detail-panel only has a background when wrapped in
+        //  .lead-tracker-v2 — without it, the panel was transparent, which is
+        //  why Smart Lists' FilterBuilder labels showed through.)
+        background:"#0d1117",
+        boxShadow:"-20px 0 60px rgba(0,0,0,.6)",
+      }}>
         {/* Header */}
         <div className="lt-detail-header" style={{padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",position:"sticky",top:0,zIndex:10}}>
           <div>
