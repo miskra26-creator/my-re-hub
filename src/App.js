@@ -8640,7 +8640,7 @@ const SettingsPage = ({setPage,toast}) => {
           {tab==="gmail"&&(
             <div className="col" style={{maxWidth:540}}>
               <div style={{fontWeight:700,fontSize:15,color:"#f1f5f9",fontFamily:"'DM Serif Display',serif"}}>📧 Gmail Sync</div>
-              <div style={{fontSize:13,color:"#475569",lineHeight:1.8}}>Connect your Gmail to automatically log emails to and from your leads on their contact timelines — just like Follow Up Boss.</div>
+              <div style={{fontSize:13,color:"#475569",lineHeight:1.8}}>Connect your Gmail to automatically log emails to and from your leads on their contact timelines — just like Follow Up Boss. First connect backfills the <strong style={{color:"#94a3b8"}}>last 90 days of email</strong>, then syncs every 5 min for new mail.</div>
 
               {gmailConnected?(
                 <>
