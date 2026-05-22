@@ -220,6 +220,11 @@ export default function SmartLists({ setPage, toast }) {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="page-content" style={{ position: 'relative' }}>
+      <style>{`
+        .sl-row:hover {
+          background: rgba(184,134,75,.12) !important;
+        }
+      `}</style>
       {/* Header */}
       <div style={{ marginBottom: 18 }}>
         <button className="btn-back" style={{ marginBottom: 14 }} onClick={() => setPage?.('dashboard')}>
@@ -347,37 +352,53 @@ export default function SmartLists({ setPage, toast }) {
                 filtered.slice(0, 500).map(lead => {
                   const checked = selectedIds.has(lead.id);
                   return (
-                    <div key={lead.id} style={{
-                      padding: '10px 14px',
-                      borderBottom: '1px solid rgba(255,255,255,.04)',
-                      display: 'grid',
-                      gridTemplateColumns: '20px 1fr auto auto auto',
-                      gap: 12, alignItems: 'center',
-                      background: checked ? 'rgba(184,134,75,.08)' : 'transparent',
-                    }}>
-                      {/* Checkbox = select for bulk action (separate click target) */}
+                    <div key={lead.id}
+                      onDoubleClick={() => setViewingLead(lead)}
+                      className="sl-row"
+                      style={{
+                        padding: '10px 14px',
+                        borderBottom: '1px solid rgba(255,255,255,.04)',
+                        display: 'grid',
+                        gridTemplateColumns: '20px 1fr auto auto auto auto',
+                        gap: 12, alignItems: 'center',
+                        background: checked ? 'rgba(184,134,75,.08)' : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => setViewingLead(lead)}
+                    >
+                      {/* Checkbox = select for bulk action (separate click target — stops propagation) */}
                       <input type="checkbox" checked={checked}
                         onChange={() => toggleSelected(lead.id)}
+                        onClick={(e) => e.stopPropagation()}
                         style={{ accentColor: '#b8864b', width: 14, height: 14, cursor: 'pointer' }} />
-                      {/* Body = click to OPEN full ContactDetail modal */}
-                      <div style={{ minWidth: 0, cursor: 'pointer' }}
-                        onClick={() => setViewingLead(lead)}>
+                      <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {lead.name || '(no name)'}
                         </div>
                         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {[lead.phone, lead.email, lead.area].filter(Boolean).join(' · ') || '—'} — <span style={{color:'#b8864b'}}>click to open</span>
+                          {[lead.phone, lead.email, lead.area].filter(Boolean).join(' · ') || '—'}
                         </div>
                       </div>
-                      <span onClick={() => setViewingLead(lead)} style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,.04)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,.04)', borderRadius: 5, padding: '2px 7px' }}>
                         {lead.type || '—'}
                       </span>
-                      <span onClick={() => setViewingLead(lead)} style={{ fontSize: 10.5, fontWeight: 700, color: '#e0b370', background: 'rgba(184,134,75,.12)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#e0b370', background: 'rgba(184,134,75,.12)', borderRadius: 5, padding: '2px 7px' }}>
                         {lead.status || '—'}
                       </span>
-                      <span onClick={() => setViewingLead(lead)} style={{ fontSize: 10.5, color: '#64748b', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 10.5, color: '#64748b' }}>
                         {lead.source || ''}
                       </span>
+                      {/* Big obvious "Open →" button — single click opens the contact */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setViewingLead(lead); }}
+                        style={{
+                          background: 'linear-gradient(135deg, #b8864b, #d4a017)',
+                          border: 'none', borderRadius: 6, padding: '6px 12px',
+                          color: '#0f172a', fontSize: 11.5, fontWeight: 900,
+                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                        Open <ChevronRight size={12} />
+                      </button>
                     </div>
                   );
                 })
