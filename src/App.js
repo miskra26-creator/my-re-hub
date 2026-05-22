@@ -2164,8 +2164,13 @@ Return STRICT JSON only (no markdown fences, no explanation):
         background:"#0d1117",
         boxShadow:"-20px 0 60px rgba(0,0,0,.6)",
       }}>
-        {/* Header */}
-        <div className="lt-detail-header" style={{padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",position:"sticky",top:0,zIndex:10}}>
+        {/* Header — sticky AND opaque so scrolling content doesn't bleed through */}
+        <div className="lt-detail-header" style={{
+          padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+          position:"sticky",top:0,zIndex:10,
+          background:"#0d1117",
+          borderBottom:"1px solid rgba(255,255,255,.06)",
+        }}>
           <div>
             <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,fontWeight:900,color:"#fff"}}>{lead.name}</div>
             <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
