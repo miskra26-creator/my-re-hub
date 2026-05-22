@@ -1943,20 +1943,41 @@ function deriveLeadType(p, tags) {
 // lead. Called when ContactDetail opens — caches result for 30 min so re-opens
 // don't spam the FUB API. Returns { notes: [...], activities: [...] } merged
 // into the lead's `meta` so the unified timeline can render them.
+//
+// Auth is handled SERVER-SIDE by /api/fub/[...path].js which uses the
+// FUB_API_KEY env var on Vercel — the client doesn't pass a key at all.
+// (The legacy bulk sync passes x-fub-key for historical reasons, but the
+// proxy ignores it.)
 async function fetchFubLeadDetail(fubId) {
-  const fubKey = (JSON.parse(localStorage.getItem("integrations") || "{}")?.fub?.apiKey)
-    || (typeof process !== 'undefined' && process.env?.REACT_APP_FUB_API_KEY)
-    || "";
-  if (!fubKey) throw new Error("FUB API key not configured");
-  const headers = { "x-fub-key": fubKey };
+  // Helper: fetch + parse, swallow errors per-endpoint so one bad endpoint
+  // doesn't kill the whole detail fetch.
+  const safeFetch = async (url) => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) {
+        // If proxy returns 500 it means FUB_API_KEY isn't set on Vercel
+        if (r.status === 500) {
+          const e = await r.json().catch(() => ({}));
+          if (/api[_\s]?key/i.test(e?.error || '')) {
+            throw new Error('FUB_API_KEY env var not set on Vercel — check vercel env ls production');
+          }
+        }
+        return null;
+      }
+      return await r.json();
+    } catch (e) {
+      // Re-throw API_KEY errors so they bubble to the UI
+      if (/api[_\s]?key/i.test(e?.message || '')) throw e;
+      return null;
+    }
+  };
 
-  // Fetch in parallel — different endpoints
   const [notesRes, eventsRes, textsRes, callsRes, emailsRes] = await Promise.all([
-    fetch(`/api/fub/notes?personIds=${fubId}&limit=50`,  { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-    fetch(`/api/fub/events?personIds=${fubId}&limit=50`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-    fetch(`/api/fub/textMessages?personIds=${fubId}&limit=50`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-    fetch(`/api/fub/calls?personIds=${fubId}&limit=50`,  { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-    fetch(`/api/fub/emails?personIds=${fubId}&limit=50`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    safeFetch(`/api/fub/notes?personIds=${fubId}&limit=50`),
+    safeFetch(`/api/fub/events?personIds=${fubId}&limit=50`),
+    safeFetch(`/api/fub/textMessages?personIds=${fubId}&limit=50`),
+    safeFetch(`/api/fub/calls?personIds=${fubId}&limit=50`),
+    safeFetch(`/api/fub/emails?personIds=${fubId}&limit=50`),
   ]);
 
   const notes = (notesRes?.notes || []).map(n => ({
