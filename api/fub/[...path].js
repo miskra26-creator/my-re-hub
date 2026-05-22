@@ -8,9 +8,18 @@
  */
 
 export default async function handler(req, res) {
-  const FUB_API_KEY = process.env.FUB_API_KEY;
+  // Accept either the server-side Vercel env var OR a client-supplied
+  // x-fub-key header (same fallback as dev's setupProxy.js). This keeps
+  // production working even if FUB_API_KEY isn't set on Vercel — Monica
+  // pastes her key on the Integrations page and we forward it.
+  const FUB_API_KEY = process.env.FUB_API_KEY
+    || req.headers['x-fub-key']
+    || (Array.isArray(req.headers['x-fub-key']) ? req.headers['x-fub-key'][0] : null);
   if (!FUB_API_KEY) {
-    return res.status(500).json({ error: 'FUB_API_KEY not configured' });
+    return res.status(500).json({
+      error: 'FUB_API_KEY not configured',
+      hint: 'Either set FUB_API_KEY on Vercel env vars OR paste your FUB key into Integrations → Follow Up Boss inside the app.',
+    });
   }
 
   // Parse the URL directly to avoid relying on Vercel's req.query.path

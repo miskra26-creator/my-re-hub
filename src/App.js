@@ -1949,17 +1949,27 @@ function deriveLeadType(p, tags) {
 // (The legacy bulk sync passes x-fub-key for historical reasons, but the
 // proxy ignores it.)
 async function fetchFubLeadDetail(fubId) {
+  // Pull the FUB key the user pasted into Integrations → Follow Up Boss
+  // and forward it as x-fub-key so the proxy can auth on Vercel even when
+  // FUB_API_KEY isn't set as a server env var. (The bulk syncFUB does the
+  // same thing — we mirror that here for parity.)
+  const fubKey = (JSON.parse(localStorage.getItem("integrations")||"{}")?.fub?.apiKey)
+              || (typeof process !== 'undefined' && process.env?.REACT_APP_FUB_API_KEY)
+              || "";
+  const fetchOpts = fubKey ? { headers: { "x-fub-key": fubKey } } : {};
+
   // Helper: fetch + parse, swallow errors per-endpoint so one bad endpoint
   // doesn't kill the whole detail fetch.
   const safeFetch = async (url) => {
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, fetchOpts);
       if (!r.ok) {
         // If proxy returns 500 it means FUB_API_KEY isn't set on Vercel
+        // AND the client didn't supply one either.
         if (r.status === 500) {
           const e = await r.json().catch(() => ({}));
           if (/api[_\s]?key/i.test(e?.error || '')) {
-            throw new Error('FUB_API_KEY env var not set on Vercel — check vercel env ls production');
+            throw new Error('No FUB key — paste yours in Integrations → Follow Up Boss');
           }
         }
         return null;
@@ -1967,7 +1977,7 @@ async function fetchFubLeadDetail(fubId) {
       return await r.json();
     } catch (e) {
       // Re-throw API_KEY errors so they bubble to the UI
-      if (/api[_\s]?key/i.test(e?.message || '')) throw e;
+      if (/fub key|api[_\s]?key/i.test(e?.message || '')) throw e;
       return null;
     }
   };
@@ -2082,6 +2092,57 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [fubDetail, setFubDetail] = useState(null);
   const [fubLoading, setFubLoading] = useState(false);
   const [fubError, setFubError] = useState(null);
+  // Lender directory (Monica's list of lenders she works with) + assigned lender
+  // for THIS lead. FUB doesn't natively have this but BoldTrail does — we
+  // surface it FUB-style as an inline-editable dropdown in the header.
+  const [lenders, setLenders] = useLS("lender_directory", []);
+  const [showAddLender, setShowAddLender] = useState(false);
+  const [newLenderName, setNewLenderName] = useState("");
+  const [newLenderCo, setNewLenderCo] = useState("");
+  const [newLenderPhone, setNewLenderPhone] = useState("");
+  const [newLenderEmail, setNewLenderEmail] = useState("");
+  // Team agent list (for Assigned-To dropdown). For solo agents this is just
+  // [Monica], but the dropdown still appears for FUB parity.
+  const [teamMembers] = useLS("team_members", []);
+  // Helper: current lead's assigned lender id (stored in lead.meta.lenderId)
+  const assignedLender = (lead.meta?.lenderId && lenders.find(l => l.id === lead.meta.lenderId)) || null;
+  const setLeadLender = (lenderId) => {
+    onUpdate({ ...lead, meta: { ...(lead.meta||{}), lenderId } });
+  };
+  const setLeadAssignedAgent = (agentName) => {
+    onUpdate({ ...lead, meta: { ...(lead.meta||{}), assignedAgent: agentName } });
+  };
+  const saveNewLender = () => {
+    if (!newLenderName.trim()) return;
+    const newL = {
+      id: uid(),
+      name: newLenderName.trim(),
+      company: newLenderCo.trim(),
+      phone: newLenderPhone.trim(),
+      email: newLenderEmail.trim(),
+      createdAt: now(),
+    };
+    setLenders(p => [...p, newL]);
+    setLeadLender(newL.id);
+    setNewLenderName(""); setNewLenderCo(""); setNewLenderPhone(""); setNewLenderEmail("");
+    setShowAddLender(false);
+    toast.success(`Added lender: ${newL.name}`);
+  };
+  // Source label — prefer the FUB source, fall back to lead.source, then "Manual"
+  const sourceLabel = lead.meta?.fubSourceName || (lead.source === 'fub' ? 'FUB' : lead.source) || 'Manual';
+  // Color-code common lead sources so Monica can scan at a glance
+  const sourceColors = {
+    'Realtor.com': '#d92228',
+    'Zillow': '#006aff',
+    'Homes.com': '#0a8a3a',
+    'Trulia': '#5eba7d',
+    'Facebook': '#1877f2',
+    'Instagram': '#e4405f',
+    'Manual': '#94a3b8',
+    'Manual entry': '#94a3b8',
+    'FUB': '#b8864b',
+  };
+  const sourceColor = sourceColors[sourceLabel] || '#a78bfa';
 
   // Auto-fetch FUB detail when the modal opens for a FUB-sourced lead.
   // Caches in memory — closes + reopens don't refetch unless the user clicks
@@ -2419,23 +2480,153 @@ Return STRICT JSON only (no markdown fences, no explanation):
         background:"#0d1117",
         boxShadow:"-20px 0 60px rgba(0,0,0,.6)",
       }}>
-        {/* Header — sticky AND opaque so scrolling content doesn't bleed through */}
+        {/* Header — sticky AND opaque so scrolling content doesn't bleed through.
+            FUB-style: name + initials avatar on top, then a row of source / agent
+            / lender chips so Monica can scan + edit those in one glance. */}
         <div className="lt-detail-header" style={{
-          padding:"20px 24px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+          padding:"18px 22px 14px",display:"flex",flexDirection:"column",gap:12,
           position:"sticky",top:0,zIndex:10,
           background:"#0d1117",
           borderBottom:"1px solid rgba(255,255,255,.06)",
         }}>
-          <div>
-            <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,fontWeight:900,color:"#fff"}}>{lead.name}</div>
-            <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
-              <span className={`badge ${statusColors[lead.status]||"badge-gray"}`}>{lead.status}</span>
-              <span className="badge badge-gray">{lead.type}</span>
-              {lead.source==="fub"&&<span className="badge badge-gray" style={{fontSize:10}}>FUB</span>}
+          {/* Row 1: avatar + name + close */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
+              {/* Initials avatar — FUB has photo, we use color-coded initials */}
+              <div style={{
+                width:44,height:44,borderRadius:"50%",flexShrink:0,
+                background:`linear-gradient(135deg, ${sourceColor}, ${sourceColor}aa)`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:"'DM Serif Display',serif",fontSize:18,fontWeight:900,color:"#fff",
+                boxShadow:"0 2px 8px rgba(0,0,0,.3)",
+              }}>
+                {(lead.name||"?").split(/\s+/).map(s=>s[0]).filter(Boolean).slice(0,2).join("").toUpperCase()}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,fontWeight:900,color:"#fff",lineHeight:1.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.name}</div>
+                <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
+                  <span className={`badge ${statusColors[lead.status]||"badge-gray"}`} style={{fontSize:10}}>{lead.status}</span>
+                  <span className="badge badge-gray" style={{fontSize:10}}>{lead.type}</span>
+                  {(lead.tags || []).slice(0,3).map(t => (
+                    <span key={t} style={{
+                      fontSize:9,padding:"2px 7px",borderRadius:10,
+                      background:"rgba(167,139,250,.15)",color:"#a78bfa",
+                      border:"1px solid rgba(167,139,250,.3)",fontWeight:700,letterSpacing:".3px",textTransform:"uppercase",
+                    }}>{t}</span>
+                  ))}
+                  {(lead.tags || []).length > 3 && (
+                    <span style={{fontSize:9,color:"#64748b"}}>+{lead.tags.length-3}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><X size={16}/></button>
+          </div>
+
+          {/* Row 2: SOURCE + ASSIGNED AGENT + LENDER (FUB parity) */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {/* SOURCE chip — color-coded by where the lead came from */}
+            <div style={{
+              padding:"7px 9px",borderRadius:8,
+              background:`linear-gradient(135deg, ${sourceColor}22, ${sourceColor}10)`,
+              border:`1px solid ${sourceColor}55`,
+              display:"flex",flexDirection:"column",gap:2,minWidth:0,
+            }}>
+              <div style={{fontSize:8.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px"}}>Source</div>
+              <div style={{fontSize:12,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={sourceLabel}>
+                {sourceLabel}
+              </div>
+              {lead.meta?.fubSourceUrl && (
+                <a href={lead.meta.fubSourceUrl} target="_blank" rel="noreferrer" style={{fontSize:9,color:sourceColor,textDecoration:"none"}}>view ↗</a>
+              )}
+            </div>
+
+            {/* ASSIGNED AGENT — dropdown */}
+            <div style={{
+              padding:"7px 9px",borderRadius:8,
+              background:"rgba(126,184,247,.08)",border:"1px solid rgba(126,184,247,.25)",
+              display:"flex",flexDirection:"column",gap:2,minWidth:0,
+            }}>
+              <div style={{fontSize:8.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px"}}>Agent</div>
+              <select
+                value={lead.meta?.assignedAgent || lead.meta?.fubAssignedTo || ""}
+                onChange={e => setLeadAssignedAgent(e.target.value)}
+                style={{
+                  background:"transparent",border:"none",outline:"none",padding:0,
+                  fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",
+                  appearance:"none",WebkitAppearance:"none",width:"100%",
+                }}>
+                <option value="" style={{background:"#0d1117"}}>— Unassigned —</option>
+                <option value="Monica Iskra" style={{background:"#0d1117"}}>Monica Iskra</option>
+                {teamMembers.map(m => (
+                  <option key={m.id||m.name} value={m.name} style={{background:"#0d1117"}}>{m.name}</option>
+                ))}
+                {/* Preserve FUB-assigned name if it's not in the list */}
+                {lead.meta?.fubAssignedTo && lead.meta.fubAssignedTo !== "Monica Iskra" && !teamMembers.find(m=>m.name===lead.meta.fubAssignedTo) && (
+                  <option value={lead.meta.fubAssignedTo} style={{background:"#0d1117"}}>{lead.meta.fubAssignedTo} (FUB)</option>
+                )}
+              </select>
+            </div>
+
+            {/* LENDER — dropdown + inline "Add" */}
+            <div style={{
+              padding:"7px 9px",borderRadius:8,
+              background:"rgba(110,231,183,.08)",border:"1px solid rgba(110,231,183,.25)",
+              display:"flex",flexDirection:"column",gap:2,minWidth:0,position:"relative",
+            }}>
+              <div style={{fontSize:8.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".5px"}}>Lender</div>
+              <select
+                value={lead.meta?.lenderId || ""}
+                onChange={e => {
+                  if (e.target.value === "__add__") { setShowAddLender(true); return; }
+                  setLeadLender(e.target.value || null);
+                }}
+                style={{
+                  background:"transparent",border:"none",outline:"none",padding:0,
+                  fontSize:12,fontWeight:800,color:"#fff",cursor:"pointer",
+                  appearance:"none",WebkitAppearance:"none",width:"100%",
+                }}>
+                <option value="" style={{background:"#0d1117"}}>— None —</option>
+                {lenders.map(l => (
+                  <option key={l.id} value={l.id} style={{background:"#0d1117"}}>{l.name}{l.company?` · ${l.company}`:""}</option>
+                ))}
+                <option value="__add__" style={{background:"#0d1117",color:"#6ee7b7",fontStyle:"italic"}}>+ Add new lender…</option>
+              </select>
+              {assignedLender && (
+                <div style={{fontSize:9,color:"#94a3b8",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {assignedLender.phone || assignedLender.email || assignedLender.company}
+                </div>
+              )}
             </div>
           </div>
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><X size={16}/></button>
         </div>
+
+        {/* Add-lender quick form (inline modal) */}
+        {showAddLender && (
+          <div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowAddLender(false)}>
+            <div style={{background:"#0d1117",borderRadius:14,padding:"22px 24px",width:420,maxWidth:"92%",border:"1px solid rgba(110,231,183,.3)"}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>🏦 Add Lender</div>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setShowAddLender(false)}><X size={14}/></button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div><div className="label" style={{marginBottom:4}}>Name *</div><input className="input" autoFocus value={newLenderName} onChange={e=>setNewLenderName(e.target.value)} placeholder="John Smith"/></div>
+                <div><div className="label" style={{marginBottom:4}}>Company</div><input className="input" value={newLenderCo} onChange={e=>setNewLenderCo(e.target.value)} placeholder="Rocket Mortgage"/></div>
+                <div className="grid-2" style={{gap:10}}>
+                  <div><div className="label" style={{marginBottom:4}}>Phone</div><input className="input" value={newLenderPhone} onChange={e=>setNewLenderPhone(e.target.value)} placeholder="(248) 555-1234"/></div>
+                  <div><div className="label" style={{marginBottom:4}}>Email</div><input className="input" type="email" value={newLenderEmail} onChange={e=>setNewLenderEmail(e.target.value)} placeholder="john@rocket.com"/></div>
+                </div>
+                <div style={{display:"flex",gap:8,marginTop:6}}>
+                  <button className="btn btn-blue btn-sm" onClick={saveNewLender} disabled={!newLenderName.trim()}>Save & assign</button>
+                  <button className="btn btn-ghost btn-sm" onClick={()=>setShowAddLender(false)}>Cancel</button>
+                </div>
+                <div style={{fontSize:10,color:"#64748b",marginTop:4}}>
+                  Saved lenders persist across all leads. Manage in Settings → Lenders later.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Follow-up banner */}
         {followUp&&(
