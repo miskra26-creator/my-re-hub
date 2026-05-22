@@ -8142,72 +8142,514 @@ const PipelineBoard = ({setPage,toast}) => {
   const [dragOver,setDragOver] = useState(null);
   const [selectedLead,setSelectedLead] = useState(null);
   const [search,setSearch] = useState("");
+  // Custom stages persist across reloads. Defaults to BOARD_STAGES; user can
+  // add/remove/rename via "Manage Stages" button.
+  const [stages, setStages] = useLS("pipeline_stages", BOARD_STAGES);
+  const [stageColors, setStageColors] = useLS("pipeline_stage_colors", STAGE_COLORS_MAP);
+  // Filter chips — quick toggles for common views
+  const [filterChip, setFilterChip] = useState("all"); // all | hot | follow-up | has-email | has-phone | stale
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("recent"); // recent | followup | value | name
+  const [showStageEditor, setShowStageEditor] = useState(false);
+  // Track which lead is being hovered, for showing quick actions on its card
+  const [hoverLeadId, setHoverLeadId] = useState(null);
 
-  const filtered = search ? leads.filter(l=>l.name.toLowerCase().includes(search.toLowerCase())||l.phone?.includes(search)||l.area?.toLowerCase().includes(search.toLowerCase())) : leads;
+  // ── Filter pipeline ─────────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    let result = leads || [];
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(l =>
+        (l.name || "").toLowerCase().includes(q) ||
+        (l.phone || "").includes(search) ||
+        (l.area || "").toLowerCase().includes(q) ||
+        (l.email || "").toLowerCase().includes(q)
+      );
+    }
+    if (filterChip === "hot")       result = result.filter(l => (l.status || "").toLowerCase().includes("hot"));
+    if (filterChip === "follow-up") result = result.filter(l => l.followUp && new Date(l.followUp) <= new Date());
+    if (filterChip === "has-email") result = result.filter(l => !!l.email);
+    if (filterChip === "has-phone") result = result.filter(l => !!l.phone);
+    if (filterChip === "stale") {
+      result = result.filter(l => {
+        const last = l.updated_at || l.meta?.lastTouch;
+        if (!last) return true;
+        const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+        return days >= 30;
+      });
+    }
+    if (sourceFilter !== "all") result = result.filter(l => (l.source || "").toLowerCase().includes(sourceFilter.toLowerCase()));
+    if (typeFilter !== "all")   result = result.filter(l => (l.type || "") === typeFilter);
+    return result;
+  }, [leads, search, filterChip, sourceFilter, typeFilter]);
+
+  // ── Pipeline-wide stats ─────────────────────────────────────────────────────
+  const pipelineStats = useMemo(() => {
+    const totalLeads = filtered.length;
+    const totalValue = filtered.reduce((sum, l) => {
+      const b = parseFloat((l.budget || "").toString().replace(/[^0-9.]/g, ""));
+      return sum + (isFinite(b) ? b : 0);
+    }, 0);
+    const followUpsDue = filtered.filter(l => l.followUp && new Date(l.followUp) <= new Date()).length;
+    const hotCount = filtered.filter(l => (l.status || "").toLowerCase().includes("hot")).length;
+    return { totalLeads, totalValue, followUpsDue, hotCount };
+  }, [filtered]);
+
+  // ── Unique sources for the source filter ──────────────────────────────────
+  const uniqueSources = useMemo(() => {
+    const s = new Set();
+    (leads || []).forEach(l => { if (l.source) s.add(l.source); });
+    return Array.from(s).sort();
+  }, [leads]);
+
+  // ── Sort within column ───────────────────────────────────────────────────
+  const sortLeads = useCallback((arr) => {
+    const sorted = [...arr];
+    if (sortBy === "recent") {
+      sorted.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+    } else if (sortBy === "followup") {
+      sorted.sort((a, b) => {
+        if (!a.followUp) return 1;
+        if (!b.followUp) return -1;
+        return new Date(a.followUp) - new Date(b.followUp);
+      });
+    } else if (sortBy === "value") {
+      sorted.sort((a, b) => {
+        const ba = parseFloat((b.budget || "").toString().replace(/[^0-9.]/g, "")) || 0;
+        const aa = parseFloat((a.budget || "").toString().replace(/[^0-9.]/g, "")) || 0;
+        return ba - aa;
+      });
+    } else if (sortBy === "name") {
+      sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+    return sorted;
+  }, [sortBy]);
 
   const onDrop = (stage) => {
-    if(!dragId) return;
-    setLeads(prev=>prev.map(l=>l.id===dragId?{...l,status:stage}:l));
+    if (!dragId) return;
+    setLeads(prev => prev.map(l => l.id === dragId ? { ...l, status: stage } : l));
     toast.success(`Moved to ${stage}`);
-    setDragId(null); setDragOver(null);
+    setDragId(null);
+    setDragOver(null);
+  };
+
+  // Days since timestamp helper
+  const daysSinceUpdate = (l) => {
+    const ts = l.updated_at || l.meta?.lastTouch;
+    if (!ts) return null;
+    return Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+  };
+
+  // ── Quick action handlers (used by hover icons on cards) ────────────────────
+  const quickCall = (lead, e) => {
+    e.stopPropagation();
+    if (!lead.phone) return toast.error("No phone number on file");
+    window.location.href = `tel:${lead.phone}`;
+  };
+  const quickText = (lead, e) => {
+    e.stopPropagation();
+    if (!lead.phone) return toast.error("No phone number on file");
+    window.location.href = `sms:${lead.phone}`;
+  };
+  const quickEmail = (lead, e) => {
+    e.stopPropagation();
+    if (!lead.email) return toast.error("No email on file");
+    window.location.href = `mailto:${lead.email}`;
+  };
+
+  const fmtPipelineMoney = (n) => {
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+    return `$${n}`;
   };
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 60px)",overflow:"hidden",padding:"20px 24px"}}>
-      <PageHeader title="Pipeline Board" sub="Drag leads between stages to update their status" setPage={setPage} parent="dashboard"
+      <PageHeader title="Pipeline Board" sub="Drag leads between stages · click any card to open · hover for quick actions" setPage={setPage} parent="dashboard"
         action={
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input className="input" placeholder="Search leads..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:200}}/>
-            <span style={{fontSize:12,color:"#475569",fontWeight:700}}>{leads.length} leads</span>
+            <input className="input" placeholder="Search leads…" value={search} onChange={e=>setSearch(e.target.value)} style={{width:180}}/>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowStageEditor(true)}>
+              <Settings size={12}/> Stages
+            </button>
           </div>
         }
       />
+
+      {/* ── PIPELINE-WIDE STATS BAR ─────────────────────────────────────────── */}
+      <div style={{
+        display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12,
+      }}>
+        <StatCard label="Total in pipeline" value={pipelineStats.totalLeads.toLocaleString()} color="#b8864b"/>
+        <StatCard label="Pipeline value"    value={fmtPipelineMoney(pipelineStats.totalValue)} color="#10b981"/>
+        <StatCard label="🔥 Hot leads"      value={pipelineStats.hotCount.toLocaleString()} color="#ef4444"/>
+        <StatCard label="⚠ Follow-ups due"  value={pipelineStats.followUpsDue.toLocaleString()} color="#f59e0b"/>
+      </div>
+
+      {/* ── FILTER CHIPS + SORT ──────────────────────────────────────────────── */}
+      <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+        {[
+          { id:"all",        label:"All" },
+          { id:"hot",        label:"🔥 Hot" },
+          { id:"follow-up",  label:"⚠ Follow-up due" },
+          { id:"has-email",  label:"📧 Has email" },
+          { id:"has-phone",  label:"📞 Has phone" },
+          { id:"stale",      label:"💤 Stale 30+ days" },
+        ].map(chip => (
+          <button key={chip.id} onClick={()=>setFilterChip(chip.id)} style={{
+            background: filterChip===chip.id ? "rgba(184,134,75,.25)" : "rgba(255,255,255,.04)",
+            border: filterChip===chip.id ? "1px solid #b8864b" : "1px solid rgba(255,255,255,.08)",
+            borderRadius:18,padding:"5px 12px",
+            color: filterChip===chip.id ? "#e0b370" : "#cbd5e1",
+            fontSize:11.5,fontWeight:700,cursor:"pointer",
+          }}>{chip.label}</button>
+        ))}
+
+        <div style={{flex:1}}/>
+
+        <select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)} className="select" style={{padding:"4px 10px",fontSize:11.5,minWidth:120}}>
+          <option value="all">Any source</option>
+          {uniqueSources.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} className="select" style={{padding:"4px 10px",fontSize:11.5,minWidth:100}}>
+          <option value="all">Any type</option>
+          <option>Buyer</option>
+          <option>Seller</option>
+          <option>Both</option>
+        </select>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className="select" style={{padding:"4px 10px",fontSize:11.5,minWidth:120}}>
+          <option value="recent">Sort: Recent</option>
+          <option value="followup">Sort: Follow-up</option>
+          <option value="value">Sort: Value</option>
+          <option value="name">Sort: Name A-Z</option>
+        </select>
+      </div>
+
+      {/* ── KANBAN ──────────────────────────────────────────────────────────── */}
       <div style={{overflowX:"auto",flex:1,paddingBottom:16}}>
         <div style={{display:"flex",gap:12,alignItems:"flex-start",height:"100%",minWidth:"max-content"}}>
-          {BOARD_STAGES.map(stage=>{
-            const col = filtered.filter(l=>l.status===stage);
-            const color = STAGE_COLORS_MAP[stage]||"#475569";
-            const isOver = dragOver===stage;
+          {stages.map(stage => {
+            const col = sortLeads(filtered.filter(l => l.status === stage));
+            const color = stageColors[stage] || "#475569";
+            const isOver = dragOver === stage;
+            const colValue = col.reduce((s, l) => {
+              const b = parseFloat((l.budget || "").toString().replace(/[^0-9.]/g, ""));
+              return s + (isFinite(b) ? b : 0);
+            }, 0);
             return (
-              <div key={stage} style={{width:220,flexShrink:0,background:isOver?"rgba(26,90,160,.1)":"rgba(255,255,255,.02)",borderRadius:13,border:`1px solid ${isOver?"rgba(126,184,247,.3)":"rgba(255,255,255,.06)"}`,display:"flex",flexDirection:"column",maxHeight:"100%",transition:"all .15s"}}
+              <div key={stage} style={{
+                width:260,flexShrink:0,
+                background: isOver ? `${color}15` : "rgba(255,255,255,.02)",
+                borderRadius:13,
+                border:`1px solid ${isOver ? color + "70" : "rgba(255,255,255,.06)"}`,
+                display:"flex",flexDirection:"column",maxHeight:"100%",transition:"all .15s",
+              }}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 onDrop={()=>onDrop(stage)}>
+
                 {/* Column Header */}
-                <div style={{padding:"12px 12px 10px",borderBottom:`1px solid ${color}30`,flexShrink:0}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:12,fontWeight:800,color,letterSpacing:"-.1px"}}>{stage}</span>
-                    <span style={{fontSize:11,fontWeight:800,background:`${color}20`,color,borderRadius:8,padding:"2px 8px"}}>{col.length}</span>
+                <div style={{padding:"12px 14px 10px",borderBottom:`2px solid ${color}40`,flexShrink:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:12.5,fontWeight:900,color,letterSpacing:"-.2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage}</span>
+                    <span style={{fontSize:11,fontWeight:800,background:`${color}20`,color,borderRadius:8,padding:"2px 8px",flexShrink:0}}>{col.length}</span>
                   </div>
-                </div>
-                {/* Cards */}
-                <div style={{overflowY:"auto",flex:1,padding:"8px 8px 8px",display:"flex",flexDirection:"column",gap:7}}>
-                  {col.length===0&&(
-                    <div style={{textAlign:"center",padding:"24px 8px",color:"#1e2d44",fontSize:11,fontWeight:700}}>
-                      {isOver?"Drop here":"Empty"}
+                  {colValue > 0 && (
+                    <div style={{fontSize:10.5,color:"#94a3b8",marginTop:3,fontWeight:700}}>
+                      💰 {fmtPipelineMoney(colValue)} total
                     </div>
                   )}
-                  {col.map(lead=>(
-                    <div key={lead.id} draggable
-                      onDragStart={e=>{setDragId(lead.id);e.dataTransfer.effectAllowed="move";}}
-                      onDragEnd={()=>{setDragId(null);setDragOver(null);}}
-                      onClick={()=>setSelectedLead(lead)}
-                      style={{background:"rgba(255,255,255,.04)",borderRadius:9,padding:"10px 12px",cursor:"grab",border:"1px solid rgba(255,255,255,.07)",borderLeft:`3px solid ${color}`,opacity:dragId===lead.id?.3:1,transition:"opacity .1s",userSelect:"none"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.name}</div>
-                      {lead.phone&&<div style={{fontSize:11,color:"#64748b",marginBottom:1}}>{lead.phone}</div>}
-                      {lead.area&&<div style={{fontSize:11,color:"#64748b",marginBottom:1}}>{lead.area}</div>}
-                      {lead.budget&&<div style={{fontSize:11,color:"#6ee7b7"}}>💰 {fmtMoney(lead.budget)}</div>}
-                      {lead.followUp&&new Date(lead.followUp)<=new Date()&&<div style={{fontSize:10,fontWeight:700,color:"#f87171",marginTop:3}}>⚠ Follow-up due</div>}
-                      {lead.source&&lead.source!=="fub"&&<div style={{fontSize:10,color:"#374151",marginTop:2}}>{lead.source}</div>}
+                </div>
+
+                {/* Cards */}
+                <div style={{overflowY:"auto",flex:1,padding:"8px 8px 8px",display:"flex",flexDirection:"column",gap:7}}>
+                  {col.length === 0 && (
+                    <div style={{textAlign:"center",padding:"24px 8px",color:"#374151",fontSize:11,fontWeight:700}}>
+                      {isOver ? "✓ Drop here" : "Empty"}
                     </div>
-                  ))}
+                  )}
+                  {col.map(lead => {
+                    const days = daysSinceUpdate(lead);
+                    const isStale = days != null && days > 14;
+                    const followUpDue = lead.followUp && new Date(lead.followUp) <= new Date();
+                    const initial = (lead.name || "?").charAt(0).toUpperCase();
+                    const isHover = hoverLeadId === lead.id;
+                    return (
+                      <div key={lead.id} draggable
+                        onDragStart={e=>{setDragId(lead.id);e.dataTransfer.effectAllowed="move";}}
+                        onDragEnd={()=>{setDragId(null);setDragOver(null);}}
+                        onClick={()=>setSelectedLead(lead)}
+                        onMouseEnter={()=>setHoverLeadId(lead.id)}
+                        onMouseLeave={()=>setHoverLeadId(null)}
+                        style={{
+                          background: isHover ? "rgba(184,134,75,.10)" : "rgba(255,255,255,.04)",
+                          borderRadius:9,padding:"10px 11px",cursor:"grab",
+                          border: isHover ? "1px solid rgba(184,134,75,.35)" : "1px solid rgba(255,255,255,.07)",
+                          borderLeft:`3px solid ${color}`,
+                          opacity:dragId===lead.id?.3:1,
+                          transition:"all .12s",userSelect:"none",position:"relative",
+                        }}>
+                        {/* Top row: avatar + name + days badge */}
+                        <div style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
+                          <div style={{
+                            width:28,height:28,borderRadius:"50%",
+                            background:`linear-gradient(135deg, ${color}, ${color}aa)`,
+                            display:"flex",alignItems:"center",justifyContent:"center",
+                            fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,
+                            boxShadow:`0 0 0 1px ${color}40`,
+                          }}>{initial}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead.name||"(no name)"}</div>
+                            {days != null && (
+                              <div style={{fontSize:10,color:isStale?"#f87171":"#64748b",fontWeight:600,marginTop:1}}>
+                                {days === 0 ? "today" : days === 1 ? "1d ago" : `${days}d ago`}
+                                {isStale && " · stale"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Contact info row */}
+                        {(lead.phone || lead.email) && (
+                          <div style={{fontSize:10.5,color:"#94a3b8",marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {lead.phone && <span>📞 {lead.phone}</span>}
+                            {lead.email && lead.phone && <span> · </span>}
+                            {lead.email && <span>✉ {lead.email.length > 22 ? lead.email.slice(0,20)+'…' : lead.email}</span>}
+                          </div>
+                        )}
+
+                        {/* Area + budget row */}
+                        <div style={{display:"flex",gap:6,fontSize:10.5,color:"#94a3b8",flexWrap:"wrap"}}>
+                          {lead.area && <span>📍 {lead.area}</span>}
+                          {lead.budget && <span style={{color:"#6ee7b7",fontWeight:700}}>💰 {fmtMoney(lead.budget)}</span>}
+                        </div>
+
+                        {/* Follow-up warning */}
+                        {followUpDue && (
+                          <div style={{fontSize:10,fontWeight:800,color:"#f87171",marginTop:5,padding:"3px 6px",background:"rgba(239,68,68,.12)",borderRadius:4,display:"inline-block"}}>
+                            ⚠ Follow-up due
+                          </div>
+                        )}
+
+                        {/* Source tag */}
+                        {lead.source && lead.source !== "fub" && (
+                          <div style={{fontSize:9.5,color:"#64748b",marginTop:4,textTransform:"uppercase",letterSpacing:.5}}>
+                            via {lead.source}
+                          </div>
+                        )}
+
+                        {/* Hover quick actions — appear at right edge */}
+                        {isHover && (
+                          <div style={{
+                            position:"absolute",top:8,right:8,display:"flex",gap:4,
+                            background:"rgba(13,17,23,.95)",borderRadius:6,padding:3,
+                            boxShadow:"0 4px 12px rgba(0,0,0,.5)",
+                            border:"1px solid rgba(184,134,75,.3)",
+                          }}>
+                            {lead.phone && (
+                              <button onClick={(e)=>quickCall(lead,e)} title="Call" style={quickBtnStyle}>
+                                <Phone size={12} />
+                              </button>
+                            )}
+                            {lead.phone && (
+                              <button onClick={(e)=>quickText(lead,e)} title="Text" style={quickBtnStyle}>
+                                <MessageSquare size={12} />
+                              </button>
+                            )}
+                            {lead.email && (
+                              <button onClick={(e)=>quickEmail(lead,e)} title="Email" style={quickBtnStyle}>
+                                <Mail size={12} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-      {selectedLead&&<ContactDetail lead={selectedLead} onClose={()=>setSelectedLead(null)} onUpdate={updated=>{setLeads(prev=>prev.map(l=>l.id===updated.id?updated:l));setSelectedLead(updated);}} toast={toast}/>}
+
+      {/* Stage editor modal */}
+      {showStageEditor && (
+        <StageEditor
+          stages={stages}
+          stageColors={stageColors}
+          setStages={setStages}
+          setStageColors={setStageColors}
+          leads={leads}
+          onClose={()=>setShowStageEditor(false)}
+          toast={toast}
+        />
+      )}
+
+      {selectedLead && (
+        <ContactDetail
+          lead={selectedLead}
+          onClose={()=>setSelectedLead(null)}
+          onUpdate={updated => { setLeads(prev=>prev.map(l=>l.id===updated.id?updated:l)); setSelectedLead(updated); }}
+          toast={toast}
+        />
+      )}
+    </div>
+  );
+};
+
+// Small stat-card component for the pipeline-wide stats bar
+const StatCard = ({label, value, color}) => (
+  <div style={{
+    background:"rgba(15,20,38,.6)",border:"1px solid rgba(255,255,255,.06)",
+    borderRadius:10,padding:"10px 14px",borderLeft:`3px solid ${color}`,
+  }}>
+    <div style={{fontSize:10.5,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>{label}</div>
+    <div style={{fontSize:20,fontWeight:900,color:"#fff"}}>{value}</div>
+  </div>
+);
+
+const quickBtnStyle = {
+  background:"transparent",border:"none",color:"#e0b370",cursor:"pointer",
+  padding:"4px 6px",borderRadius:4,display:"inline-flex",alignItems:"center",
+};
+
+// Stage editor modal — add / remove / rename / recolor stages
+const StageEditor = ({stages, stageColors, setStages, setStageColors, leads, onClose, toast}) => {
+  const [editStages, setEditStages] = useState([...stages]);
+  const [editColors, setEditColors] = useState({...stageColors});
+  const [newStageName, setNewStageName] = useState("");
+
+  const addStage = () => {
+    const name = newStageName.trim();
+    if (!name) return;
+    if (editStages.includes(name)) return toast.error("Stage already exists");
+    setEditStages([...editStages, name]);
+    setEditColors({...editColors, [name]: "#94a3b8"});
+    setNewStageName("");
+  };
+
+  const renameStage = (oldName, newName) => {
+    if (!newName.trim() || editStages.includes(newName)) return;
+    setEditStages(editStages.map(s => s === oldName ? newName : s));
+    const colors = {...editColors};
+    colors[newName] = colors[oldName] || "#94a3b8";
+    delete colors[oldName];
+    setEditColors(colors);
+  };
+
+  const removeStage = (stage) => {
+    const leadsInStage = (leads || []).filter(l => l.status === stage).length;
+    if (leadsInStage > 0) {
+      if (!window.confirm(`${leadsInStage} lead(s) have status "${stage}". Removing this stage will leave them orphaned. Continue?`)) return;
+    }
+    setEditStages(editStages.filter(s => s !== stage));
+  };
+
+  const updateColor = (stage, color) => {
+    setEditColors({...editColors, [stage]: color});
+  };
+
+  const moveUp = (idx) => {
+    if (idx === 0) return;
+    const arr = [...editStages];
+    [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+    setEditStages(arr);
+  };
+  const moveDown = (idx) => {
+    if (idx === editStages.length - 1) return;
+    const arr = [...editStages];
+    [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
+    setEditStages(arr);
+  };
+
+  const save = () => {
+    setStages(editStages);
+    setStageColors(editColors);
+    toast.success(`Pipeline stages updated · ${editStages.length} stages`);
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:300,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20,
+    }}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:"#0d1117",borderRadius:14,padding:24,maxWidth:540,width:"100%",
+        border:"1px solid rgba(184,134,75,.3)",boxShadow:"0 20px 80px rgba(0,0,0,.5)",
+        maxHeight:"85vh",overflow:"auto",
+      }}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontSize:17,fontWeight:900,color:"#fff"}}>Pipeline Stages</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",fontSize:22,cursor:"pointer"}}>×</button>
+        </div>
+
+        <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:14,lineHeight:1.5}}>
+          Add custom stages, reorder them, change colors. Each lead's <code>status</code> field maps to one of these stages.
+        </div>
+
+        {/* Existing stages list */}
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+          {editStages.map((stage, idx) => (
+            <div key={stage} style={{
+              display:"flex",gap:8,alignItems:"center",
+              padding:"8px 10px",background:"rgba(255,255,255,.03)",borderRadius:8,
+              borderLeft:`3px solid ${editColors[stage] || "#94a3b8"}`,
+            }}>
+              <input type="color" value={editColors[stage] || "#94a3b8"}
+                onChange={e=>updateColor(stage, e.target.value)}
+                style={{width:30,height:24,border:"none",cursor:"pointer",borderRadius:4,padding:0,background:"transparent"}}/>
+              <input value={stage} onChange={e=>renameStage(stage, e.target.value)}
+                style={{
+                  background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",
+                  borderRadius:6,padding:"5px 10px",color:"#f1f5f9",fontSize:12.5,flex:1,outline:"none",
+                }}/>
+              <button onClick={()=>moveUp(idx)} disabled={idx===0} style={{
+                background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.08)",
+                borderRadius:5,padding:"4px 7px",color:"#cbd5e1",fontSize:10,fontWeight:700,
+                cursor: idx===0?"not-allowed":"pointer",opacity:idx===0?0.4:1,
+              }}>↑</button>
+              <button onClick={()=>moveDown(idx)} disabled={idx===editStages.length-1} style={{
+                background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.08)",
+                borderRadius:5,padding:"4px 7px",color:"#cbd5e1",fontSize:10,fontWeight:700,
+                cursor: idx===editStages.length-1?"not-allowed":"pointer",opacity:idx===editStages.length-1?0.4:1,
+              }}>↓</button>
+              <button onClick={()=>removeStage(stage)} style={{
+                background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",
+                borderRadius:5,padding:"4px 7px",color:"#fca5a5",fontSize:10,fontWeight:700,cursor:"pointer",
+              }}>×</button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new */}
+        <div style={{display:"flex",gap:8,marginBottom:18}}>
+          <input value={newStageName} onChange={e=>setNewStageName(e.target.value)}
+            placeholder="New stage name (e.g. 'Touring Properties')"
+            onKeyDown={e=>e.key==='Enter' && addStage()}
+            style={{
+              background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",
+              borderRadius:7,padding:"8px 12px",color:"#f1f5f9",fontSize:13,flex:1,outline:"none",
+            }}/>
+          <button onClick={addStage} style={{
+            background:"linear-gradient(135deg, #b8864b, #d4a017)",border:"none",
+            borderRadius:8,padding:"8px 16px",color:"#0f172a",fontSize:12,fontWeight:900,cursor:"pointer",
+          }}>+ Add</button>
+        </div>
+
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{
+            background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",
+            borderRadius:8,padding:"8px 16px",color:"#cbd5e1",fontSize:12.5,fontWeight:700,cursor:"pointer",
+          }}>Cancel</button>
+          <button onClick={save} style={{
+            background:"linear-gradient(135deg, #b8864b, #d4a017)",border:"none",
+            borderRadius:8,padding:"8px 18px",color:"#0f172a",fontSize:13,fontWeight:900,cursor:"pointer",
+          }}>Save changes</button>
+        </div>
+      </div>
     </div>
   );
 };
