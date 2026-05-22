@@ -2861,135 +2861,182 @@ Return STRICT JSON only (no markdown fences, no explanation):
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="tabs" style={{margin:"14px 0 12px"}}>
-            <button className={`tab ${tab==="activity"?"active":""}`} onClick={()=>setTab("activity")}>Activity ({activities.length})</button>
-            <button className={`tab ${tab==="tasks"?"active":""}`} onClick={()=>setTab("tasks")}>
-              Tasks {openTasks.length>0&&<span style={{marginLeft:4,background:"#ef4444",color:"#fff",borderRadius:8,padding:"0 5px",fontSize:10}}>{openTasks.length}</span>}
-            </button>
-            <button className={`tab ${tab==="notes"?"active":""}`} onClick={()=>setTab("notes")}>Notes</button>
-          </div>
-
-          {tab==="activity"&&(
-            <>
-              {/* Log activity */}
-              <div style={{marginBottom:14}}>
-                <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
-                  {ACTIVITY_TYPES.map(a=>(
-                    <button key={a.id} onClick={()=>setActType(a.id)}
-                      style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:`2px solid ${actType===a.id?a.color:"rgba(255,255,255,.08)"}`,background:actType===a.id?`${a.color}20`:"transparent",color:actType===a.id?a.color:"#475569"}}>
-                      {a.icon} {a.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <input className="input" placeholder={`Log a ${actType}...`} value={noteText} onChange={e=>setNoteText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logActivity()}/>
-                  <button className="btn btn-blue btn-sm" onClick={logActivity}><Send size={12}/></button>
-                </div>
-              </div>
-
-              {/* ── UNIFIED TIMELINE — pulls from every source ────────────
-                 Aggregates manual activities, tasks (open + completed),
-                 email queue, Past Client Agent log, status changes,
-                 campaign enrollments, and the lead-created event.
-                 See src/leadActivity.js for the aggregator. */}
-              {(() => {
-                // Build the unified timeline, including FUB notes + activities
-                // when they've been lazy-fetched. FUB events have their own
-                // shape (already pre-formatted in fetchFubLeadDetail) so we
-                // append them post-hoc.
-                const events = getLeadTimeline(lead, {
-                  manualActivities: activities,
-                  tasks,
-                  emailQueue,
-                  agentActivity,
-                });
-                if (fubDetail) {
-                  events.push(...fubDetail.notes, ...fubDetail.activities);
-                  events.sort((a, b) => b.ts - a.ts);
-                }
-                const summary = summarizeTimeline(events);
-
-                if (events.length === 0) {
-                  return <div style={{textAlign:"center",padding:"30px 0",color:"#374151",fontSize:13}}>No history yet — log your first interaction above</div>;
-                }
-
-                return (
-                  <>
-                    {/* Summary header */}
-                    <div style={{
-                      display:"flex",gap:8,flexWrap:"wrap",marginBottom:14,
-                      padding:"10px 12px",background:"rgba(184,134,75,.08)",borderRadius:10,
-                      border:"1px solid rgba(184,134,75,.2)",
+          {/* Tabs — FUB style: Activity / Tasks / Notes / Emails / Texts / Calls.
+             The unified timeline is rebuilt once inside the IIFE and sliced
+             per tab so the badges always reflect what's in each pane. */}
+          {(() => {
+            const all = (() => {
+              const e = getLeadTimeline(lead, { manualActivities: activities, tasks, emailQueue, agentActivity });
+              if (fubDetail) { e.push(...fubDetail.notes, ...fubDetail.activities); e.sort((a,b)=>b.ts-a.ts); }
+              return e;
+            })();
+            const counts = {
+              activity: all.length,
+              tasks: openTasks.length,
+              notes: all.filter(e => e.type === 'note').length,
+              emails: all.filter(e => e.type === 'email').length,
+              texts: all.filter(e => e.type === 'text').length,
+              calls: all.filter(e => e.type === 'call').length,
+            };
+            const renderRow = (e) => (
+              <div key={e.id} style={{
+                display:"flex",gap:10,padding:"10px 12px",
+                background:"rgba(255,255,255,.03)",borderRadius:10,
+                border:"1px solid rgba(255,255,255,.05)",
+                borderLeft:`3px solid ${e.color}`,
+              }}>
+                <span style={{fontSize:16,flexShrink:0,lineHeight:1.4}}>{e.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,color:"#fff",fontWeight:600,wordBreak:"break-word"}}>
+                    {e.title}
+                    {e.status && e.status !== 'open' && (
+                      <span style={{
+                        marginLeft:8,fontSize:9.5,fontWeight:800,letterSpacing:.5,
+                        textTransform:"uppercase",padding:"1px 6px",borderRadius:4,
+                        background: e.status==='sent'||e.status==='completed' ? "rgba(16,185,129,.15)"
+                                  : e.status==='error' ? "rgba(239,68,68,.15)"
+                                  : "rgba(184,134,75,.15)",
+                        color: e.status==='sent'||e.status==='completed' ? "#6ee7b7"
+                             : e.status==='error' ? "#fca5a5"
+                             : "#e0b370",
+                      }}>{e.status}</span>
+                    )}
+                  </div>
+                  {e.body && (
+                    <div style={{fontSize:11.5,color:"#94a3b8",marginTop:3,whiteSpace:"pre-wrap",
+                      wordBreak:"break-word",maxHeight:60,overflow:"hidden",
+                      lineHeight:1.4,
                     }}>
-                      <span style={{fontSize:11,fontWeight:800,color:"#e0b370",letterSpacing:1,textTransform:"uppercase"}}>
-                        {events.length} event{events.length===1?'':'s'}
-                      </span>
-                      {summary.lastTouch && (
-                        <span style={{fontSize:11,color:"#94a3b8"}}>
-                          · last touch {timeAgo(summary.lastTouch)}
-                        </span>
-                      )}
-                      {Object.entries(summary.counts).map(([type, count]) => (
-                        <span key={type} style={{fontSize:11,color:"#cbd5e1"}}>
-                          · <strong style={{color:"#fff"}}>{count}</strong> {type}{count===1?'':'s'}
-                        </span>
-                      ))}
+                      {e.body.length > 240 ? e.body.slice(0,240)+'…' : e.body}
+                    </div>
+                  )}
+                  <div style={{fontSize:10.5,color:"#475569",marginTop:4}}>
+                    {e.source} · {formatTs(e.ts)} · {timeAgo(e.ts)}
+                  </div>
+                </div>
+                {e.id.startsWith('man_') && (
+                  <button style={{background:"none",border:"none",color:"#374151",cursor:"pointer",padding:2,height:'fit-content'}}
+                    onClick={()=>setActivities(p=>p.filter(x=>('man_'+(x.id||x.createdAt))!==e.id))}>
+                    <X size={12}/>
+                  </button>
+                )}
+              </div>
+            );
+            const TabBtn = ({id, label, badge}) => (
+              <button className={`tab ${tab===id?"active":""}`} onClick={()=>setTab(id)}>
+                {label} {badge>0 && <span style={{
+                  marginLeft:4,background:tab===id?"#b8864b":"rgba(255,255,255,.1)",
+                  color:"#fff",borderRadius:8,padding:"0 6px",fontSize:10,fontWeight:800,
+                }}>{badge}</span>}
+              </button>
+            );
+            const renderEmpty = (msg) => (
+              <div style={{textAlign:"center",padding:"30px 0",color:"#374151",fontSize:13}}>{msg}</div>
+            );
+            return (
+              <>
+                <div className="tabs" style={{margin:"14px 0 12px",flexWrap:"wrap",gap:4}}>
+                  <TabBtn id="activity" label="Activity" badge={counts.activity}/>
+                  <TabBtn id="tasks" label="Tasks" badge={counts.tasks}/>
+                  <TabBtn id="notes" label="Notes" badge={counts.notes}/>
+                  <TabBtn id="emails" label="Emails" badge={counts.emails}/>
+                  <TabBtn id="texts" label="Texts" badge={counts.texts}/>
+                  <TabBtn id="calls" label="Calls" badge={counts.calls}/>
+                </div>
+
+                {/* ─── ACTIVITY: everything ─── */}
+                {tab==="activity" && (
+                  <>
+                    <div style={{marginBottom:14}}>
+                      <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                        {ACTIVITY_TYPES.map(a=>(
+                          <button key={a.id} onClick={()=>setActType(a.id)}
+                            style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:`2px solid ${actType===a.id?a.color:"rgba(255,255,255,.08)"}`,background:actType===a.id?`${a.color}20`:"transparent",color:actType===a.id?a.color:"#475569"}}>
+                            {a.icon} {a.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <input className="input" placeholder={`Log a ${actType}...`} value={noteText} onChange={e=>setNoteText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logActivity()}/>
+                        <button className="btn btn-blue btn-sm" onClick={logActivity}><Send size={12}/></button>
+                      </div>
                     </div>
 
-                    {/* Timeline */}
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {events.map(e => (
-                        <div key={e.id} style={{
-                          display:"flex",gap:10,padding:"10px 12px",
-                          background:"rgba(255,255,255,.03)",borderRadius:10,
-                          border:"1px solid rgba(255,255,255,.05)",
-                          borderLeft:`3px solid ${e.color}`,
-                        }}>
-                          <span style={{fontSize:16,flexShrink:0,lineHeight:1.4}}>{e.icon}</span>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,color:"#fff",fontWeight:600,wordBreak:"break-word"}}>
-                              {e.title}
-                              {e.status && e.status !== 'open' && (
-                                <span style={{
-                                  marginLeft:8,fontSize:9.5,fontWeight:800,letterSpacing:.5,
-                                  textTransform:"uppercase",padding:"1px 6px",borderRadius:4,
-                                  background: e.status==='sent'||e.status==='completed' ? "rgba(16,185,129,.15)"
-                                            : e.status==='error' ? "rgba(239,68,68,.15)"
-                                            : "rgba(184,134,75,.15)",
-                                  color: e.status==='sent'||e.status==='completed' ? "#6ee7b7"
-                                       : e.status==='error' ? "#fca5a5"
-                                       : "#e0b370",
-                                }}>{e.status}</span>
-                              )}
-                            </div>
-                            {e.body && (
-                              <div style={{fontSize:11.5,color:"#94a3b8",marginTop:3,whiteSpace:"pre-wrap",
-                                wordBreak:"break-word",maxHeight:60,overflow:"hidden",
-                                lineHeight:1.4,
-                              }}>
-                                {e.body.length > 240 ? e.body.slice(0,240)+'…' : e.body}
-                              </div>
+                    {all.length === 0
+                      ? renderEmpty("No history yet — log your first interaction above")
+                      : (
+                        <>
+                          <div style={{
+                            display:"flex",gap:8,flexWrap:"wrap",marginBottom:14,
+                            padding:"10px 12px",background:"rgba(184,134,75,.08)",borderRadius:10,
+                            border:"1px solid rgba(184,134,75,.2)",
+                          }}>
+                            <span style={{fontSize:11,fontWeight:800,color:"#e0b370",letterSpacing:1,textTransform:"uppercase"}}>
+                              {all.length} event{all.length===1?'':'s'}
+                            </span>
+                            {all[0] && (
+                              <span style={{fontSize:11,color:"#94a3b8"}}>· last touch {timeAgo(all[0].ts)}</span>
                             )}
-                            <div style={{fontSize:10.5,color:"#475569",marginTop:4}}>
-                              {e.source} · {formatTs(e.ts)} · {timeAgo(e.ts)}
-                            </div>
+                            {Object.entries(all.reduce((a,e)=>{a[e.type]=(a[e.type]||0)+1;return a;},{})).map(([type, count]) => (
+                              <span key={type} style={{fontSize:11,color:"#cbd5e1"}}>
+                                · <strong style={{color:"#fff"}}>{count}</strong> {type}{count===1?'':'s'}
+                              </span>
+                            ))}
                           </div>
-                          {/* Delete only allowed for manual-log entries */}
-                          {e.id.startsWith('man_') && (
-                            <button style={{background:"none",border:"none",color:"#374151",cursor:"pointer",padding:2,height:'fit-content'}}
-                              onClick={()=>setActivities(p=>p.filter(x=>('man_'+(x.id||x.createdAt))!==e.id))}>
-                              <X size={12}/>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.map(renderRow)}</div>
+                        </>
+                      )
+                    }
                   </>
-                );
-              })()}
-            </>
-          )}
+                )}
+
+                {/* ─── NOTES: textarea + filtered notes list ─── */}
+                {tab==="notes" && (
+                  <div style={{paddingBottom:20}}>
+                    <div className="label" style={{marginBottom:8}}>General Notes</div>
+                    <textarea className="textarea" style={{minHeight:120}} placeholder="Anything about this contact — preferences, timeline, how you met..." value={form.notes||""} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
+                    <button className="btn btn-blue btn-sm" style={{marginTop:10,marginBottom:20}} onClick={saveEdit}><Save size={12}/>Save Notes</button>
+
+                    <div className="label" style={{marginBottom:8,marginTop:14}}>FUB / Logged Notes ({counts.notes})</div>
+                    {counts.notes === 0
+                      ? renderEmpty("No notes synced from FUB — try Re-sync from FUB above")
+                      : <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.filter(e=>e.type==='note').map(renderRow)}</div>
+                    }
+                  </div>
+                )}
+
+                {/* ─── EMAILS ─── */}
+                {tab==="emails" && (
+                  <div style={{paddingBottom:20}}>
+                    {counts.emails === 0
+                      ? renderEmpty("No emails yet — drip campaigns, FUB sync, or manual emails will appear here")
+                      : <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.filter(e=>e.type==='email').map(renderRow)}</div>
+                    }
+                  </div>
+                )}
+
+                {/* ─── TEXTS ─── */}
+                {tab==="texts" && (
+                  <div style={{paddingBottom:20}}>
+                    {counts.texts === 0
+                      ? renderEmpty("No texts yet")
+                      : <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.filter(e=>e.type==='text').map(renderRow)}</div>
+                    }
+                  </div>
+                )}
+
+                {/* ─── CALLS ─── */}
+                {tab==="calls" && (
+                  <div style={{paddingBottom:20}}>
+                    {counts.calls === 0
+                      ? renderEmpty("No call logs yet")
+                      : <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.filter(e=>e.type==='call').map(renderRow)}</div>
+                    }
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {tab==="tasks"&&(
             <div style={{paddingBottom:20}}>
@@ -3162,13 +3209,6 @@ Return STRICT JSON only (no markdown fences, no explanation):
             </div>
           )}
 
-          {tab==="notes"&&(
-            <div>
-              <div className="label" style={{marginBottom:8}}>General Notes</div>
-              <textarea className="textarea" style={{minHeight:180}} placeholder="Anything about this contact — preferences, timeline, how you met..." value={form.notes||""} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
-              <button className="btn btn-blue btn-sm" style={{marginTop:10}} onClick={saveEdit}><Save size={12}/>Save Notes</button>
-            </div>
-          )}
         </div>
       </div>
     </div>
