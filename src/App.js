@@ -12,6 +12,8 @@ import AutoReel from './AutoReel';
 import VirtualStaging from './VirtualStaging';
 import PastClientAgent, { PastClientAgentWorker } from './PastClientAgent';
 import SmartLists from './SmartLists';
+import FubMigration from './FubMigration';
+import { idbGet as cloudIdbGet } from './cloudHooks';
 import { getLeadTimeline, summarizeTimeline, timeAgo, formatTs } from './leadActivity';
 import AIStudio from './AIStudio';
 import AdComposer from './AdComposer';
@@ -1948,11 +1950,73 @@ function deriveLeadType(p, tags) {
 // FUB_API_KEY env var on Vercel — the client doesn't pass a key at all.
 // (The legacy bulk sync passes x-fub-key for historical reasons, but the
 // proxy ignores it.)
-async function fetchFubLeadDetail(fubId) {
-  // Pull the FUB key the user pasted into Integrations → Follow Up Boss
-  // and forward it as x-fub-key so the proxy can auth on Vercel even when
-  // FUB_API_KEY isn't set as a server env var. (The bulk syncFUB does the
-  // same thing — we mirror that here for parity.)
+async function fetchFubLeadDetail(fubId, leadId) {
+  // PREFERRED PATH: Read from local IndexedDB if the FUB Migration tool
+  // has already imported this lead's data. This is what makes my-re-hub
+  // FUB-independent — once imported, we never call FUB again on contact
+  // open. (Settings → 🗄️ FUB Migration runs the one-time import.)
+  if (leadId) {
+    try {
+      const cached = await cloudIdbGet(`fub_data_${leadId}`);
+      if (cached && cached.importedAt) {
+        // Reshape the raw FUB records into timeline events (same shape as
+        // the live-fetch path below produces)
+        const notes = (cached.notes || []).map(n => ({
+          id: 'fubnote_' + n.id,
+          ts: new Date(n.created || n.updated).getTime(),
+          type: 'note', source: 'FUB note', icon: '📝', color: '#94a3b8',
+          title: (n.subject || n.body || '').slice(0, 80) || 'Note',
+          body: n.body || '', direction: null, status: null, raw: n,
+        }));
+        const events = (cached.events || []).map(ev => ({
+          id: 'fubevt_' + ev.id,
+          ts: new Date(ev.created || ev.occurredAt).getTime(),
+          type: 'task', source: `FUB: ${ev.type || 'event'}`, icon: '✓', color: '#b8864b',
+          title: ev.description || ev.type || 'Event',
+          body: null, direction: null,
+          status: ev.completed ? 'completed' : 'open', raw: ev,
+        }));
+        const texts = (cached.textMessages || []).map(t => ({
+          id: 'fubsms_' + t.id,
+          ts: new Date(t.created || t.sent).getTime(),
+          type: 'text', source: 'FUB SMS', icon: '💬', color: '#3b82f6',
+          title: `SMS ${t.isIncoming || t.direction === 'inbound' ? 'received' : 'sent'}`,
+          body: t.message || t.body || '',
+          direction: t.isIncoming || t.direction === 'inbound' ? 'inbound' : 'outbound',
+          status: 'sent', raw: t,
+        }));
+        const calls = (cached.calls || []).map(c => ({
+          id: 'fubcall_' + c.id,
+          ts: new Date(c.created || c.occurredAt).getTime(),
+          type: 'call', source: `FUB call · ${c.duration ? c.duration + 's' : ''}`, icon: '📞', color: '#10b981',
+          title: c.outcome || c.note || `Call ${c.isIncoming ? 'received' : 'made'}`,
+          body: c.note || null,
+          direction: c.isIncoming ? 'inbound' : 'outbound',
+          status: c.outcome || null, raw: c,
+        }));
+        const emails = (cached.emails || []).map(e => ({
+          id: 'fubeml_' + e.id,
+          ts: new Date(e.created || e.sent).getTime(),
+          type: 'email', source: 'FUB email', icon: '📧', color: '#ea4335',
+          title: e.subject || `Email ${e.isIncoming ? 'received' : 'sent'}`,
+          body: e.body || e.snippet || null,
+          direction: e.isIncoming ? 'inbound' : 'outbound',
+          status: 'sent', raw: e,
+        }));
+        return {
+          notes,
+          activities: [...events, ...texts, ...calls, ...emails].sort((a,b)=>b.ts-a.ts),
+          fetchedAt: cached.importedAt,
+          fromCache: true,
+        };
+      }
+    } catch (e) {
+      console.warn('[FUB cache read]', e.message);
+    }
+  }
+
+  // FALLBACK PATH: live FUB API call. Pull the FUB key the user pasted
+  // into Integrations and forward it as x-fub-key so the proxy can auth.
   const fubKey = (JSON.parse(localStorage.getItem("integrations")||"{}")?.fub?.apiKey)
               || (typeof process !== 'undefined' && process.env?.REACT_APP_FUB_API_KEY)
               || "";
@@ -2190,7 +2254,7 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   useEffect(() => {
     if (!lead.fubId || fubDetail || fubLoading) return;
     setFubLoading(true);
-    fetchFubLeadDetail(lead.fubId)
+    fetchFubLeadDetail(lead.fubId, lead.id)
       .then(d => { setFubDetail(d); setFubError(null); })
       .catch(e => { setFubError(e.message); console.warn('[FUB detail]', e); })
       .finally(() => setFubLoading(false));
@@ -2202,7 +2266,7 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
     setFubLoading(true);
     setFubError(null);
     try {
-      const d = await fetchFubLeadDetail(lead.fubId);
+      const d = await fetchFubLeadDetail(lead.fubId, lead.id);
       setFubDetail(d);
       toast.success(`Re-synced from FUB · ${d.notes.length} notes · ${d.activities.length} activities`);
     } catch (e) {
@@ -8733,7 +8797,7 @@ const SettingsPage = ({setPage,toast}) => {
       <PageHeader title="Settings" sub="Your profile, brand, and preferences" setPage={setPage} parent="dashboard"/>
       <div style={{display:"flex",gap:22}}>
         <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:160,flexShrink:0}}>
-          {[{id:"profile",l:"Agent Profile"},{id:"brand",l:"Brand Voice"},{id:"areas",l:"Service Areas"},{id:"ai",l:"AI Settings"},{id:"automation",l:"🤖 Automation"},{id:"gmail",l:"📧 Gmail Sync"},{id:"mobile",l:"📱 Mobile App"}].map(t=>(
+          {[{id:"profile",l:"Agent Profile"},{id:"brand",l:"Brand Voice"},{id:"areas",l:"Service Areas"},{id:"ai",l:"AI Settings"},{id:"automation",l:"🤖 Automation"},{id:"gmail",l:"📧 Gmail Sync"},{id:"fub-migration",l:"🗄️ FUB Migration"},{id:"mobile",l:"📱 Mobile App"}].map(t=>(
             <button key={t.id} className={`nav-item ${tab===t.id?"active":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>
           ))}
         </div>
@@ -8874,6 +8938,10 @@ const SettingsPage = ({setPage,toast}) => {
                 </>
               )}
             </div>
+          )}
+
+          {tab==="fub-migration"&&(
+            <FubMigration toast={toast}/>
           )}
 
           {tab==="mobile"&&(
