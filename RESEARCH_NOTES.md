@@ -126,31 +126,63 @@ Sources: https://www.sierrainteractive.com/ + https://www.realgeeks.com/ + https
 
 ---
 
-## 🎯 Proposed roadmap (honest priorities)
+## 🎯 LOCKED IN — Official roadmap (decided 2026-05-23 morning)
 
-### Phase 0 — Make what exists actually work (next 2 weeks)
-1. **Today's bugs:** Fix texts via X-System headers (mostly done), verify migration captures everything
-2. **FUB migration completion** — let it run, verify counts, turn off auto-sync
-3. **Stress-test daily-use features:** Lead detail, drip enrollment, action plans, pipeline — actually USE them in your day-to-day for 10 leads, find what breaks, fix it
-4. **UI polish on those 3-4 features only** — BoldTrail-clean look, bigger photos, lighter palette
-5. **Twilio SMS integration** ($5/mo) so we can actually send texts, not just log them
+### Phase 0 — Make what exists actually work (NOW, this week + next)
+1. ✅ FUB migration complete (DONE — 100%)
+2. **Fix texts via X-System headers** — Monica registers system at apps.followupboss.com/system-registration + adds FUB_SYSTEM/FUB_SYSTEM_KEY env vars on Vercel + clicks Resume Import (~15 min when she's ready)
+3. **Stress-test daily-use features** — Use Lead Detail, Drip enrollment, Action plans, Pipeline on 10 real leads. Find what breaks. Report back.
+4. **UI polish on those 3-4 features ONLY** — BoldTrail-clean look, bigger photos, lighter palette
+5. **Twilio SMS integration** ($5/mo) — required infrastructure for everything in Phase 1
 
-### Phase 1 — Lead conversion features (3-4 weeks)
-6. **AI ISA** — auto-respond to new leads via SMS within 60s using Claude. The #1 highest-ROI feature.
-7. **Mass email/text/video blast** — pick 50 leads → send a market update. BoldTrail-style.
-8. **Power dialer (mobile)** — sequential call list with auto-dial via Twilio.
-9. **Seller lead magnet** — Real Geeks' Estate IQ clone. Public page where homeowners get home value + we capture them as seller leads.
+### Phase 1 — AI ISA + Database Activation (2-3 weeks) ← BIGGEST ROI
+6. **AI ISA** — auto-respond to new leads via SMS within 60 seconds using Claude. The #1 competitive feature in the 2026 market. 78% of buyers work with the first agent who responds.
+7. **Database activation campaigns to her 6,041 existing leads** — most agents never touch their old database. Build drip + reactivation flows. This activates value she's ALREADY paid for.
+8. **Mass email/text blast** — pick 50 leads → send a market update. BoldTrail-style.
 
-### Phase 2 — Marketing automation (3-4 weeks)
-10. **Squeeze/landing page builder** — quick lead capture pages with stats
-11. **Behavioral triggers** — once we have an IDX feed, auto-text on property view / favorite
-12. **Mass email tracking** — opens, clicks, delivery rates
-13. **Contact enrichment** — pull social profiles/birthdays for past clients (free via Apollo or Clearbit trial)
+### Phase 1.5 — Public website (4-6 weeks from now)
+9. **Perna-quality IDX website** — Tier 2 scope (50-80 hrs my time, $60-240/mo to run).
+   - Foundation: homepage with property search, home valuation lead magnet, agent bio, community pages, blog
+   - Behavioral tracking — property views logged to lead's profile
+   - Saved searches + auto-email alerts
+   - AI chat widget on every page
+   - FB Pixel + Google Tag for retargeting infrastructure
+   - Lead capture wired to my-re-hub
+   - GATED ON: Realcomp IDX access (Monica's email to IDXSupport in progress)
+   - **Built only AFTER Phase 0 + Phase 1 are PROVEN over 2-3 weeks of daily use.**
 
-### Phase 3 — Brokerage tools (later, lower priority)
-14. Transaction management checklists per deal
-15. Commission tracking (you already have Finances page — extend it)
-16. Document storage per contact
+### Phase 2 — Marketing automation (after website launches)
+10. Power dialer (sequential auto-dial via Twilio Voice)
+11. Squeeze/landing page builder
+12. Behavioral triggers tied to IDX (auto-text on property view)
+13. Mass email tracking (opens, clicks)
+14. Contact enrichment (social profiles, life events)
+15. Seller lead magnet (Real Geeks' Estate IQ clone — moved here, dependent on website + IDX)
+
+### Phase 3 — Brokerage tools (lower priority)
+16. Transaction management checklists per deal
+17. Commission tracking (extend existing Finances page)
+18. Document storage per contact
+
+---
+
+## 🧠 Why this priority order (decision rationale 2026-05-23)
+
+Monica asked the honest question: "Are people still using agent websites or have they pulled back to Zillow/Homes.com?"
+
+**Data says:** Agent websites still convert at 3-5x template rate, forced registration still works (+425% signups), 78% of buyers work with the first agent who responds. BUT the agent website's JOB has shifted:
+- **Discovery** = Zillow/Realtor.com/Homes.com
+- **Conversion** = Agent website (when buyer is serious or wants a specific agent)
+- **Retention** = Agent website (saved searches, alerts)
+
+The Ylopo "cold buyer → ad → IDX site → register" funnel still works, but it requires ad spend ($1-3k/mo). Without ads, the website is a credibility/conversion tool, not a cold-lead generator.
+
+**Monica's actual lead sources:** sphere + referrals + Realtor.com purchased leads. Her business doesn't need cold ad-funnel website — it needs:
+1. Speed-to-respond on Realtor.com leads (= AI ISA)
+2. Activation of her 6,041 existing FUB leads (= database campaigns)
+3. Credibility website for sphere conversion (= Phase 1.5, lower urgency)
+
+That's why AI ISA + database activation come BEFORE the website. Bigger ROI on time invested for HER specific business mix.
 
 ---
 

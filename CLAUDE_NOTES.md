@@ -90,6 +90,45 @@ Contains:
 
 ---
 
+### Update 2026-05-23 ~5am — Roadmap LOCKED IN
+
+Monica woke up early (~4-5am her time). FUB migration confirmed 100% complete.
+Long Q&A session about platform direction and website priorities.
+
+Key decisions she made tonight:
+- **Skip extracting FUB text history** initially — she'll spend the 10 min to
+  register a system with FUB anyway (her words: "what the hell is 10 minutes")
+  but it's optional value-add, not critical
+- **NOT canceling FUB yet** — smart, run both in parallel for 2-3 weeks
+- **Website goes to Phase 1.5, NOT Phase 0** — agreed AI ISA + database
+  activation of her 6,041 leads is higher ROI than building Perna-quality
+  website upfront. Site stays in roadmap as Tier 2 scope.
+- **Reference site she likes**: thepernateam.com (Michael Perna, Metro Detroit
+  competitor doing $200M/year, also uses Claude Code per Monica). Standard to
+  match visually when we build her site.
+
+Updated RESEARCH_NOTES.md with the locked priority order:
+- Phase 0: Stress-test internals + UI polish + Twilio
+- Phase 1: AI ISA (auto-text new leads in 60s) + database activation of 6,041
+  existing leads. BIGGEST ROI, do FIRST.
+- Phase 1.5: Public website (50-80 hrs my time, $60-240/mo to run). GATED on
+  Realcomp IDX access she's still waiting on.
+- Phase 2: Power dialer, squeeze pages, behavioral triggers, etc.
+
+Reasoning written into research doc: Her business mix (sphere + referrals +
+Realtor.com leads) doesn't need cold-ad website front-end. It needs speed-to-
+respond (AI ISA) + database activation of existing relationships.
+
+### Open questions when she wakes up properly
+
+- What's her current ad spend / lead source mix? Need this to validate Phase 1
+  priorities make sense for her actual business
+- Has Realcomp IDXSupport responded to her email?
+- Did she ever close deals from Ylopo specifically? Helps gauge expected
+  website ROI when we build Phase 1.5
+
+---
+
 ## Previous session: 2026-05-21 (laptop, late evening — AutoReel deep dive, hard lesson)
 
 ### Headline
