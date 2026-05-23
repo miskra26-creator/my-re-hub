@@ -2207,9 +2207,29 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "", phone: "", email: "" });
   const [agentVoice] = useLS("agent_voice", "");
 
-  const leadTasks = tasks.filter(t=>t.leadId===lead.id).sort((a,b)=>a.completed-b.completed||a.dueDate>b.dueDate?1:-1);
-  const openTasks = leadTasks.filter(t=>!t.completed);
-  const doneTasks = leadTasks.filter(t=>t.completed);
+  const leadTasks = useMemo(
+    () => tasks.filter(t=>t.leadId===lead.id).sort((a,b)=>a.completed-b.completed||a.dueDate>b.dueDate?1:-1),
+    [tasks, lead.id]
+  );
+  const openTasks = useMemo(() => leadTasks.filter(t=>!t.completed), [leadTasks]);
+  const doneTasks = useMemo(() => leadTasks.filter(t=>t.completed), [leadTasks]);
+
+  // Heavy timeline computation — memoized so re-renders (e.g. typing in the
+  // note input, toggling tabs) don't redo all the work. Only recomputes
+  // when one of the source arrays actually changes.
+  const allEvents = useMemo(() => {
+    const e = getLeadTimeline(lead, { manualActivities: activities, tasks, emailQueue, agentActivity });
+    if (fubDetail) { e.push(...fubDetail.notes, ...fubDetail.activities); e.sort((a,b)=>b.ts-a.ts); }
+    return e;
+  }, [lead, activities, tasks, emailQueue, agentActivity, fubDetail]);
+  const tabCounts = useMemo(() => ({
+    activity: allEvents.length,
+    tasks: openTasks.length,
+    notes: allEvents.filter(e => e.type === 'note').length,
+    emails: allEvents.filter(e => e.type === 'email').length,
+    texts: allEvents.filter(e => e.type === 'text').length,
+    calls: allEvents.filter(e => e.type === 'call').length,
+  }), [allEvents, openTasks.length]);
 
   const addTask = ()=>{
     if(!newTaskTitle.trim()) return;
@@ -2865,19 +2885,10 @@ Return STRICT JSON only (no markdown fences, no explanation):
              The unified timeline is rebuilt once inside the IIFE and sliced
              per tab so the badges always reflect what's in each pane. */}
           {(() => {
-            const all = (() => {
-              const e = getLeadTimeline(lead, { manualActivities: activities, tasks, emailQueue, agentActivity });
-              if (fubDetail) { e.push(...fubDetail.notes, ...fubDetail.activities); e.sort((a,b)=>b.ts-a.ts); }
-              return e;
-            })();
-            const counts = {
-              activity: all.length,
-              tasks: openTasks.length,
-              notes: all.filter(e => e.type === 'note').length,
-              emails: all.filter(e => e.type === 'email').length,
-              texts: all.filter(e => e.type === 'text').length,
-              calls: all.filter(e => e.type === 'call').length,
-            };
+            // Read the pre-memoized values hoisted to the top of ContactDetail
+            // — no recomputation per render, no freeze on tab switch.
+            const all = allEvents;
+            const counts = tabCounts;
             const renderRow = (e) => (
               <div key={e.id} style={{
                 display:"flex",gap:10,padding:"10px 12px",
