@@ -3580,7 +3580,12 @@ const LeadTracker = ({setPage,toast}) => {
   // Auto-sync FUB on mount, every 10 min, and when the tab regains focus.
   // Silent (no toast) — runs in background. Debounced to once per minute so
   // bouncing between sidebar pages doesn't hammer the API.
+  //
+  // OPT-OUT: After the FUB Migration tool finishes, Monica can disable auto-
+  // sync from Settings → 🗄️ FUB Migration. Once disabled, my-re-hub never
+  // calls FUB on its own — she controls when (or if) to fetch new data.
   useEffect(() => {
+    if (localStorage.getItem('fub_auto_sync_disabled') === '1') return;
     let lastFireAt = 0;
     const maybeSync = () => {
       if (Date.now() - lastFireAt < 60000) return;

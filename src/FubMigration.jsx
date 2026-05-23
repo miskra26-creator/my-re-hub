@@ -128,6 +128,22 @@ export default function FubMigration({ toast }) {
   const [debugLog, setDebugLog] = useState([]);
   const [showDebug, setShowDebug] = useState(false);
   const stopRef = useRef(false);
+  // The auto-sync toggle — flips localStorage['fub_auto_sync_disabled']
+  // which the useEffect in App.js reads on mount. After this is set,
+  // my-re-hub stops auto-calling FUB on app load / window focus / every 10m.
+  const [autoSyncDisabled, setAutoSyncDisabled] = useState(
+    () => localStorage.getItem('fub_auto_sync_disabled') === '1'
+  );
+  const toggleAutoSync = () => {
+    const next = !autoSyncDisabled;
+    if (next) localStorage.setItem('fub_auto_sync_disabled', '1');
+    else localStorage.removeItem('fub_auto_sync_disabled');
+    setAutoSyncDisabled(next);
+    toast.success(next
+      ? '🛑 FUB auto-sync disabled — reads from local cache only'
+      : '🔄 FUB auto-sync enabled — will pull updates every 10 min'
+    );
+  };
 
   // Count what's already in IDB on mount (for resume scenarios)
   useEffect(() => {
@@ -269,6 +285,36 @@ export default function FubMigration({ toast }) {
             transition: 'width .3s',
           }} />
         </div>
+      </div>
+
+      {/* Auto-sync toggle — the "stop calling FUB every time I open the app" switch */}
+      <div className="glass-card" style={{
+        padding: '14px 16px',
+        background: autoSyncDisabled ? 'rgba(16,185,129,.06)' : 'rgba(184,134,75,.06)',
+        border: `1px solid ${autoSyncDisabled ? 'rgba(16,185,129,.2)' : 'rgba(184,134,75,.2)'}`,
+        display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 3 }}>
+            {autoSyncDisabled ? '🛑 FUB auto-sync is OFF' : '🔄 FUB auto-sync is ON'}
+          </div>
+          <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+            {autoSyncDisabled
+              ? 'my-re-hub reads from your local cache only. FUB is not called on app open. Turn this back on if you want fresh data from FUB.'
+              : 'Pulls latest from FUB every 10 min + on app open. After migration completes, turn this OFF so you can cancel FUB.'}
+          </div>
+        </div>
+        <button
+          onClick={toggleAutoSync}
+          style={{
+            background: autoSyncDisabled ? '#10b981' : 'rgba(255,255,255,.08)',
+            border: 'none', borderRadius: 8,
+            padding: '8px 14px', fontSize: 11.5, fontWeight: 800,
+            color: '#fff', cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}>
+          {autoSyncDisabled ? 'Turn ON' : 'Turn OFF'}
+        </button>
       </div>
 
       {/* Action buttons */}
