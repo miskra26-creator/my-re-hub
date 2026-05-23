@@ -951,6 +951,71 @@ const InfluencerWatch = ({ setPage, toast }) => {
     toast?.success?.('📋 Caption + hashtags copied to clipboard');
   };
 
+  // ── GEMINI OPTIMIZATION — sharpens any template into 3 variations ─────
+  // Monica's ask: "use Gemini for optimization to get the best content."
+  // Each variation targets a different angle (more emotional / more educational /
+  // more punchy) so she picks what fits the moment. Uses /api/claude/messages
+  // which falls back to GOOGLE_GEMINI_API_KEY (free) when ANTHROPIC isn't set.
+  const [optimizing, setOptimizing] = useState(null); // template.id being optimized
+  const [optimizedVariants, setOptimizedVariants] = useState({}); // {templateId: [variants]}
+  const optimizeTemplate = async (template) => {
+    setOptimizing(template.id);
+    try {
+      const prompt = `You are a viral real estate content optimizer. Rewrite the caption below into 3 sharper variations for Monica Iskra (RE/MAX Classic luxury agent, Metro Detroit — Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield).
+
+ORIGINAL CAPTION:
+"""
+${template.caption}
+"""
+
+PLATFORM: ${template.platform}
+INSPIRED BY: ${template.inspiredBy} (study their voice)
+
+Generate 3 distinct rewrites:
+1. EMOTIONAL — lead with feeling, tell the human story harder
+2. EDUCATIONAL — lead with the lesson, make the value clearer
+3. PUNCHY — shorter, more shocking, designed to stop the scroll
+
+Rules:
+- Match Monica's voice: warm, professional, confident, never pushy
+- Keep the platform format (Reel = punchier, Carousel = more list-like)
+- Each rewrite must still include a clear CTA
+- Each must be COMPLETE and ready to post (no placeholders)
+
+Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
+[
+  {"angle": "EMOTIONAL", "caption": "...", "whyBetter": "1 sentence explaining the angle"},
+  {"angle": "EDUCATIONAL", "caption": "...", "whyBetter": "1 sentence"},
+  {"angle": "PUNCHY", "caption": "...", "whyBetter": "1 sentence"}
+]`;
+      const r = await fetch('/api/claude/messages', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 3000,
+          messages: [{role:'user', content: prompt}],
+        }),
+      });
+      if (!r.ok) throw new Error(`AI error ${r.status}`);
+      const data = await r.json();
+      const text = data?.content?.[0]?.text || data?.choices?.[0]?.message?.content || '';
+      const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (!jsonMatch) throw new Error('AI returned no parseable variations');
+      const variants = JSON.parse(jsonMatch[0]);
+      setOptimizedVariants(prev => ({...prev, [template.id]: variants}));
+      toast?.success?.(`✨ ${variants.length} optimized variations generated`);
+    } catch (e) {
+      toast?.error?.('Optimize failed: ' + e.message);
+    }
+    setOptimizing(null);
+  };
+  const copyVariant = (variant, template) => {
+    const fullText = `${variant.caption}\n\n${(template.hashtags || []).join(' ')}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(fullText);
+    toast?.success?.(`📋 ${variant.angle} version copied to clipboard`);
+  };
+
   const filteredIdeas = contentIdeas.filter(i =>
     (engineFilter.platform === 'all' || (i.platform || '').toLowerCase().includes(engineFilter.platform)) &&
     (engineFilter.effort === 'all' || i.effort === engineFilter.effort) &&
@@ -1082,7 +1147,7 @@ const InfluencerWatch = ({ setPage, toast }) => {
             {/* Big action buttons */}
             <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
               <button onClick={()=>copyTemplateAndMarkPosted(todaysPick)} style={{
-                flex:1,minWidth:200,padding:'14px 18px',
+                flex:1,minWidth:180,padding:'14px 18px',
                 background:'linear-gradient(135deg, #10b981, #6ee7b7)',
                 color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:800,cursor:'pointer',
                 boxShadow:'0 4px 14px rgba(16,185,129,.3)',
@@ -1096,7 +1161,52 @@ const InfluencerWatch = ({ setPage, toast }) => {
               }}>
                 📋 Just Copy
               </button>
+              <button onClick={()=>optimizeTemplate(todaysPick)} disabled={optimizing === todaysPick.id} style={{
+                padding:'14px 18px',
+                background: optimizing === todaysPick.id ? 'rgba(167,139,250,.2)' : 'linear-gradient(135deg, #a78bfa, #c4b5fd)',
+                color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:800,cursor: optimizing === todaysPick.id ? 'wait' : 'pointer',
+              }}>
+                {optimizing === todaysPick.id ? '⏳ Optimizing…' : '✨ Optimize with Gemini'}
+              </button>
             </div>
+
+            {/* Gemini-optimized variations (appear after "Optimize" is clicked) */}
+            {optimizedVariants[todaysPick.id] && (
+              <div style={{marginTop:14,padding:'14px 16px',background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.3)',borderRadius:10}}>
+                <div style={{fontSize:10.5,fontWeight:800,color:'#a78bfa',textTransform:'uppercase',letterSpacing:.6,marginBottom:10}}>
+                  ✨ Gemini-Optimized Variations — pick the angle that fits today's vibe
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))',gap:10}}>
+                  {optimizedVariants[todaysPick.id].map((v, i) => {
+                    const angleColors = { EMOTIONAL: '#f87171', EDUCATIONAL: '#7eb8f7', PUNCHY: '#10b981' };
+                    const c = angleColors[v.angle] || '#a78bfa';
+                    return (
+                      <div key={i} style={{
+                        padding:'10px 12px',background:'rgba(0,0,0,.25)',borderRadius:8,
+                        borderLeft:`3px solid ${c}`,display:'flex',flexDirection:'column',gap:6,
+                      }}>
+                        <div style={{fontSize:9.5,fontWeight:900,color:c,letterSpacing:.5}}>
+                          {v.angle}
+                        </div>
+                        <div style={{fontSize:10,color:'#94a3b8',fontStyle:'italic'}}>
+                          {v.whyBetter}
+                        </div>
+                        <div style={{fontSize:11,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,maxHeight:140,overflow:'auto'}}>
+                          {v.caption}
+                        </div>
+                        <button onClick={()=>copyVariant(v, todaysPick)} style={{
+                          marginTop:'auto',padding:'6px 10px',
+                          background:`${c}22`,color:c,border:`1px solid ${c}55`,
+                          borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer',
+                        }}>
+                          📋 Use this version
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Posted count badge */}
             {postedLog.length > 0 && (
@@ -1138,13 +1248,33 @@ const InfluencerWatch = ({ setPage, toast }) => {
                     }}>
                       ✅ Copy + Post
                     </button>
-                    <button onClick={()=>copyTemplateOnly(t)} style={{
-                      padding:'6px 10px',background:'rgba(126,184,247,.12)',color:'#7eb8f7',
-                      border:'1px solid rgba(126,184,247,.25)',borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer',
-                    }}>
+                    <button onClick={()=>copyTemplateOnly(t)} title="Just copy"
+                      style={{padding:'6px 10px',background:'rgba(126,184,247,.12)',color:'#7eb8f7',
+                      border:'1px solid rgba(126,184,247,.25)',borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer'}}>
                       📋
                     </button>
+                    <button onClick={()=>optimizeTemplate(t)} disabled={optimizing === t.id} title="Optimize with Gemini"
+                      style={{padding:'6px 10px',background:'rgba(167,139,250,.12)',color:'#a78bfa',
+                      border:'1px solid rgba(167,139,250,.25)',borderRadius:6,fontSize:10.5,fontWeight:800,cursor: optimizing === t.id ? 'wait' : 'pointer'}}>
+                      {optimizing === t.id ? '⏳' : '✨'}
+                    </button>
                   </div>
+                  {/* Inline variations for this template */}
+                  {optimizedVariants[t.id] && (
+                    <div style={{marginTop:8,padding:'8px 10px',background:'rgba(167,139,250,.08)',borderLeft:'2px solid #a78bfa',borderRadius:6,display:'flex',flexDirection:'column',gap:6}}>
+                      {optimizedVariants[t.id].map((v, i) => {
+                        const angleColors = { EMOTIONAL: '#f87171', EDUCATIONAL: '#7eb8f7', PUNCHY: '#10b981' };
+                        const c = angleColors[v.angle] || '#a78bfa';
+                        return (
+                          <div key={i} style={{display:'flex',alignItems:'center',gap:6,fontSize:10}}>
+                            <span style={{padding:'1px 5px',borderRadius:4,background:`${c}22`,color:c,fontWeight:800,fontSize:8.5}}>{v.angle}</span>
+                            <span style={{flex:1,color:'#cbd5e1',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{v.caption.slice(0,60)}…</span>
+                            <button onClick={()=>copyVariant(v, t)} style={{background:'none',border:'none',color:c,cursor:'pointer',fontSize:11}}>📋</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
