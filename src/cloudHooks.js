@@ -128,7 +128,7 @@ function openDB() {
   });
 }
 
-async function idbGet(key) {
+export async function idbGet(key) {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -143,7 +143,7 @@ async function idbGet(key) {
   }
 }
 
-async function idbSet(key, value) {
+export async function idbSet(key, value) {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -154,6 +154,26 @@ async function idbSet(key, value) {
     });
   } catch (e) {
     console.warn('idbSet error', e);
+  }
+}
+
+// Count how many keys in IDB start with a given prefix — used by the FUB
+// migration tool to show "X of 6041 leads imported" without loading every
+// blob into memory.
+export async function idbCountByPrefix(prefix) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).getAllKeys();
+      req.onsuccess = (e) => {
+        const keys = e.target.result || [];
+        resolve(keys.filter(k => typeof k === 'string' && k.startsWith(prefix)).length);
+      };
+      req.onerror = () => resolve(0);
+    });
+  } catch {
+    return 0;
   }
 }
 
