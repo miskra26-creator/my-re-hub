@@ -20,6 +20,77 @@ import {
   Search, Bookmark,
 } from 'lucide-react';
 
+// ── CONTENT ENGINE — 30 viral-ready ideas for Metro Detroit luxury ──────────
+// Seed data so the page works instantly without an AI call. Refresh button
+// re-generates fresh ideas via Gemini API (free tier).
+const CONTENT_ENGINE_SEED = [
+  { hook: '"Why this $1.4M Birmingham home will sell in 3 days"', platform: 'Instagram Reel', niche: 'luxury-tour', effort: '30min', engagement: 'HIGH', caption: '3 things buyers will fight over here:\n\n1️⃣ Walk-in pantry bigger than most NYC apartments\n2️⃣ Heated garage (you Detroit folks know)\n3️⃣ Primary suite with private balcony overlooking Quarton Lake\n\nWho do I tour this one with? 👇', hashtags: ['#BirminghamMI', '#MetroDetroitLuxury', '#OaklandCountyRealEstate', '#LuxuryHomesMichigan', '#MichiganRealtor'], visual: 'Slow-motion walkthrough hero shot, focus on natural light from window, then quick cuts of 3 features' },
+  { hook: '"POV: You said yes to the Bloomfield Hills house"', platform: 'TikTok', niche: 'lifestyle', effort: '15min', engagement: 'HIGH', caption: 'When clients close on their dream home, this is the moment.\n\nNo script. No staging. Just real joy.\n\nThinking about buying in Bloomfield Hills? My DMs are open 💛', hashtags: ['#BloomfieldHills', '#ClosingDay', '#RealEstateAgent', '#MichiganRealtor', '#LuxuryLifestyle'], visual: 'Phone shot of clients getting keys, slow-mo of them walking into empty house, golden hour' },
+  { hook: '"3 mistakes first-time luxury buyers in Michigan ALWAYS make"', platform: 'Instagram Reel', niche: 'educational', effort: '20min', engagement: 'MED', caption: 'I\'ve helped 100+ families buy in Oakland County. Here\'s what trips up first-time luxury buyers:\n\n❌ Falling in love before pre-approval\n❌ Skipping the sewer inspection in older Birmingham homes\n❌ Underestimating winter heating costs on 5000+ sqft\n\nSave this for when you\'re ready 📌', hashtags: ['#OaklandCountyRealEstate', '#FirstTimeLuxuryBuyer', '#MichiganRealEstate', '#BirminghamMI', '#HomeBuyingTips'], visual: 'Talking head with text overlay for each mistake, B-roll of homes in background' },
+  { hook: '"Why Birmingham real estate jumped 12% this year"', platform: 'YouTube Short', niche: 'market', effort: '45min', engagement: 'MED', caption: 'Birmingham\'s appreciation outpaced the national average AGAIN. Here\'s why:\n\n• Detroit auto sector rebound\n• Walkable downtown + restaurant scene\n• Top-rated school district (Birmingham Public Schools = top 5 in MI)\n• Limited new construction = scarcity\n\nIf you own here, congrats. If you\'re thinking about buying, let\'s talk before prices climb again.', hashtags: ['#BirminghamMarket2026', '#MetroDetroitMarket', '#OaklandCountyHomes', '#MichiganRealEstate'], visual: 'Stock chart animation + drone shot of downtown Birmingham + agent talking head' },
+  { hook: '"Day in the life of a Metro Detroit luxury agent"', platform: 'Instagram Reel', niche: 'day-in-life', effort: '2hrs', engagement: 'HIGH', caption: '6am ☕ Coffee + client emails from Bloomfield\n9am 📞 Listing strategy call with sellers in Novi\n11am 🏡 Showing 3 homes in Birmingham\n2pm 📋 Offer review at the brokerage\n5pm 🎉 Closing celebration with my buyers\n9pm 📱 Final emails of the day\n\nSomeone wanted to know what this job really looks like 👆', hashtags: ['#MichiganRealtor', '#DayInTheLife', '#LuxuryRealEstate', '#MetroDetroit', '#WomenInRealEstate'], visual: 'Quick cuts of each timestamped activity, time stamps as text overlay, upbeat music' },
+  { hook: '"This $850K Novi home sold in 4 days. Here\'s why."', platform: 'TikTok', niche: 'luxury-tour', effort: '30min', engagement: 'HIGH', caption: 'Marketing matters MORE than price when listing a home.\n\nWhat we did differently:\n📸 Twilight photography (sold in 4 days)\n🎥 Drone tour for the lake views\n📋 Pre-listing inspection cleared concerns upfront\n🎯 Targeted ads to Novi buyers\n\nThinking of selling? DM me before you sign with anyone.', hashtags: ['#NoviMichigan', '#HomeSellingTips', '#MetroDetroitRealEstate', '#LuxuryHomes'], visual: 'Before/after of listing photos, fast cuts of staging, drone shot of property' },
+  { hook: '"What $500K buys you in Birmingham vs Bloomfield"', platform: 'Instagram Carousel', niche: 'market', effort: '30min', engagement: 'HIGH', caption: 'Swipe to compare ➡️\n\nSame budget. Wildly different homes.\n\nBirmingham: 3-bed colonial, walk to downtown, 1950s build\nBloomfield: 4-bed ranch on 1/2 acre, top schools, 1980s build\n\nWhich would YOU pick? Comment below 👇', hashtags: ['#BirminghamMI', '#BloomfieldHills', '#NeighborhoodComparison', '#MetroDetroitHomes'], visual: '10-image carousel: 5 images per home, price labels, side-by-side comparisons' },
+  { hook: '"Walking you through this Northville new build"', platform: 'YouTube Short', niche: 'luxury-tour', effort: '45min', engagement: 'MED', caption: 'Just listed: brand new construction in Northville.\n\n5 beds | 4.5 baths | 4,800 sqft | $1.275M\n\nFeatures:\n✨ 10ft ceilings on main level\n✨ Chef\'s kitchen with Wolf appliances\n✨ Heated 3-car garage\n✨ Finished basement with wet bar\n\nFull tour link in bio. Showings start Friday.', hashtags: ['#NorthvilleMI', '#NewConstruction', '#LuxuryHomes', '#MetroDetroitRealEstate'], visual: 'Smooth gimbal walkthrough, starting at front door, ending at backyard sunset' },
+  { hook: '"5 things I tell every Metro Detroit buyer about winter"', platform: 'Instagram Reel', niche: 'educational', effort: '15min', engagement: 'MED', caption: 'Out-of-state buyers always ask. Here\'s the truth:\n\n🥶 Yes, it gets cold. Salt your driveway.\n❄️ Heated garages are worth every penny\n🏠 Check the furnace age (replace = $5-8k)\n🍂 Gutter guards prevent ice dams\n☃️ Snow blowers > shovels after age 35\n\nSurviving 8 Michigan winters in luxury 💁‍♀️', hashtags: ['#MetroDetroit', '#MichiganLiving', '#WinterHomeTips', '#NewToMichigan'], visual: 'Snowy exterior shots + cozy interior cuts + agent talking with coffee' },
+  { hook: '"The Bloomfield Hills home that started a bidding war"', platform: 'TikTok', niche: 'luxury-tour', effort: '30min', engagement: 'HIGH', caption: 'Listed Friday. 11 offers by Sunday. Closed for $145K OVER asking.\n\nWhat made this listing explode:\n• Twilight photos hit Instagram before MLS\n• Pre-showing private agent tour built urgency\n• Honest disclosure of every flaw (buyers trust this)\n• Multiple-offer protocol set clear rules\n\nMy approach isn\'t magic. It\'s strategy.', hashtags: ['#BloomfieldHills', '#BiddingWar', '#ListingAgent', '#MetroDetroitLuxury'], visual: 'Stack of offers fanned out + drone of house + closing celebration shot' },
+  { hook: '"What\'s actually happening with mortgage rates right now"', platform: 'Instagram Reel', niche: 'market', effort: '20min', engagement: 'MED', caption: 'I\'m not a lender, but here\'s what I\'m seeing on actual closings:\n\n📈 Conventional 30yr: high 6\'s\n💰 Jumbo (over $766K): high 6\'s to low 7\'s\n🏦 Best deals: local credit unions beat the big banks\n⏰ Buyers waiting for "perfect rate" are missing inventory\n\nTalk to a lender BEFORE you look. Need a great one? DM me.', hashtags: ['#MortgageRates2026', '#MichiganRealEstate', '#HomeBuying', '#MetroDetroit'], visual: 'Talking head with rate graphic text overlay, B-roll of home for sale signs' },
+  { hook: '"Open house this Sunday in West Bloomfield"', platform: 'Instagram Story', niche: 'listing-promo', effort: '5min', engagement: 'LOW', caption: 'OPEN HOUSE 🏡\n\n📍 Address in story link\n🕐 Sunday 1-3pm\n💰 $895,000\n🛏 4 beds | 3.5 baths | 3,200 sqft\n\nNo appointment needed. Coffee + cookies provided ☕🍪', hashtags: ['#OpenHouse', '#WestBloomfield', '#MetroDetroitHomes'], visual: 'Map pin animation + 3 photos of home + branded story template' },
+  { hook: '"Behind-the-scenes of pricing a $2M Bloomfield home"', platform: 'YouTube Short', niche: 'educational', effort: '45min', engagement: 'MED', caption: 'Pricing luxury isn\'t about Zestimate. It\'s about:\n\n1. Recent SOLDs in same micro-market\n2. Active comps + their days on market\n3. Unique features (lake view? private dock?)\n4. Seller timeline (motivated? testing?)\n5. Current buyer pool depth\n\nMost agents skip 3-5. That\'s why they overprice and chase the market down.', hashtags: ['#LuxuryRealEstate', '#PricingStrategy', '#BloomfieldHills', '#MichiganRealtor'], visual: 'Whiteboard explanation + B-roll of homes + spreadsheet on screen' },
+  { hook: '"Bought this Birmingham fixer 18 months ago for $475K"', platform: 'TikTok', niche: 'investor', effort: '30min', engagement: 'HIGH', caption: 'Just listed for $890K after renovation.\n\nThe math:\n💰 Purchase: $475K\n🔨 Reno: $185K\n🏷 Listed: $890K\n💵 Profit (before agent/tax): $230K\n\nFlipping luxury isn\'t for everyone. The buyer pool is smaller but the margins are bigger. DM me if you want me to find your next project.', hashtags: ['#BirminghamMI', '#FixAndFlip', '#RealEstateInvesting', '#MetroDetroit'], visual: 'Before/after split screen, numbers as text overlay, drone of finished home' },
+  { hook: '"Why I left BoldTrail / kvCORE and built my own CRM"', platform: 'Instagram Reel', niche: 'day-in-life', effort: '30min', engagement: 'MED', caption: 'I was paying $500/mo for software I barely used.\n\nNow I have:\n✅ My own AI-powered CRM\n✅ Custom drip campaigns\n✅ Automated past-client touchpoints\n✅ Everything in ONE place\n\nIt\'s not for everyone. But if you\'re tired of paying for tools you don\'t use, DM me. I\'ll show you what I built.', hashtags: ['#RealEstateTechnology', '#AgentLife', '#MichiganRealtor', '#WomenInRealEstate'], visual: 'Agent at laptop, screen recordings of CRM, fast cuts of dashboards' },
+  { hook: '"Birmingham vs Royal Oak — which is right for you?"', platform: 'Instagram Carousel', niche: 'market', effort: '40min', engagement: 'HIGH', caption: 'Two of the best Metro Detroit walkable cities. Different vibes:\n\n🏛️ BIRMINGHAM: luxury, refined, $$$ (median $850K)\n🎨 ROYAL OAK: hip, eclectic, $$ (median $385K)\n\nSwipe for the full comparison ➡️\n\nWhich would YOU pick? Comment 1 for Birmingham, 2 for Royal Oak.', hashtags: ['#BirminghamMI', '#RoyalOakMI', '#NeighborhoodCompare', '#MetroDetroit'], visual: '8-image carousel: side-by-side photos + key stats + vibe shots' },
+  { hook: '"$650K in West Bloomfield got me THIS much house"', platform: 'TikTok', niche: 'luxury-tour', effort: '20min', engagement: 'HIGH', caption: 'When clients ask "what does $650K get me?" — I show them this home.\n\n4 beds | 3 baths | 2,800 sqft | West Bloomfield Township\n\n✅ Updated kitchen\n✅ Finished basement\n✅ Lake access community\n✅ Top-rated schools\n\nDM "tour" for the full walkthrough.', hashtags: ['#WestBloomfield', '#MetroDetroitHomes', '#LuxuryRealEstate', '#MichiganHomes'], visual: 'Fast-cut tour with price label always on screen, dramatic music' },
+  { hook: '"How I help past clients become repeat clients"', platform: 'Instagram Reel', niche: 'educational', effort: '20min', engagement: 'MED', caption: 'Every agent SAYS they keep in touch with past clients.\n\nFew actually do it.\n\nMy system:\n• Houseaversary text on closing date every year\n• Birthday email\n• Quarterly market report for THEIR neighborhood\n• Holiday cards (real ones, not e-cards)\n\nResult: 65% of my business is repeat or referral.', hashtags: ['#RealEstateMarketing', '#PastClientCare', '#MichiganRealtor', '#AgentTips'], visual: 'Agent writing card, sending text, phone notifications, happy clients' },
+  { hook: '"3 questions to ask BEFORE hiring a listing agent"', platform: 'Instagram Reel', niche: 'educational', effort: '15min', engagement: 'MED', caption: 'Most sellers just call the first agent they meet. Don\'t.\n\nAsk:\n\n1️⃣ "How many homes did you sell in MY ZIP code last year?"\n2️⃣ "What\'s your average days-on-market vs the MLS average?"\n3️⃣ "Can I see your last 5 listings\' marketing photos?"\n\nIf they can\'t answer all 3 confidently, keep looking. Save this 📌', hashtags: ['#HomeSellingTips', '#ListingAgent', '#MichiganRealEstate', '#MetroDetroit'], visual: 'Talking head with the 3 questions as bold text overlays' },
+  { hook: '"Dream Cruise weekend = the best time to list your Royal Oak home"', platform: 'Instagram Reel', niche: 'hyperlocal', effort: '20min', engagement: 'HIGH', caption: 'Hot tip nobody talks about:\n\nDream Cruise brings 1M+ visitors to Woodward every August. Many are out-of-state buyers checking out Metro Detroit.\n\nListings active during Dream Cruise week see 40% more open house traffic.\n\nIf you\'re thinking of selling, list by August 1. DM me for a free CMA.', hashtags: ['#DreamCruise', '#RoyalOak', '#MetroDetroitMarket', '#HomeSelling'], visual: 'Classic cars on Woodward + open house sign + agent talking' },
+  { hook: '"What happens at closing in 60 seconds"', platform: 'TikTok', niche: 'educational', effort: '20min', engagement: 'MED', caption: 'You\'re under contract. Now what?\n\n📅 Day 1-7: Inspection\n📅 Day 8-21: Appraisal + lending\n📅 Day 22-35: Final walkthrough\n📅 Day 35-45: Closing day 🎉\n\nMy job: keep YOU calm while I handle everything behind the scenes.', hashtags: ['#HomeClosing', '#FirstTimeBuyer', '#MichiganRealtor', '#MetroDetroit'], visual: 'Timeline animation + agent voiceover + closing keys reveal' },
+  { hook: '"The North American Auto Show brings BUYERS to Metro Detroit"', platform: 'Instagram Reel', niche: 'hyperlocal', effort: '15min', engagement: 'MED', caption: 'Auto execs from Tokyo, Munich, Seoul fly in every January.\n\nMany are relocating to Detroit area for work.\n\nIf your home is move-in ready and well-priced, January is a SLEEPER month for selling to relocation buyers.\n\nThinking of selling Q1? Let\'s talk now to be ready.', hashtags: ['#NorthAmericanAutoShow', '#DetroitRelocation', '#MetroDetroitMarket', '#MichiganRealtor'], visual: 'Auto show footage + maps + agent talking + relocation testimonials' },
+  { hook: '"$1.2M Birmingham home tour — full price reveal at end"', platform: 'YouTube Short', niche: 'luxury-tour', effort: '60min', engagement: 'HIGH', caption: 'Take a quick tour of this STUNNING Birmingham colonial.\n\n• 5 beds, 4.5 baths\n• 4,200 sqft\n• Walk to downtown\n• Top-rated school district\n• Heated 3-car garage\n\nStick around for the asking price at the end 👀', hashtags: ['#BirminghamMI', '#LuxuryHomeTour', '#MetroDetroitHomes', '#MichiganRealEstate'], visual: 'Gimbal walkthrough, hide price until last 3 seconds for hook' },
+  { hook: '"5 things I always check in older Bloomfield Hills homes"', platform: 'Instagram Reel', niche: 'educational', effort: '20min', engagement: 'MED', caption: 'Buying a luxury home built before 1990? Don\'t skip these:\n\n1️⃣ Knob & tube wiring (insurance won\'t cover)\n2️⃣ Galvanized plumbing (replace eventually)\n3️⃣ Asbestos in older boilers\n4️⃣ Original windows (drafty + $$$$$ to replace)\n5️⃣ Sewer line scope ($300, saves $30K)\n\nSave this for your next showing 📌', hashtags: ['#BloomfieldHills', '#HomeBuyingTips', '#OlderHomes', '#MichiganRealtor'], visual: 'Walk through home pointing out each issue, B-roll of inspection' },
+  { hook: '"What I wish first-time sellers knew"', platform: 'Instagram Reel', niche: 'educational', effort: '20min', engagement: 'MED', caption: 'Selling your first home? Three truths:\n\n💵 Closing costs are ~7-10% of sale price\n📅 Timing matters more than you think (spring > winter)\n📸 First impression (photos) sells your home\n\nWant my "selling for the first time" checklist? Comment "checklist" below.', hashtags: ['#FirstTimeSeller', '#HomeSellingTips', '#MichiganRealtor', '#MetroDetroit'], visual: 'Agent at kitchen table with checklist + B-roll of home sale signs' },
+  { hook: '"Why I refused to list this $1.5M home (until they fixed it)"', platform: 'TikTok', niche: 'agent-story', effort: '30min', engagement: 'HIGH', caption: 'A seller called me last week. Wanted to list for $1.5M.\n\nI walked through the home. Beautiful. But:\n• Cracked driveway\n• Outdated kitchen (1990s oak)\n• Carpet in the basement (mold smell)\n\nI told them: "Spend $35K, list for $1.65M, net $80K more."\n\nThey did it. Listing goes live Monday.\n\nMost agents take the listing as-is. I tell you the truth.', hashtags: ['#ListingAgent', '#HonestRealtor', '#MetroDetroitLuxury', '#MichiganRealEstate'], visual: 'Agent at home walking through issues, then dramatic reveal of staged version' },
+  { hook: '"Where to actually live in Metro Detroit if you want luxury"', platform: 'Instagram Carousel', niche: 'market', effort: '40min', engagement: 'HIGH', caption: 'Out-of-state buyer? Don\'t just Google "best suburbs Detroit."\n\nMy ranked list:\n\n1️⃣ Birmingham — walkable luxury\n2️⃣ Bloomfield Hills — estates + privacy\n3️⃣ Bloomfield Township — best schools value\n4️⃣ Northville — small-town charm + luxury\n5️⃣ Novi — newer construction\n6️⃣ West Bloomfield — lakes + diversity\n7️⃣ Rochester Hills — value play\n\nSave this 📌 DM me for the full breakdown.', hashtags: ['#MetroDetroit', '#RelocatingToMichigan', '#LuxurySuburbs', '#OaklandCounty'], visual: '8-image carousel: 1 per suburb with key stats + iconic photo' },
+  { hook: '"Tigers opening day is the unofficial start of Metro Detroit home buying season"', platform: 'Instagram Reel', niche: 'hyperlocal', effort: '15min', engagement: 'MED', caption: 'It\'s a Detroit thing.\n\nWhen the Tigers play their home opener, our market wakes up. Spring buyers come out. Sellers start prepping. Open houses get crowded.\n\nIf you\'re thinking of buying or selling this spring, start the conversation NOW so you\'re ready before the rush.', hashtags: ['#DetroitTigers', '#OpeningDay', '#MetroDetroitMarket', '#SpringMarket'], visual: 'Tigers stadium + spring open house signs + cherry blossoms + agent talking' },
+  { hook: '"3 reasons Michigan is the BEST place to buy luxury right now"', platform: 'YouTube Short', niche: 'market', effort: '30min', engagement: 'MED', caption: 'Coastal buyers, listen up:\n\n1️⃣ Your $1M = $1.8M house here\n2️⃣ No state income tax on real estate gains over 2yrs\n3️⃣ Best schools in the Midwest (Birmingham, Bloomfield)\n4️⃣ Four seasons (winter is gorgeous, fight me)\n5️⃣ Detroit auto/tech sector booming\n\nDM me if you\'re considering relocation. I\'ll send you a relocation guide.', hashtags: ['#MichiganRelocation', '#LuxuryRealEstate', '#MetroDetroit', '#MoveToMichigan'], visual: 'Drone shots of Birmingham + Bloomfield estates + stock charts overlay' },
+  { hook: '"Birmingham Restaurant Week — the BEST week to host a buyer tour"', platform: 'Instagram Reel', niche: 'hyperlocal', effort: '25min', engagement: 'MED', caption: 'Pro tip for buyer agents (or DIY buyers):\n\nSchedule your downtown Birmingham showings during Restaurant Week.\n\nWhy?\n🍽️ Town is alive and busy\n🚶 Walkability sells itself\n🍷 Easy to grab a glass of wine after to close the deal\n🌳 Trees are budding, town looks magical\n\nNothing sells Birmingham like the Birmingham experience.', hashtags: ['#BirminghamMI', '#BirminghamRestaurantWeek', '#HomeShowing', '#MetroDetroit'], visual: 'Restaurant patio shots + agent walking through downtown + happy buyers' },
+];
+
+// The prompt used by the "Refresh Ideas" button. Calls /api/claude/messages
+// which falls back to GOOGLE_GEMINI_API_KEY when ANTHROPIC isn't set. Output
+// must be JSON array matching the seed shape for the UI to render.
+const CONTENT_ENGINE_PROMPT = `You are an elite real estate content strategist generating viral content ideas for Monica Iskra, a RE/MAX Classic luxury agent in Metro Detroit (Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield, Oakland County, I-275 corridor, $350K+ homes).
+
+Generate 30 fresh, ready-to-post content ideas she can execute THIS WEEK.
+
+OUTPUT REQUIREMENT: Return ONLY a valid JSON array, no preamble, no markdown code fences. Each object must have EXACTLY these fields:
+{
+  "hook": "First 3 seconds — what stops the scroll",
+  "platform": "Instagram Reel" | "TikTok" | "YouTube Short" | "Instagram Carousel" | "Instagram Story",
+  "niche": "luxury-tour" | "market" | "educational" | "day-in-life" | "hyperlocal" | "investor" | "agent-story" | "lifestyle" | "listing-promo",
+  "effort": "5min" | "15min" | "20min" | "25min" | "30min" | "45min" | "60min" | "2hrs",
+  "engagement": "LOW" | "MED" | "HIGH",
+  "caption": "Full ready-to-paste caption in Monica's voice (warm, professional, confident, never pushy). Include emoji where natural. End with a clear CTA.",
+  "hashtags": ["array of 5 hashtags optimized for Metro Detroit luxury"],
+  "visual": "One sentence describing the visual/b-roll"
+}
+
+MIX REQUIREMENT (must include all):
+- 10 luxury home walkthroughs (name specific Metro Detroit suburbs)
+- 5 market commentary (Birmingham appreciation, Bloomfield prices, etc.)
+- 5 day-in-the-life as a luxury agent
+- 5 educational ("3 mistakes...", "What to check...", etc.)
+- 5 hyper-local Metro Detroit cultural moments (Dream Cruise, Auto Show, Tigers Opening Day, Birmingham Restaurant Week, etc.)
+
+QUALITY RULES:
+- Every idea must name a real Metro Detroit neighborhood, not generic
+- No vague "real estate tips" — be hyper-specific
+- Hashtags must reasonably exist (no #made_up_hashtag)
+- Captions must be in HER voice (warm, professional, confident — like a luxury concierge, not a used-car salesman)
+- Avoid clichés ("don't miss out", "act fast", "click link in bio")
+
+OUTPUT ONLY THE JSON ARRAY. NO OTHER TEXT.`;
+
 // ── CURATED INFLUENCER DIRECTORY ────────────────────────────────────────────
 // Each entry: name, location, platforms (with handles), follower estimates,
 // what they're known for, and a "why watch" tag explaining the format/style
@@ -422,6 +493,7 @@ const InfluencerWatch = ({ setPage, toast }) => {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 18, borderBottom: '1px solid rgba(255,255,255,.06)', paddingBottom: 2, flexWrap: 'wrap' }}>
         {[
+          { id: 'engine', label: '🚀 Content Engine', desc: '30 viral ideas, dummy-proof' },
           { id: 'feed', label: '🔥 Feed', desc: 'Unified inspiration feed' },
           { id: 'directory', label: '📋 Directory', desc: 'Curated 20+ creators' },
           { id: 'inspiration', label: '✨ Adapt a Post', desc: 'Paste any URL, AI adapts' },
@@ -442,6 +514,155 @@ const InfluencerWatch = ({ setPage, toast }) => {
           </button>
         ))}
       </div>
+
+      {/* CONTENT ENGINE TAB — Monica's #1 ask: dummy-proof viral idea generator */}
+      {tab === 'engine' && (
+        <div>
+          {/* Hero with Refresh button */}
+          <div style={{
+            display:'flex',gap:14,alignItems:'center',justifyContent:'space-between',
+            padding:'18px 22px',marginBottom:18,
+            background:'linear-gradient(135deg, rgba(184,134,75,.12), rgba(167,139,250,.06))',
+            border:'1px solid rgba(184,134,75,.25)',borderRadius:14,
+          }}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>🚀 Viral Content Engine</div>
+              <div style={{fontSize:14,color:'#fff',fontWeight:700,marginBottom:3}}>
+                {contentIdeas.length} ready-to-post ideas for Metro Detroit luxury
+              </div>
+              <div style={{fontSize:11.5,color:'#94a3b8'}}>
+                Each idea has a hook, full caption, hashtags, and visual cue. Click <strong>"Use This"</strong> to copy caption + save as a draft.
+              </div>
+            </div>
+            <button onClick={refreshContentIdeas} disabled={engineLoading}
+              style={{
+                background:engineLoading?'rgba(184,134,75,.2)':'linear-gradient(135deg, #b8864b, #e0b370)',
+                color:'#fff',border:'none',borderRadius:10,padding:'10px 16px',
+                fontSize:12,fontWeight:800,cursor:engineLoading?'wait':'pointer',
+                whiteSpace:'nowrap',
+              }}>
+              {engineLoading ? '⏳ Generating…' : '✨ Refresh with AI'}
+            </button>
+          </div>
+
+          {engineError && (
+            <div style={{padding:'10px 12px',marginBottom:12,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,fontSize:11.5,color:'#f87171'}}>
+              ⚠ {engineError}
+            </div>
+          )}
+
+          {/* Filter row */}
+          <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+            <span style={{fontSize:11,color:'#64748b',fontWeight:700}}>FILTER:</span>
+            <select value={engineFilter.platform} onChange={e=>setEngineFilter(f=>({...f,platform:e.target.value}))}
+              style={{background:'rgba(255,255,255,.04)',color:'#fff',border:'1px solid rgba(255,255,255,.1)',borderRadius:6,padding:'5px 8px',fontSize:11.5}}>
+              <option value="all">All platforms</option>
+              <option value="reel">Instagram Reel</option>
+              <option value="tiktok">TikTok</option>
+              <option value="youtube">YouTube Short</option>
+              <option value="carousel">Instagram Carousel</option>
+              <option value="story">Instagram Story</option>
+            </select>
+            <select value={engineFilter.effort} onChange={e=>setEngineFilter(f=>({...f,effort:e.target.value}))}
+              style={{background:'rgba(255,255,255,.04)',color:'#fff',border:'1px solid rgba(255,255,255,.1)',borderRadius:6,padding:'5px 8px',fontSize:11.5}}>
+              <option value="all">Any effort</option>
+              <option value="5min">5 min</option>
+              <option value="15min">15 min</option>
+              <option value="20min">20 min</option>
+              <option value="30min">30 min</option>
+              <option value="45min">45 min</option>
+              <option value="60min">1 hr</option>
+              <option value="2hrs">2 hrs</option>
+            </select>
+            <select value={engineFilter.niche} onChange={e=>setEngineFilter(f=>({...f,niche:e.target.value}))}
+              style={{background:'rgba(255,255,255,.04)',color:'#fff',border:'1px solid rgba(255,255,255,.1)',borderRadius:6,padding:'5px 8px',fontSize:11.5}}>
+              <option value="all">All niches</option>
+              <option value="luxury-tour">Luxury Tour</option>
+              <option value="market">Market</option>
+              <option value="educational">Educational</option>
+              <option value="day-in-life">Day in Life</option>
+              <option value="hyperlocal">Hyperlocal</option>
+              <option value="investor">Investor</option>
+              <option value="agent-story">Agent Story</option>
+              <option value="lifestyle">Lifestyle</option>
+              <option value="listing-promo">Listing Promo</option>
+            </select>
+            <span style={{fontSize:10.5,color:'#475569',marginLeft:'auto'}}>{filteredIdeas.length} of {contentIdeas.length} ideas · {contentDrafts.length} saved drafts</span>
+          </div>
+
+          {/* Ideas grid */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(380px, 1fr))',gap:14}}>
+            {filteredIdeas.map((idea, idx) => {
+              const engagementColor = idea.engagement === 'HIGH' ? '#10b981' : idea.engagement === 'MED' ? '#f0c040' : '#94a3b8';
+              return (
+                <div key={idx} style={{
+                  background:'#0d1117',border:'1px solid rgba(255,255,255,.08)',borderRadius:12,
+                  padding:'14px 16px',display:'flex',flexDirection:'column',gap:9,
+                  borderLeft:`3px solid ${engagementColor}`,
+                }}>
+                  {/* Hook */}
+                  <div style={{fontSize:14,fontWeight:800,color:'#fff',lineHeight:1.3}}>
+                    {idea.hook}
+                  </div>
+                  {/* Meta tags */}
+                  <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:'rgba(126,184,247,.12)',color:'#7eb8f7',fontWeight:700}}>{idea.platform}</span>
+                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:'rgba(167,139,250,.12)',color:'#a78bfa',fontWeight:700,textTransform:'uppercase'}}>{idea.niche}</span>
+                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:'rgba(255,255,255,.05)',color:'#94a3b8',fontWeight:700}}>⏱ {idea.effort}</span>
+                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:`${engagementColor}22`,color:engagementColor,fontWeight:800}}>{idea.engagement}</span>
+                  </div>
+                  {/* Caption preview */}
+                  <div style={{fontSize:11.5,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,
+                    maxHeight:120,overflow:'hidden',
+                    background:'rgba(255,255,255,.02)',padding:'8px 10px',borderRadius:8,
+                    borderLeft:'2px solid rgba(184,134,75,.3)',
+                  }}>
+                    {idea.caption}
+                  </div>
+                  {/* Visual cue */}
+                  {idea.visual && (
+                    <div style={{fontSize:10.5,color:'#94a3b8',fontStyle:'italic'}}>
+                      🎬 <strong style={{color:'#cbd5e1'}}>Visual:</strong> {idea.visual}
+                    </div>
+                  )}
+                  {/* Hashtags */}
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    {(idea.hashtags || []).map((h,i) => (
+                      <span key={i} style={{fontSize:9.5,color:'#7eb8f7',fontWeight:600}}>{h}</span>
+                    ))}
+                  </div>
+                  {/* Action button */}
+                  <button onClick={()=>useThisIdea(idea)} style={{
+                    marginTop:'auto',padding:'8px 12px',
+                    background:'linear-gradient(135deg, #b8864b, #e0b370)',
+                    color:'#fff',border:'none',borderRadius:8,fontSize:11.5,fontWeight:800,cursor:'pointer',
+                  }}>
+                    ✨ Use This Idea → Copy + Save Draft
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Drafts log preview */}
+          {contentDrafts.length > 0 && (
+            <div style={{marginTop:24,padding:'14px 16px',background:'rgba(16,185,129,.04)',border:'1px solid rgba(16,185,129,.15)',borderRadius:10}}>
+              <div style={{fontSize:11,fontWeight:800,color:'#6ee7b7',textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>
+                📋 {contentDrafts.length} saved draft{contentDrafts.length===1?'':'s'} (latest 5)
+              </div>
+              {contentDrafts.slice(0,5).map(d => (
+                <div key={d.id} style={{padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,.04)',fontSize:11.5,color:'#94a3b8'}}>
+                  <strong style={{color:'#fff'}}>{d.hook}</strong> · {d.platform} · saved {new Date(d.savedAt).toLocaleString()}
+                </div>
+              ))}
+              <button onClick={()=>{ if(window.confirm('Clear all saved drafts?')) setContentDrafts([]); }}
+                style={{marginTop:8,background:'none',border:'1px solid rgba(239,68,68,.3)',color:'#f87171',padding:'4px 10px',borderRadius:6,fontSize:10,cursor:'pointer'}}>
+                Clear drafts
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* DIRECTORY TAB */}
       {tab === 'directory' && (
