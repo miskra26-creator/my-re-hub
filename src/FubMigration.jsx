@@ -150,6 +150,47 @@ export default function FubMigration({ toast }) {
     idbCountByPrefix('fub_data_').then(setIdbCount);
   }, [progress?.lastCompletedIndex]);
 
+  // Verification scan — opens IDB and sums up record counts across every
+  // imported lead so Monica can SEE the data is there without opening
+  // individual leads. Runs on demand from a button.
+  const [verifyResult, setVerifyResult] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const runVerification = async () => {
+    setVerifying(true);
+    setVerifyResult(null);
+    try {
+      const counts = { leads: 0, notes: 0, events: 0, textMessages: 0, calls: 0, emails: 0 };
+      const samples = [];
+      let scanned = 0;
+      for (const lead of fubLeads) {
+        const blob = await idbGet(`fub_data_${lead.id}`);
+        if (!blob) continue;
+        counts.leads++;
+        counts.notes += (blob.notes || []).length;
+        counts.events += (blob.events || []).length;
+        counts.textMessages += (blob.textMessages || []).length;
+        counts.calls += (blob.calls || []).length;
+        counts.emails += (blob.emails || []).length;
+        // Save a few samples to display so Monica can sanity-check
+        if (samples.length < 3 && ((blob.notes||[]).length + (blob.emails||[]).length) > 0) {
+          samples.push({ name: lead.name, ...counts && {
+            notes: (blob.notes||[]).length,
+            emails: (blob.emails||[]).length,
+            texts: (blob.textMessages||[]).length,
+            calls: (blob.calls||[]).length,
+          }});
+        }
+        scanned++;
+        if (scanned % 500 === 0) await new Promise(r => setTimeout(r, 0));
+      }
+      setVerifyResult({ counts, samples });
+      toast.success(`✓ Local DB verified — ${counts.leads.toLocaleString()} leads with data`);
+    } catch (e) {
+      toast.error('Verification failed: ' + e.message);
+    }
+    setVerifying(false);
+  };
+
   const saveProgress = (p) => {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(p));
     setProgress(p);
@@ -216,6 +257,14 @@ export default function FubMigration({ toast }) {
       toast.info('⏸ Import paused — click Resume to continue');
     } else {
       toast.success(`✅ FUB import complete — ${recordsImported.toLocaleString()} records saved across ${fubLeads.length} leads`);
+      // Auto-disable FUB auto-sync on completion. The whole point of running
+      // the migration was to stop depending on FUB live calls — flipping this
+      // flag immediately enforces "read from local DB only" mode.
+      if (localStorage.getItem('fub_auto_sync_disabled') !== '1') {
+        localStorage.setItem('fub_auto_sync_disabled', '1');
+        setAutoSyncDisabled(true);
+        toast.success('🛑 FUB auto-sync disabled automatically — you are now reading from local cache only.');
+      }
     }
     idbCountByPrefix('fub_data_').then(setIdbCount);
   };
@@ -319,6 +368,15 @@ export default function FubMigration({ toast }) {
 
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {/* Verify button appears once any data has been imported */}
+        {idbCount > 0 && (
+          <button className="btn" style={{
+            background: 'rgba(16,185,129,.12)', color: '#6ee7b7',
+            border: '1px solid rgba(16,185,129,.3)', width: 'fit-content',
+          }} onClick={runVerification} disabled={verifying}>
+            {verifying ? '⏳ Verifying…' : '✓ Verify Local Data'}
+          </button>
+        )}
         {!running && done < fubLeads.length && (
           <button className="btn btn-blue" onClick={start} style={{ width: 'fit-content' }}>
             {done > 0 ? '▶ Resume Import' : '▶ Start Import'}
@@ -340,6 +398,40 @@ export default function FubMigration({ toast }) {
           </button>
         )}
       </div>
+
+      {/* Verification results — shown after Verify Local Data button click */}
+      {verifyResult && (
+        <div className="glass-card" style={{ padding: '16px 18px', background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.3)' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#6ee7b7', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>
+            ✅ Local DB verified — your FUB data is saved
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 12 }}>
+            {[
+              { label: 'Leads', n: verifyResult.counts.leads, c: '#fff' },
+              { label: 'Notes', n: verifyResult.counts.notes, c: '#cbd5e1' },
+              { label: 'Events', n: verifyResult.counts.events, c: '#b8864b' },
+              { label: 'Texts', n: verifyResult.counts.textMessages, c: verifyResult.counts.textMessages > 0 ? '#3b82f6' : '#475569' },
+              { label: 'Calls', n: verifyResult.counts.calls, c: '#10b981' },
+              { label: 'Emails', n: verifyResult.counts.emails, c: '#ea4335' },
+            ].map(s => (
+              <div key={s.label} style={{ textAlign: 'center', padding: '8px 4px', background: 'rgba(0,0,0,.15)', borderRadius: 6 }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: s.c, fontFamily: "'DM Serif Display',serif" }}>
+                  {s.n.toLocaleString()}
+                </div>
+                <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .3 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {verifyResult.counts.textMessages === 0 && (
+            <div style={{ padding: '8px 10px', background: 'rgba(212,160,23,.08)', border: '1px solid rgba(212,160,23,.25)', borderRadius: 6, fontSize: 11, color: '#f0c040', marginBottom: 8 }}>
+              ⚠ <strong>Zero texts imported.</strong> This is the X-System bug — see RESEARCH_NOTES.md for the fix (register a system at apps.followupboss.com/system-registration + add FUB_SYSTEM env vars on Vercel, then re-run import).
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+            All this data is now in your browser's IndexedDB. Lead detail pages read from here instead of calling FUB. You can cancel FUB and this data persists.
+          </div>
+        </div>
+      )}
 
       {/* Realtime aggregated counts — proves texts/calls are coming through */}
       {debugLog.length > 0 && (
