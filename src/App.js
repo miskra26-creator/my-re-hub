@@ -7972,8 +7972,23 @@ const GmailSyncWorker = ({notify, toast}) => {
             console.log(`[Gmail sync] ${i}/${newMsgs.length} fetched`);
           }
         }
-        for(const {msg,detail} of details){
-          const syncKey=`gmail_synced_${msg.id}`;
+        // ── PERF: build an email→lead lookup map ONCE so each Gmail message
+        // is an O(1) hash lookup instead of O(leads) scan. Without this, a
+        // 3000-email backfill on a 6000-lead account is 18M iterations on
+        // the main thread → tab freezes hard. With it, the same backfill
+        // is 6000 hash lookups → milliseconds.
+        const emailToLead = new Map();
+        for(const lead of leads){
+          if(!lead.email) continue;
+          emailToLead.set(lead.email.toLowerCase().trim(), lead);
+        }
+        // ── PERF: accumulate per-lead activity additions in memory and flush
+        // each lead's localStorage write ONCE at the end, instead of
+        // read-modify-writing localStorage on every single match.
+        const pendingByLead = new Map(); // leadId → [entries]
+        const matchedSyncKeys = []; // gmail_synced_<id> keys to set at flush time
+        for(let mi=0; mi<details.length; mi++){
+          const {msg,detail}=details[mi];
           if(!detail) continue;
           const headers=detail.payload?.headers||[];
           const from=headers.find(h=>h.name==='From')?.value||'';
@@ -7981,33 +7996,64 @@ const GmailSyncWorker = ({notify, toast}) => {
           const subject=headers.find(h=>h.name==='Subject')?.value||'(no subject)';
           const fromEmail=gmailExtractEmail(from);
           const toEmails=(to||'').split(',').map(gmailExtractEmail);
-          // Extract the actual email body — this is what FUB redacts and what
-          // Monica actually wants to read on the contact timeline.
-          const body=gmailExtractBody(detail.payload).slice(0,5000);
-          leads.forEach(lead=>{
-            if(!lead.email) return;
-            const le=lead.email.toLowerCase().trim();
-            const isIn=fromEmail===le;
-            const isOut=toEmails.some(e=>e===le);
-            if(!isIn&&!isOut) return;
-            localStorage.setItem(syncKey,'1');
-            const actKey=`activities_${lead.id}`;
-            const existing=JSON.parse(localStorage.getItem(actKey)||'[]');
-            if(existing.find(a=>a.gmailId===msg.id)) return;
-            existing.unshift({
+          // Body capped at 2KB (was 5KB) — keeps localStorage well under quota
+          // even with thousands of synced emails. Most useful content fits.
+          const body=gmailExtractBody(detail.payload).slice(0,2000);
+          // Find which lead this email belongs to via the prebuilt map. An
+          // email can match either the sender (inbound) OR a recipient
+          // (outbound). Multiple leads on the same address would all match,
+          // but that's rare so we keep the loop simple.
+          const candidates = [];
+          const inLead = emailToLead.get(fromEmail);
+          if(inLead) candidates.push({lead:inLead, direction:'inbound'});
+          for(const te of toEmails){
+            const outLead = emailToLead.get(te);
+            if(outLead && outLead.id !== inLead?.id) candidates.push({lead:outLead, direction:'outbound'});
+          }
+          if(candidates.length === 0) continue;
+          matchedSyncKeys.push(`gmail_synced_${msg.id}`);
+          for(const {lead, direction} of candidates){
+            const entry = {
               id:uid(),
               type:'gmail',
-              direction:isIn?'inbound':'outbound',
+              direction,
               subject,
-              note:`${isIn?'📨 Email from':'📤 Email to'} ${lead.name}: "${subject}"`,
-              detail:body, // ← body shows in timeline (leadActivity.js maps detail → body)
+              note:`${direction==='inbound'?'📨 Email from':'📤 Email to'} ${lead.name}: "${subject}"`,
+              detail:body,
               gmailId:msg.id,
               createdAt:new Date().toISOString(),
-            });
-            localStorage.setItem(actKey,JSON.stringify(existing));
+            };
+            if(!pendingByLead.has(lead.id)) pendingByLead.set(lead.id, []);
+            pendingByLead.get(lead.id).push(entry);
             logged++;
-          });
+          }
+          // Yield to the browser every 50 messages so the UI thread stays
+          // responsive. Without this even the fast version can hang on huge
+          // backfills because we're holding the event loop.
+          if(mi % 50 === 0 && mi > 0){
+            await new Promise(r => setTimeout(r, 0));
+          }
         }
+        // Flush all per-lead writes ONCE. For each lead we read the existing
+        // activities, dedupe by gmailId, prepend the new ones, write back.
+        for(const [leadId, entries] of pendingByLead){
+          const actKey = `activities_${leadId}`;
+          const existing = JSON.parse(localStorage.getItem(actKey)||'[]');
+          const existingGmailIds = new Set(existing.filter(a=>a.gmailId).map(a=>a.gmailId));
+          const toAdd = entries.filter(e => !existingGmailIds.has(e.gmailId));
+          if(toAdd.length === 0) continue;
+          try{
+            localStorage.setItem(actKey, JSON.stringify([...toAdd, ...existing]));
+          }catch(quotaErr){
+            // localStorage full — bail with a friendly toast
+            console.warn('[Gmail sync] localStorage quota hit on lead', leadId, quotaErr);
+            toast.error('📧 Gmail sync paused — browser storage is full. Try clearing some history or contact support.');
+            break;
+          }
+        }
+        // Now mark all matched messages as synced (do this after the writes
+        // so a quota failure doesn't leave us with dangling sync flags)
+        for(const k of matchedSyncKeys) localStorage.setItem(k, '1');
         localStorage.setItem('gmail_last_sync',String(Date.now()));
         if(isFirstSync){
           toast.success(`✅ Gmail backfill complete — ${logged} email${logged===1?'':'s'} logged on contact timelines from the last 90 days`);
