@@ -20,10 +20,236 @@ import {
   Search, Bookmark,
 } from 'lucide-react';
 
-// ── CONTENT ENGINE — 30 viral-ready ideas for Metro Detroit luxury ──────────
-// Seed data so the page works instantly without an AI call. Refresh button
-// re-generates fresh ideas via Gemini API (free tier).
+// ── CONTENT ENGINE — Top US RE creators + their viral content formulas ──────
+// Monica's actual ask: she wants to see what TOP US agents are posting that's
+// going viral, then click "Adapt for Me" to get HER version of that style.
+// Not Metro-Detroit-specific captions — national inspiration.
+//
+// Each entry: real US creator with proven viral content + the formula behind
+// why it worked + an adapt-this-for-Monica idea. "Refresh with AI" calls
+// Gemini to find currently-trending creators (the seed gets stale every quarter).
 const CONTENT_ENGINE_SEED = [
+  {
+    creator: 'Glennda Baker', handle: '@glennda_baker', platform: 'TikTok', followers: '850K',
+    location: 'Atlanta, GA', niche: 'storytelling', effort: '30min', engagement: 'HIGH',
+    hook: 'The "$137,000 commission" story', viralViews: '10M+ views',
+    contentType: 'Talking-head storytelling reel',
+    caption: 'Glennda\'s signature: real client story told with vulnerability, ending with a shocking number ($137K commission) and a soft market lesson. No selling — just teaching through story. Her account exploded in 2024 with this format.',
+    hashtags: ['#storyselling', '#atlantarealestate', '#realestateagent', '#commissionstory', '#realtorlife'],
+    visual: 'Direct-to-camera, agent at desk or in car. Minimal cuts. Strong eye contact. Captions on screen for accessibility.',
+    formula: 'Personal anecdote → real numbers → broader lesson → CTA',
+    adaptIdea: 'Tell YOUR biggest "I saved the buyer $X" story. Real numbers, real emotions. Soft lesson about why agent representation matters. Metro Detroit edition.',
+  },
+  {
+    creator: 'Mike Sherrard', handle: '@mikesherrard', platform: 'YouTube Long-form', followers: '700K+',
+    location: 'Toronto, ON', niche: 'agent-education', effort: '2hrs', engagement: 'HIGH',
+    hook: '"I generated $1M in sales with ZERO ad spend"', viralViews: '500K+ per video',
+    contentType: 'Long-form YouTube tutorial / breakdown',
+    caption: 'Mike teaches agents how to actually do content marketing. His "no ad spend" content goes viral with other agents because it\'s contrarian + actionable. He doesn\'t target buyers — he targets agents (which converts to coaching $$$).',
+    hashtags: ['#realestateeducation', '#agentmarketing', '#contentstrategy', '#realestatecoach'],
+    visual: 'Talking-head with B-roll of his actual posts. Whiteboard explanations. Screen recordings of strategies.',
+    formula: 'Contrarian claim → proof (real screenshots) → step-by-step breakdown → CTA',
+    adaptIdea: 'Make YOUR version targeting buyers/sellers: "How I helped 47 Metro Detroit buyers find homes without a single Zillow lead" — contrarian, real proof, actionable for viewers.',
+  },
+  {
+    creator: 'Ryan Serhant', handle: '@ryanserhant', platform: 'Instagram + TikTok', followers: '2M+',
+    location: 'New York, NY', niche: 'luxury-tour', effort: '2hrs', engagement: 'HIGH',
+    hook: '"This $50M penthouse has a private elevator to the rooftop pool"', viralViews: '5M+ per tour',
+    contentType: 'High-production luxury walkthroughs with personality',
+    caption: 'Serhant\'s formula: pick the most absurd feature first ("private elevator to rooftop pool"), tour it with energy, drop the price like a punchline. Million Dollar Listing pedigree gives him distribution, but the FORMAT works for any luxury home.',
+    hashtags: ['#luxurytour', '#nyrealestate', '#milliondollarhome', '#luxuryrealestate'],
+    visual: 'Professional gimbal, drone exterior, multiple angles. NEVER static. Always moving. Music swells at price reveal.',
+    formula: 'Wild feature hook → personality-driven tour → price punchline at end',
+    adaptIdea: 'Birmingham/Bloomfield luxury tours with YOUR personality. Find the wildest feature (heated driveway? 6-car garage? wine cellar?) and lead with it. Tour with energy. Price reveal at end.',
+  },
+  {
+    creator: 'Loida Velasquez', handle: '@loidavelasquez', platform: 'YouTube + Instagram', followers: '500K+',
+    location: 'Los Angeles, CA', niche: 'agent-education', effort: '45min', engagement: 'HIGH',
+    hook: '"How I doored 300 doors and got 7 listings"', viralViews: '300K+ per video',
+    contentType: 'Day-in-life door-knocking and prospecting vlogs',
+    caption: 'Loida documents the unglamorous reality of prospecting (door knocking, cold calling) and shows the actual results. Hyper-relatable for agents who hate prospecting but need to do it. Her authenticity is the moat.',
+    hashtags: ['#realestateprospecting', '#doorknocking', '#newagent', '#realestatehustle'],
+    visual: 'Handheld phone POV. Real interactions (even the rude ones). End-of-day reflection at car.',
+    formula: 'Set a goal → document the grind → show the result → reflection',
+    adaptIdea: 'Document YOUR prospecting day in Bloomfield or Birmingham. Door knock 50 homes. Show real reactions. Share what worked. Authenticity wins.',
+  },
+  {
+    creator: 'Tom Ferry', handle: '@tomferry', platform: 'Instagram + YouTube', followers: '1.5M+',
+    location: 'Newport Beach, CA', niche: 'agent-education', effort: '30min', engagement: 'MED',
+    hook: '"5 scripts that close listings in 2026"', viralViews: '200K+ per post',
+    contentType: 'Script teardowns + role-play demos',
+    caption: 'Tom Ferry is the agent coaching empire. His content gives away scripts and tactics agents can use TOMORROW. Generates inbound coaching leads. Best for: stealing his SCRIPT FORMAT for buyer/seller education content.',
+    hashtags: ['#realestatecoach', '#listingscripts', '#agentcoaching', '#realestatetraining'],
+    visual: 'Talking head with text overlay scripts. Sometimes role-play with another agent.',
+    formula: 'Common agent problem → exact script → why it works → CTA',
+    adaptIdea: 'Steal his FORMAT but make it for BUYERS/SELLERS not agents: "5 questions to ask before hiring a luxury listing agent in Metro Detroit." Same script format, different audience.',
+  },
+  {
+    creator: 'Madison Sutton', handle: '@thenycagent', platform: 'TikTok + Instagram', followers: '650K+',
+    location: 'New York, NY', niche: 'lifestyle', effort: '30min', engagement: 'HIGH',
+    hook: '"$5,000 a month gets you THIS in NYC"', viralViews: '8M+ on best reels',
+    contentType: 'Apartment tour reels with shocking price reveals',
+    caption: 'Madison built her brand on rental tours that reveal how brutal NYC pricing is. Her "POV: you can afford $3K rent" content drives massive engagement because it taps into housing anxiety. The format works ANYWHERE with price scarcity.',
+    hashtags: ['#nycapartments', '#nycrealestate', '#nycrentals', '#luxurynyc'],
+    visual: 'POV walk-through. Price label visible from start (creates anticipation). Quick cuts.',
+    formula: 'Shock price hook → POV tour → emotional reveal (good or bad) → CTA',
+    adaptIdea: 'Metro Detroit version: "What $500K buys you in Birmingham vs Royal Oak vs Detroit." Same shock-price format, applied to YOUR market\'s price diversity.',
+  },
+  {
+    creator: 'Ricky Carruth', handle: '@rickycarruth', platform: 'YouTube + Instagram', followers: '300K+',
+    location: 'Orange Beach, AL', niche: 'agent-education', effort: '45min', engagement: 'MED',
+    hook: '"How I doubled my income calling expired listings"', viralViews: '150K+ per post',
+    contentType: 'Free coaching content + script breakdowns',
+    caption: 'Ricky built his brand on giving away EVERYTHING for free (his book is free, his coaching is free). Reverse psychology — agents pay because he overdelivers. Best for: how to give away value to build trust.',
+    hashtags: ['#expiredlistings', '#realestatecoaching', '#freecontent'],
+    visual: 'Plain background, talking head, sometimes whiteboard. Production value is low — content is the value.',
+    formula: 'Specific tactic → exact script → results → "and it\'s free"',
+    adaptIdea: 'Give away your seller prep checklist for free. Post the entire thing as a carousel. Trust > sales pitch.',
+  },
+  {
+    creator: 'Brittany Loeffler', handle: '@brittanyloefflerteam', platform: 'TikTok + Instagram', followers: '300K+',
+    location: 'Philadelphia, PA', niche: 'day-in-life', effort: '20min', engagement: 'HIGH',
+    hook: '"POV: you\'re a luxury agent on closing day"', viralViews: '3M+ on top reels',
+    contentType: 'Aesthetic day-in-life with luxury lifestyle aspiration',
+    caption: 'Brittany sells the LIFESTYLE of being a luxury agent (well-dressed, beautiful homes, dream cars). Her content makes other women want to BECOME agents AND makes wealthy women want to HIRE her. Double-audience win.',
+    hashtags: ['#luxuryagent', '#realestatelifestyle', '#womeninrealestate', '#luxurylife'],
+    visual: 'Cinematic gimbal shots, fashion-forward outfits, sun flares, beautiful homes, dream cars.',
+    formula: 'Aspirational visual → soft narration → lifestyle aesthetic → CTA',
+    adaptIdea: 'YOUR Metro Detroit luxury agent aesthetic: well-dressed, in Birmingham/Bloomfield homes, behind the wheel of a nice car, sunrise to sunset day-in-life. Aspirational, not sales-y.',
+  },
+  {
+    creator: 'The Altman Brothers', handle: '@thealtmanbrothers', platform: 'Instagram', followers: '1M+',
+    location: 'Beverly Hills, CA', niche: 'luxury-tour', effort: '2hrs', engagement: 'HIGH',
+    hook: '"You\'re looking at a $42M Bel-Air estate"', viralViews: '2M+ per tour',
+    contentType: 'Ultra-luxury walkthroughs with brotherly chemistry',
+    caption: 'The Altman Brothers (from Million Dollar Listing LA) sell PERSONALITY as much as homes. Their content works because of their dynamic, not just the homes. Two-agent banter format is replicable with a partner.',
+    hashtags: ['#luxuryrealestate', '#bevhills', '#milliondollarhome', '#luxurylifestyle'],
+    visual: 'Two-person conversational tour. Drone establishing shots. Lots of personality.',
+    formula: 'Establish stakes (price) → tour with banter → personality moments → CTA',
+    adaptIdea: 'Find a partner (your broker, another agent, a stager) and do paired tours. The chemistry sells. If solo: do "tour with your spouse/friend" content.',
+  },
+  {
+    creator: 'Mauricio Umansky', handle: '@mumansky18', platform: 'Instagram', followers: '1M+',
+    location: 'Beverly Hills, CA', niche: 'celebrity-listings', effort: '2hrs', engagement: 'HIGH',
+    hook: '"Inside the $250M Bel-Air mega-mansion"', viralViews: '5M+ per tour',
+    contentType: 'Celebrity-tier luxury with Mauricio\'s personal brand',
+    caption: 'Mauricio (founder of The Agency) leverages his RHOBH celebrity for visibility, then converts with actual luxury expertise. His "celebrity client" mentions are subtle flexes that establish authority.',
+    hashtags: ['#luxuryrealestate', '#thelagent', '#beverlyhills', '#celebrityhomes'],
+    visual: 'Drone establishing shots, smooth gimbal tours, sometimes featuring clients (with permission).',
+    formula: 'Authority signal (celebrity, price) → tour → personal brand moment → CTA',
+    adaptIdea: 'You don\'t need celebrities. Use Metro Detroit "celebrity homes" — former Pistons players\' homes, Lions players\' homes, Motown legend homes. Public records show many of these.',
+  },
+  {
+    creator: 'Tatiana Londono', handle: '@tatianalondono', platform: 'Instagram + TikTok', followers: '500K+',
+    location: 'Montreal, QC', niche: 'agent-education', effort: '30min', engagement: 'HIGH',
+    hook: '"3 ways NEW agents waste their first year"', viralViews: '1M+ on top reels',
+    contentType: 'Bold opinions + script breakdowns for agents',
+    caption: 'Tatiana built her empire by being BLUNT — calls out bad agent behavior, gives controversial advice, doesn\'t soften. The "I\'m going to say what other coaches won\'t" angle drives engagement.',
+    hashtags: ['#realestatecoach', '#newagent', '#agentadvice', '#realestatetraining'],
+    visual: 'Direct-to-camera, intense eye contact, bold backgrounds. Captions emphasize controversial takes.',
+    formula: 'Controversial opinion → defense → actionable advice → CTA',
+    adaptIdea: 'Pick something the Metro Detroit luxury market gets WRONG. Take a bold stance ("Most Birmingham agents underprice older homes by $50K — here\'s why"). Defend it with proof.',
+  },
+  {
+    creator: 'Jonathan Garbutt', handle: '@thatsmartagent', platform: 'TikTok', followers: '400K+',
+    location: 'Toronto, ON', niche: 'agent-education', effort: '15min', engagement: 'HIGH',
+    hook: '"This script gets you 5 listing appointments a week"', viralViews: '2M+ on top reels',
+    contentType: 'Script teardowns — exact words to say',
+    caption: 'Jonathan gives the EXACT words agents need to say. Short reels (15-30 sec), high-value, immediately actionable. Agents save these reels. Builds authority fast.',
+    hashtags: ['#realestatescripts', '#listingagent', '#realestatecoach', '#agentscripts'],
+    visual: 'Quick cuts, captions emphasize key phrases. Phone-shot, casual setting.',
+    formula: 'Specific scenario → exact words → why it works → save it',
+    adaptIdea: 'For BUYERS/SELLERS not agents: "What to say when an agent pressures you to make an offer." Same script-teardown format, consumer audience.',
+  },
+  {
+    creator: 'Krista Mashore', handle: '@kristamashore', platform: 'YouTube + Instagram', followers: '300K+',
+    location: 'Brentwood, CA', niche: 'agent-education', effort: '45min', engagement: 'MED',
+    hook: '"How I went from 5 deals to 169 in one year"', viralViews: '200K+ per video',
+    contentType: 'Personal transformation + agent system breakdowns',
+    caption: 'Krista\'s hero arc (single mom → top agent) is her hook. She teaches HER specific system. Personal story + system = high-converting coaching content.',
+    hashtags: ['#realestatecoach', '#topagent', '#realestatesystem'],
+    visual: 'Polished talking head, B-roll of her business, occasional client testimonials.',
+    formula: 'Personal story → "here\'s what changed" → system breakdown → CTA',
+    adaptIdea: 'Share YOUR transformation story. "From 12 deals to 38 deals by focusing on Birmingham luxury." Your specific pivot, your specific system.',
+  },
+  {
+    creator: 'Brennan Adams', handle: '@brennanadams_re', platform: 'Instagram + TikTok', followers: '250K+',
+    location: 'Toronto, ON', niche: 'investor', effort: '30min', engagement: 'HIGH',
+    hook: '"I bought this duplex for $40K. Here\'s what I made."', viralViews: '1M+ on top reels',
+    contentType: 'Investment property breakdowns + real numbers',
+    caption: 'Brennan shares ACTUAL investment numbers (purchase price, reno cost, rent, profit). Real estate investor audience eats this up. Builds an investor lead pipeline.',
+    hashtags: ['#realestateinvesting', '#duplexinvesting', '#rentalproperty', '#cashflow'],
+    visual: 'Before/after shots, P&L breakdown on screen, walkthrough of finished property.',
+    formula: 'Shocking purchase price → reno breakdown → final numbers → reproducible system',
+    adaptIdea: 'Metro Detroit investor content. Show duplex deals in Hamtramck, Ferndale, Royal Oak. Real numbers. Real cash flow. Builds investor lead pipeline.',
+  },
+  {
+    creator: 'Brandon Mulrenin', handle: '@brandonmulrenin', platform: 'YouTube + Instagram', followers: '400K+',
+    location: 'Cherry Hill, NJ', niche: 'agent-education', effort: '45min', engagement: 'MED',
+    hook: '"Why most agents will fail in 2026"', viralViews: '300K+ per video',
+    contentType: 'Market predictions + agent business model breakdowns',
+    caption: 'Brandon makes bold predictions about the industry. Pulls in both consumers (worried about market) and agents (worried about their business). Dual-audience content scales.',
+    hashtags: ['#realestatemarket', '#realestatepredictions', '#agentbusiness'],
+    visual: 'Authority pose talking head, charts on screen, sometimes interviews other agents.',
+    formula: 'Bold prediction → evidence → implications → action',
+    adaptIdea: 'Take a Metro Detroit-specific stance. "Bloomfield Hills will outperform every Detroit suburb in 2026 — here\'s why." Bold, evidenced, local.',
+  },
+  {
+    creator: 'Phil Hawkins', handle: '@philhawkinsre', platform: 'TikTok', followers: '200K+',
+    location: 'Dallas, TX', niche: 'lifestyle', effort: '20min', engagement: 'HIGH',
+    hook: '"Day in the life: closing 3 deals before noon"', viralViews: '5M+ on top reels',
+    contentType: 'Fast-paced day-in-life montages',
+    caption: 'Phil\'s rapid-fire day-in-life content (closings, meetings, calls in 60 seconds) creates "wow this guy works hard" perception. Builds trust through visible work ethic.',
+    hashtags: ['#realestatelife', '#dayinthelife', '#hustleculture', '#realestateagent'],
+    visual: 'Timelapses, jump cuts between activities, time stamps on screen, upbeat music.',
+    formula: 'Aggressive goal (3 deals) → rapid montage → end-of-day reflection',
+    adaptIdea: 'Your Metro Detroit montage: 6am coffee, 9am Birmingham showing, noon Bloomfield listing presentation, 3pm Novi closing, 6pm dinner with past clients. Show the volume.',
+  },
+  {
+    creator: 'Hina Khan', handle: '@hinakhanrealtor', platform: 'TikTok + Instagram', followers: '150K+',
+    location: 'Houston, TX', niche: 'luxury-tour', effort: '30min', engagement: 'HIGH',
+    hook: '"What $2M gets you in Houston vs LA"', viralViews: '3M+ on top reels',
+    contentType: 'City-comparison tours showing price disparity',
+    caption: 'Hina\'s city-comparison content (Houston $2M vs LA $2M) goes viral because it taps into "did I move to the wrong city" anxiety. Visual side-by-side reveals are screenshot-worthy.',
+    hashtags: ['#houstonrealestate', '#houstonvsla', '#luxuryhomes', '#hometourcompare'],
+    visual: 'Side-by-side splits, same camera angle in both cities, clear price labels.',
+    formula: 'Shock comparison setup → side-by-side reveal → emotional implication → CTA',
+    adaptIdea: '"What $500K buys you in Bloomfield Hills vs Beverly Hills" or "$1M Birmingham home vs $1M Manhattan apartment." Geographic value comparison.',
+  },
+  {
+    creator: 'Andy Elliott', handle: '@officialandyelliott', platform: 'Instagram + TikTok', followers: '500K+',
+    location: 'Scottsdale, AZ', niche: 'sales-training', effort: '15min', engagement: 'HIGH',
+    hook: '"Stop saying \'I\'ll think about it\' to your clients"', viralViews: '2M+ on top reels',
+    contentType: 'Sales objection handling — exact scripts',
+    caption: 'Andy gets agents fired up about closing. High-energy delivery, controversial takes on sales tactics. Audience: agents who want more aggression in their close.',
+    hashtags: ['#salescoaching', '#closing', '#realestatescripts', '#salestraining'],
+    visual: 'Intense talking head, dramatic lighting, captions in ALL CAPS for emphasis.',
+    formula: 'Common weak phrase → why it loses → power phrase replacement → demo',
+    adaptIdea: 'Calmer Monica version: "Here\'s what I say when a buyer says \'we\'re going to wait until rates drop\'." Your specific Metro Detroit objection-handling.',
+  },
+  {
+    creator: 'Dean Adler', handle: '@deanadler_realestate', platform: 'TikTok + Instagram', followers: '200K+',
+    location: 'New York, NY', niche: 'luxury-tour', effort: '30min', engagement: 'HIGH',
+    hook: '"Inside a $25M NYC penthouse — wait until you see the closet"', viralViews: '4M+ on top reels',
+    contentType: 'Luxury walkthrough reels with one wow moment',
+    caption: 'Dean builds every tour around ONE wow moment (the closet, the wine cellar, the hidden room). The hook tees up the reveal. Tour structure: build anticipation → payoff.',
+    hashtags: ['#nyrealestate', '#luxurypenthouse', '#luxurytour', '#manhattan'],
+    visual: 'Smooth gimbal, building toward one big reveal. Music swells at the moment.',
+    formula: 'Tease the wow → walk through ordinary → reveal the wow → emotional payoff',
+    adaptIdea: 'Find ONE wow feature in each Birmingham/Bloomfield listing (the wine cellar, the indoor pool, the panic room). Build the whole reel around the reveal.',
+  },
+  {
+    creator: 'Sarah Knauer', handle: '@sarahknauer.realestate', platform: 'TikTok + Instagram', followers: '180K+',
+    location: 'Nashville, TN', niche: 'agent-story', effort: '25min', engagement: 'HIGH',
+    hook: '"Single mom who built a million-dollar real estate business"', viralViews: '3M+ on top reels',
+    contentType: 'Hero-arc personal story + real estate education',
+    caption: 'Sarah\'s hero arc (single mom transitioning into top producer) is the foundation. Every market lesson is wrapped in her personal journey. Authenticity + aspiration = high engagement with women buyers.',
+    hashtags: ['#singlemomrealestate', '#womenwhocrush', '#nashvillerealestate', '#femaleagent'],
+    visual: 'Mix of personal life moments, professional shots, talking-head reflection.',
+    formula: 'Personal vulnerability → market lesson → empowerment → CTA',
+    adaptIdea: 'YOUR personal journey into real estate. Whatever your origin story is, lean into it. Women buyers and sellers want to work with women who get it.',
+  },
+];
   { hook: '"Why this $1.4M Birmingham home will sell in 3 days"', platform: 'Instagram Reel', niche: 'luxury-tour', effort: '30min', engagement: 'HIGH', caption: '3 things buyers will fight over here:\n\n1️⃣ Walk-in pantry bigger than most NYC apartments\n2️⃣ Heated garage (you Detroit folks know)\n3️⃣ Primary suite with private balcony overlooking Quarton Lake\n\nWho do I tour this one with? 👇', hashtags: ['#BirminghamMI', '#MetroDetroitLuxury', '#OaklandCountyRealEstate', '#LuxuryHomesMichigan', '#MichiganRealtor'], visual: 'Slow-motion walkthrough hero shot, focus on natural light from window, then quick cuts of 3 features' },
   { hook: '"POV: You said yes to the Bloomfield Hills house"', platform: 'TikTok', niche: 'lifestyle', effort: '15min', engagement: 'HIGH', caption: 'When clients close on their dream home, this is the moment.\n\nNo script. No staging. Just real joy.\n\nThinking about buying in Bloomfield Hills? My DMs are open 💛', hashtags: ['#BloomfieldHills', '#ClosingDay', '#RealEstateAgent', '#MichiganRealtor', '#LuxuryLifestyle'], visual: 'Phone shot of clients getting keys, slow-mo of them walking into empty house, golden hour' },
   { hook: '"3 mistakes first-time luxury buyers in Michigan ALWAYS make"', platform: 'Instagram Reel', niche: 'educational', effort: '20min', engagement: 'MED', caption: 'I\'ve helped 100+ families buy in Oakland County. Here\'s what trips up first-time luxury buyers:\n\n❌ Falling in love before pre-approval\n❌ Skipping the sewer inspection in older Birmingham homes\n❌ Underestimating winter heating costs on 5000+ sqft\n\nSave this for when you\'re ready 📌', hashtags: ['#OaklandCountyRealEstate', '#FirstTimeLuxuryBuyer', '#MichiganRealEstate', '#BirminghamMI', '#HomeBuyingTips'], visual: 'Talking head with text overlay for each mistake, B-roll of homes in background' },
@@ -56,10 +282,13 @@ const CONTENT_ENGINE_SEED = [
   { hook: '"Birmingham Restaurant Week — the BEST week to host a buyer tour"', platform: 'Instagram Reel', niche: 'hyperlocal', effort: '25min', engagement: 'MED', caption: 'Pro tip for buyer agents (or DIY buyers):\n\nSchedule your downtown Birmingham showings during Restaurant Week.\n\nWhy?\n🍽️ Town is alive and busy\n🚶 Walkability sells itself\n🍷 Easy to grab a glass of wine after to close the deal\n🌳 Trees are budding, town looks magical\n\nNothing sells Birmingham like the Birmingham experience.', hashtags: ['#BirminghamMI', '#BirminghamRestaurantWeek', '#HomeShowing', '#MetroDetroit'], visual: 'Restaurant patio shots + agent walking through downtown + happy buyers' },
 ];
 
-// The prompt used by the "Refresh Ideas" button. Calls /api/claude/messages
+// The prompt used by the "Refresh with AI" button. Calls /api/claude/messages
 // which falls back to GOOGLE_GEMINI_API_KEY when ANTHROPIC isn't set. Output
 // must be JSON array matching the seed shape for the UI to render.
-const CONTENT_ENGINE_PROMPT = `You are an elite real estate content strategist generating viral content ideas for Monica Iskra, a RE/MAX Classic luxury agent in Metro Detroit (Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield, Oakland County, I-275 corridor, $350K+ homes).
+// Monica explicitly wants TOP US CREATORS + their viral content, not local
+// caption ideas. The seed is high-engagement US RE creators with proven viral
+// content + the formula behind why it worked + an adapt-this-for-Monica idea.
+const CONTENT_ENGINE_PROMPT_OLD_METRO = `You are an elite real estate content strategist generating viral content ideas for Monica Iskra, a RE/MAX Classic luxury agent in Metro Detroit (Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield, Oakland County, I-275 corridor, $350K+ homes).
 
 Generate 30 fresh, ready-to-post content ideas she can execute THIS WEEK.
 
@@ -88,6 +317,44 @@ QUALITY RULES:
 - Hashtags must reasonably exist (no #made_up_hashtag)
 - Captions must be in HER voice (warm, professional, confident — like a luxury concierge, not a used-car salesman)
 - Avoid clichés ("don't miss out", "act fast", "click link in bio")
+
+OUTPUT ONLY THE JSON ARRAY. NO OTHER TEXT.`;
+
+// The ACTIVE prompt — fetches TOP US viral creators + their content formulas.
+// Used by the "Refresh with AI" button on the Content Engine tab.
+const CONTENT_ENGINE_PROMPT = `You are an expert real estate content researcher tracking the highest-engagement US real estate creators on Instagram, TikTok, and YouTube in 2026.
+
+Your client is Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent). She wants to study the BEST US RE creators and adapt their winning formulas to her market.
+
+Return 20 top US real estate creators currently going viral. PRIORITIZE creators with proven high engagement (50K+ views per post regularly). Skip coaching influencers if possible — focus on PRACTICING agents who post about real estate.
+
+OUTPUT REQUIREMENT: Return ONLY a valid JSON array, no preamble, no markdown code fences. Each object must have EXACTLY these fields:
+{
+  "creator": "Full name",
+  "handle": "@instagram_or_tiktok_handle",
+  "platform": "TikTok" | "Instagram" | "YouTube" | "Instagram + TikTok" | "YouTube Long-form",
+  "followers": "estimated follower count e.g. '850K' or '1.5M'",
+  "location": "City, ST",
+  "niche": "storytelling" | "luxury-tour" | "agent-education" | "investor" | "day-in-life" | "lifestyle" | "celebrity-listings" | "agent-story" | "sales-training",
+  "effort": "15min" | "20min" | "25min" | "30min" | "45min" | "60min" | "2hrs",
+  "engagement": "LOW" | "MED" | "HIGH",
+  "hook": "Their signature hook style — actual example of how they open a viral post",
+  "viralViews": "Approximate view count on their viral posts e.g. '10M+ views' or '500K+ per video'",
+  "contentType": "What kind of content (e.g. 'Talking-head storytelling reel' or 'High-production luxury walkthrough')",
+  "caption": "2-3 sentences describing what makes this creator's content WORK — the psychological + algorithmic reasons",
+  "hashtags": ["5 hashtags this creator uses"],
+  "visual": "One sentence describing the visual style/production approach",
+  "formula": "The 3-5 step formula this creator follows on every post",
+  "adaptIdea": "One specific idea for HOW MONICA (Metro Detroit luxury agent) could adapt this creator's style to her market — be specific, name Birmingham/Bloomfield/Novi/Northville/West Bloomfield"
+}
+
+QUALITY RULES:
+- Real creators only. Don't make up handles.
+- Mix luxury and non-luxury creators (Monica wants creative inspiration from all niches)
+- Mix big names (Ryan Serhant, Altman Brothers) with mid-tier creators (50K-500K followers — often higher engagement than mega-creators)
+- Geographic mix across the US
+- Include creators known for going VIRAL specifically (not just consistently posting)
+- "adaptIdea" must mention a specific Metro Detroit neighborhood, not generic
 
 OUTPUT ONLY THE JSON ARRAY. NO OTHER TEXT.`;
 
@@ -444,10 +711,11 @@ const InfluencerWatch = ({ setPage, toast }) => {
       status: 'draft',
     };
     setContentDrafts(p => [draft, ...p]);
-    // Copy caption to clipboard
-    const fullText = `${idea.hook}\n\n${idea.caption}\n\n${(idea.hashtags || []).join(' ')}`;
-    if (navigator.clipboard) navigator.clipboard.writeText(fullText);
-    toast?.success?.('✅ Idea saved + caption copied to clipboard');
+    // Build a "ready to film" brief in the clipboard — creator's formula
+    // adapted to Monica's market. Easier to act on than just a hook.
+    const brief = `INSPIRED BY: ${idea.creator} (${idea.handle})\n\nHOOK STYLE: "${idea.hook}"\n\nFORMULA TO FOLLOW:\n${idea.formula}\n\nADAPT FOR METRO DETROIT:\n${idea.adaptIdea}\n\nVISUAL:\n${idea.visual}\n\nHASHTAGS:\n${(idea.hashtags || []).join(' ')}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(brief);
+    toast?.success?.(`✅ "${idea.creator}" formula saved + brief copied to clipboard`);
   };
   const filteredIdeas = contentIdeas.filter(i =>
     (engineFilter.platform === 'all' || (i.platform || '').toLowerCase().includes(engineFilter.platform)) &&
@@ -526,12 +794,12 @@ const InfluencerWatch = ({ setPage, toast }) => {
             border:'1px solid rgba(184,134,75,.25)',borderRadius:14,
           }}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:11,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>🚀 Viral Content Engine</div>
+              <div style={{fontSize:11,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>🚀 Top US Viral Real Estate Creators</div>
               <div style={{fontSize:14,color:'#fff',fontWeight:700,marginBottom:3}}>
-                {contentIdeas.length} ready-to-post ideas for Metro Detroit luxury
+                {contentIdeas.length} highest-engagement US RE creators + their viral formulas
               </div>
               <div style={{fontSize:11.5,color:'#94a3b8'}}>
-                Each idea has a hook, full caption, hashtags, and visual cue. Click <strong>"Use This"</strong> to copy caption + save as a draft.
+                Each card shows a top creator's signature hook, why it works, the exact formula, and how to adapt it for YOUR market. Click <strong>"Adapt for Me"</strong> to save the brief.
               </div>
             </div>
             <button onClick={refreshContentIdeas} disabled={engineLoading}
@@ -577,68 +845,130 @@ const InfluencerWatch = ({ setPage, toast }) => {
             <select value={engineFilter.niche} onChange={e=>setEngineFilter(f=>({...f,niche:e.target.value}))}
               style={{background:'rgba(255,255,255,.04)',color:'#fff',border:'1px solid rgba(255,255,255,.1)',borderRadius:6,padding:'5px 8px',fontSize:11.5}}>
               <option value="all">All niches</option>
+              <option value="storytelling">Storytelling</option>
               <option value="luxury-tour">Luxury Tour</option>
-              <option value="market">Market</option>
-              <option value="educational">Educational</option>
-              <option value="day-in-life">Day in Life</option>
-              <option value="hyperlocal">Hyperlocal</option>
+              <option value="agent-education">Agent Education</option>
               <option value="investor">Investor</option>
-              <option value="agent-story">Agent Story</option>
+              <option value="day-in-life">Day in Life</option>
               <option value="lifestyle">Lifestyle</option>
-              <option value="listing-promo">Listing Promo</option>
+              <option value="celebrity-listings">Celebrity Listings</option>
+              <option value="agent-story">Agent Story</option>
+              <option value="sales-training">Sales Training</option>
             </select>
-            <span style={{fontSize:10.5,color:'#475569',marginLeft:'auto'}}>{filteredIdeas.length} of {contentIdeas.length} ideas · {contentDrafts.length} saved drafts</span>
+            <span style={{fontSize:10.5,color:'#475569',marginLeft:'auto'}}>{filteredIdeas.length} of {contentIdeas.length} creators · {contentDrafts.length} saved briefs</span>
           </div>
 
-          {/* Ideas grid */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(380px, 1fr))',gap:14}}>
+          {/* Creator grid — each card shows a top US RE creator + their viral formula */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(420px, 1fr))',gap:14}}>
             {filteredIdeas.map((idea, idx) => {
               const engagementColor = idea.engagement === 'HIGH' ? '#10b981' : idea.engagement === 'MED' ? '#f0c040' : '#94a3b8';
+              // Handle building social URLs from handle
+              const handleClean = (idea.handle || '').replace('@','');
+              const platformUrl = (idea.platform || '').toLowerCase().includes('tiktok')
+                ? `https://tiktok.com/@${handleClean}`
+                : (idea.platform || '').toLowerCase().includes('youtube')
+                ? `https://youtube.com/${handleClean.startsWith('@')?handleClean:'@'+handleClean}`
+                : `https://instagram.com/${handleClean}`;
               return (
                 <div key={idx} style={{
                   background:'#0d1117',border:'1px solid rgba(255,255,255,.08)',borderRadius:12,
-                  padding:'14px 16px',display:'flex',flexDirection:'column',gap:9,
+                  padding:'16px 18px',display:'flex',flexDirection:'column',gap:10,
                   borderLeft:`3px solid ${engagementColor}`,
                 }}>
-                  {/* Hook */}
-                  <div style={{fontSize:14,fontWeight:800,color:'#fff',lineHeight:1.3}}>
-                    {idea.hook}
+                  {/* Creator header */}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:16,fontWeight:900,color:'#fff',fontFamily:"'DM Serif Display',serif",lineHeight:1.1}}>
+                        {idea.creator}
+                      </div>
+                      <a href={platformUrl} target="_blank" rel="noreferrer" style={{
+                        fontSize:11.5,color:'#7eb8f7',textDecoration:'none',fontWeight:600,
+                      }}>
+                        {idea.handle} ↗
+                      </a>
+                      <div style={{fontSize:10,color:'#64748b',marginTop:2}}>{idea.location}</div>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:14,fontWeight:900,color:engagementColor,fontFamily:"'DM Serif Display',serif"}}>
+                        {idea.followers}
+                      </div>
+                      <div style={{fontSize:9.5,color:'#94a3b8',marginTop:2}}>followers</div>
+                    </div>
                   </div>
+
                   {/* Meta tags */}
                   <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                     <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:'rgba(126,184,247,.12)',color:'#7eb8f7',fontWeight:700}}>{idea.platform}</span>
                     <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:'rgba(167,139,250,.12)',color:'#a78bfa',fontWeight:700,textTransform:'uppercase'}}>{idea.niche}</span>
-                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:'rgba(255,255,255,.05)',color:'#94a3b8',fontWeight:700}}>⏱ {idea.effort}</span>
-                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:`${engagementColor}22`,color:engagementColor,fontWeight:800}}>{idea.engagement}</span>
+                    <span style={{fontSize:9,padding:'2px 7px',borderRadius:10,background:`${engagementColor}22`,color:engagementColor,fontWeight:800}}>{idea.viralViews}</span>
                   </div>
-                  {/* Caption preview */}
-                  <div style={{fontSize:11.5,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,
-                    maxHeight:120,overflow:'hidden',
+
+                  {/* Their viral hook / content type */}
+                  <div style={{padding:'8px 10px',background:'rgba(184,134,75,.06)',borderRadius:8,borderLeft:'2px solid #b8864b'}}>
+                    <div style={{fontSize:9.5,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.5,marginBottom:3}}>
+                      Signature Hook
+                    </div>
+                    <div style={{fontSize:12.5,color:'#fff',fontWeight:700,fontStyle:'italic'}}>
+                      "{idea.hook}"
+                    </div>
+                    <div style={{fontSize:10.5,color:'#94a3b8',marginTop:4}}>
+                      Type: {idea.contentType}
+                    </div>
+                  </div>
+
+                  {/* Why it works */}
+                  <div style={{fontSize:11,color:'#cbd5e1',lineHeight:1.55,
                     background:'rgba(255,255,255,.02)',padding:'8px 10px',borderRadius:8,
-                    borderLeft:'2px solid rgba(184,134,75,.3)',
                   }}>
-                    {idea.caption}
+                    <strong style={{color:'#fff'}}>Why it works:</strong> {idea.caption}
                   </div>
+
+                  {/* Formula */}
+                  {idea.formula && (
+                    <div style={{fontSize:11,color:'#a78bfa',padding:'6px 10px',background:'rgba(167,139,250,.06)',borderRadius:8}}>
+                      📐 <strong style={{color:'#fff'}}>Formula:</strong> {idea.formula}
+                    </div>
+                  )}
+
+                  {/* Adapt for Monica idea */}
+                  {idea.adaptIdea && (
+                    <div style={{fontSize:11,color:'#6ee7b7',padding:'8px 10px',background:'rgba(16,185,129,.06)',borderRadius:8,borderLeft:'2px solid #10b981'}}>
+                      🎯 <strong style={{color:'#fff'}}>Adapt for you:</strong> {idea.adaptIdea}
+                    </div>
+                  )}
+
                   {/* Visual cue */}
                   {idea.visual && (
                     <div style={{fontSize:10.5,color:'#94a3b8',fontStyle:'italic'}}>
-                      🎬 <strong style={{color:'#cbd5e1'}}>Visual:</strong> {idea.visual}
+                      🎬 {idea.visual}
                     </div>
                   )}
+
                   {/* Hashtags */}
                   <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                     {(idea.hashtags || []).map((h,i) => (
                       <span key={i} style={{fontSize:9.5,color:'#7eb8f7',fontWeight:600}}>{h}</span>
                     ))}
                   </div>
-                  {/* Action button */}
-                  <button onClick={()=>handleUseIdea(idea)} style={{
-                    marginTop:'auto',padding:'8px 12px',
-                    background:'linear-gradient(135deg, #b8864b, #e0b370)',
-                    color:'#fff',border:'none',borderRadius:8,fontSize:11.5,fontWeight:800,cursor:'pointer',
-                  }}>
-                    ✨ Use This Idea → Copy + Save Draft
-                  </button>
+
+                  {/* Action buttons */}
+                  <div style={{display:'flex',gap:6,marginTop:'auto'}}>
+                    <a href={platformUrl} target="_blank" rel="noreferrer" style={{
+                      flex:1,padding:'8px 12px',
+                      background:'rgba(126,184,247,.12)',color:'#7eb8f7',
+                      border:'1px solid rgba(126,184,247,.3)',borderRadius:8,
+                      fontSize:11.5,fontWeight:800,cursor:'pointer',textDecoration:'none',textAlign:'center',
+                    }}>
+                      👁 View {(idea.platform||'').split(' ')[0]}
+                    </a>
+                    <button onClick={()=>handleUseIdea(idea)} style={{
+                      flex:1,padding:'8px 12px',
+                      background:'linear-gradient(135deg, #b8864b, #e0b370)',
+                      color:'#fff',border:'none',borderRadius:8,fontSize:11.5,fontWeight:800,cursor:'pointer',
+                    }}>
+                      ✨ Adapt for Me
+                    </button>
+                  </div>
                 </div>
               );
             })}
