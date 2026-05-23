@@ -436,7 +436,7 @@ const InfluencerWatch = ({ setPage, toast }) => {
     }
     setEngineLoading(false);
   };
-  const useThisIdea = (idea) => {
+  const handleUseIdea = (idea) => {
     const draft = {
       id: 'draft_' + Date.now(),
       ...idea,
@@ -632,7 +632,7 @@ const InfluencerWatch = ({ setPage, toast }) => {
                     ))}
                   </div>
                   {/* Action button */}
-                  <button onClick={()=>useThisIdea(idea)} style={{
+                  <button onClick={()=>handleUseIdea(idea)} style={{
                     marginTop:'auto',padding:'8px 12px',
                     background:'linear-gradient(135deg, #b8864b, #e0b370)',
                     color:'#fff',border:'none',borderRadius:8,fontSize:11.5,fontWeight:800,cursor:'pointer',
