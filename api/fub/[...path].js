@@ -36,14 +36,26 @@ export default async function handler(req, res) {
   const targetUrl = `https://api.followupboss.com/v1/${fubPath}${rawQuery ? '?' + rawQuery : ''}`;
 
   try {
-    const fetchOptions = {
-      method: req.method,
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(FUB_API_KEY + ':').toString('base64'),
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+    // FUB's textMessages and some other endpoints are "Restricted - Registered
+    // Systems Only" — they require X-System + X-System-Key headers identifying
+    // the calling app as a registered FUB integration. Without these the
+    // endpoints either 401 or return empty arrays.
+    //
+    // Register at https://apps.followupboss.com/system-registration (free)
+    // then set FUB_SYSTEM and FUB_SYSTEM_KEY as Vercel env vars. The proxy
+    // attaches them automatically here. If missing, we still send the
+    // request — non-restricted endpoints (people, notes, events, emails,
+    // calls) usually work without them.
+    const FUB_SYSTEM = process.env.FUB_SYSTEM;
+    const FUB_SYSTEM_KEY = process.env.FUB_SYSTEM_KEY;
+    const headers = {
+      'Authorization': 'Basic ' + Buffer.from(FUB_API_KEY + ':').toString('base64'),
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
+    if (FUB_SYSTEM) headers['X-System'] = FUB_SYSTEM;
+    if (FUB_SYSTEM_KEY) headers['X-System-Key'] = FUB_SYSTEM_KEY;
+    const fetchOptions = { method: req.method, headers };
 
     // Forward body for POST/PUT/PATCH
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {

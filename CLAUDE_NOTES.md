@@ -6,7 +6,91 @@
 
 ---
 
-## Last session: 2026-05-21 (laptop, late evening — AutoReel deep dive, hard lesson)
+## Last session: 2026-05-22 (home-pc, evening into late night — FUB migration architecture pivot)
+
+### Headline
+
+**Monica articulated the core problem cleanly tonight: my-re-hub was a FUB viewer,
+not a FUB replacement. Every "sync" was me asking FUB for data again, not
+owning it. The day she cancels FUB, my-re-hub would go dark for everything but
+leads.** Architecture pivoted accordingly.
+
+### Major work shipped tonight
+
+1. **Gmail OAuth fully wired up** — Monica completed the Google Cloud setup
+   (Client ID `892886589497-a0mk17n49i744su40h94a2d8qq8nl74c.apps.googleusercontent.com`).
+   Authorized JS origin was initially put in the wrong field (redirect URIs); we
+   moved it. She's now connected. 365-day backfill running in browser.
+2. **Gmail sync perf rewrite** — first version froze her browser tab because the
+   algorithm was O(emails × leads) = 18M iterations on the main thread for her
+   6000+ leads. Fixed with O(1) email→lead Map + UI yielding every 50 messages +
+   bulk per-lead writes. Body cap dropped 5KB → 2KB. See commit `c68d8a9`.
+3. **ContactDetail freeze on lead click fixed** — wrapped the timeline
+   computation in useMemo so opening a lead with thousands of activities doesn't
+   re-iterate the whole array per render. Commit `3fb0678`.
+4. **FUB Migration tool BUILT and SHIPPED** — `src/FubMigration.jsx`. One-time
+   mass import of every note/event/text/call/email from FUB into IndexedDB.
+   Resumable, rate-limit aware, live progress UI, debug log to diagnose the
+   missing-texts bug. Settings → 🗄️ FUB Migration. Auto-sync OFF toggle so once
+   import completes, my-re-hub stops calling FUB on every app load.
+5. **ContactDetail reads from IDB cache first** — `fetchFubLeadDetail` checks
+   `fub_data_<leadId>` in IndexedDB before falling back to live FUB API. Means
+   after migration, FUB is read-only optional.
+6. **Live "Search Gmail" button** on each lead's Emails tab — bypasses FUB
+   redactions, pulls all email ever sent to/from that address with bodies, no
+   storage cost. Useful for old leads outside the 365-day cache.
+7. **Lender directory** + **FUB-style ContactDetail header** — Source pill,
+   Agent dropdown, Lender dropdown with inline add. Avatar color-coded by lead
+   source. Pane widened from 520px to `min(1100px, max(720px, 58vw))`.
+8. **Tabs split FUB-style** — Activity / Tasks / Notes / Emails / Texts / Calls
+   each with accurate count badges.
+9. **Texts/calls bug root cause IDENTIFIED**: FUB's `textMessages` endpoint is
+   "Restricted - Registered Systems Only" — needs `X-System` + `X-System-Key`
+   headers our proxy didn't send. Fix shipped in `api/fub/[...path].js` — now
+   forwards env vars `FUB_SYSTEM` and `FUB_SYSTEM_KEY` if present. **Monica
+   needs to register a system at apps.followupboss.com/system-registration and
+   add the env vars on Vercel when she wakes up.** Full instructions in
+   `RESEARCH_NOTES.md`.
+
+### What's running RIGHT NOW (Monica's browser, overnight)
+
+She kicked off the FUB Migration before bed. The import is iterating 6,041
+leads at ~2 concurrent × 5 endpoints. Estimated 30 min – 2 hours. Progress
+saves to `localStorage.fub_import_progress` every batch so it's resumable. She
+needs to leave the browser tab open or it stops.
+
+### Research doc written: RESEARCH_NOTES.md
+
+Contains:
+- Texts bug fix instructions (Monica's morning task)
+- BoldTrail features worth stealing + skipping
+- Survey of Sierra, Real Geeks, Lofty, LionDesk (now defunct), Wise Agent, Ylopo
+- **The AI ISA opportunity** — biggest competitive gap in market; ~6h to build
+- Proposed roadmap with Phase 0/1/2/3 priorities
+- Honest doubts section (IDX gate, Twilio dependency, etc.)
+- Total cost analysis: $10-35/mo for my-re-hub vs. $1k+/mo for commercial stack
+
+### Binding Monica rules (still in effect, repeated for emphasis)
+
+- **Honest upfront.** When something needs paid AI / 3rd party / her direct
+  action — say so in the FIRST message. No "try this, try this" dead-end loops.
+- **She is NOT canceling FUB yet.** Smart. Run both in parallel until my-re-hub
+  is proven over 2-3 weeks of daily use.
+- **No more new features until the existing ones are battle-tested.** Her
+  exact words: "nothing in here really works yet."
+
+### Tomorrow morning's priority
+
+1. Verify the FUB migration completed overnight (check Settings → FUB Migration
+   for the %). If paused, click Resume.
+2. **Register system with FUB** + add `FUB_SYSTEM` and `FUB_SYSTEM_KEY` to
+   Vercel env vars. Verify texts/calls now appear.
+3. After both done: turn off FUB auto-sync. App now reads from local cache.
+4. Pick a Phase 0 item from `RESEARCH_NOTES.md` to tackle next.
+
+---
+
+## Previous session: 2026-05-21 (laptop, late evening — AutoReel deep dive, hard lesson)
 
 ### Headline
 
