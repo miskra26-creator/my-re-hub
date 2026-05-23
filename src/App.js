@@ -2111,6 +2111,27 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
   const [fubDetail, setFubDetail] = useState(null);
   const [fubLoading, setFubLoading] = useState(false);
   const [fubError, setFubError] = useState(null);
+  // Live Gmail search state — full email history fetched on-demand, never
+  // stored in localStorage. Cleared when the modal closes.
+  const [gmailLiveResults, setGmailLiveResults] = useState(null); // null | [] | array
+  const [gmailSearching, setGmailSearching] = useState(false);
+  const [gmailSearchError, setGmailSearchError] = useState(null);
+  const searchAllGmailForLead = async () => {
+    if(!lead.email) return toast.error('Lead has no email address');
+    const token = localStorage.getItem('gmail_token');
+    if(!token) return toast.error('Connect Gmail first in Settings → 📧 Gmail Sync');
+    setGmailSearching(true);
+    setGmailSearchError(null);
+    try{
+      const results = await gmailSearchForLead(token, lead.email, { max: 200 });
+      setGmailLiveResults(results);
+      toast.success(`Found ${results.length} email${results.length===1?'':'s'} in Gmail with ${lead.name}`);
+    }catch(e){
+      setGmailSearchError(e.message);
+      toast.error('Gmail search failed: ' + e.message);
+    }
+    setGmailSearching(false);
+  };
   // Lender directory (Monica's list of lenders she works with) + assigned lender
   // for THIS lead. FUB doesn't natively have this but BoldTrail does — we
   // surface it FUB-style as an inline-editable dropdown in the header.
@@ -3051,9 +3072,60 @@ Return STRICT JSON only (no markdown fences, no explanation):
                 {/* ─── EMAILS ─── */}
                 {tab==="emails" && (
                   <div style={{paddingBottom:20}}>
-                    {counts.emails === 0
+                    {/* On-demand Gmail search — pulls ALL email history with
+                       this lead live, no storage. Good for FUB-redacted
+                       emails or anything older than the 1-year cache. */}
+                    {lead.email && (
+                      <div style={{
+                        padding:"10px 12px",marginBottom:12,
+                        background:"linear-gradient(135deg, rgba(234,67,53,.08), rgba(234,67,53,.04))",
+                        border:"1px solid rgba(234,67,53,.25)",borderRadius:10,
+                        display:"flex",alignItems:"center",gap:10,
+                      }}>
+                        <span style={{fontSize:18}}>🔍</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:800,color:"#fff"}}>Search ALL Gmail history</div>
+                          <div style={{fontSize:10.5,color:"#94a3b8"}}>Pulls every email ever with {lead.email} (bypasses FUB redactions, no date limit)</div>
+                        </div>
+                        <button onClick={searchAllGmailForLead} disabled={gmailSearching}
+                          style={{
+                            background:"#ea4335",color:"#fff",border:"none",borderRadius:6,
+                            padding:"7px 12px",fontSize:11.5,fontWeight:800,cursor:gmailSearching?"wait":"pointer",
+                          }}>
+                          {gmailSearching ? '⏳ Searching…' : 'Search Gmail'}
+                        </button>
+                      </div>
+                    )}
+                    {gmailSearchError && (
+                      <div style={{padding:"8px 10px",marginBottom:10,background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.25)",borderRadius:8,fontSize:11,color:"#f87171"}}>
+                        ⚠ {gmailSearchError}
+                      </div>
+                    )}
+                    {/* Live results section (rendered ABOVE the cached emails) */}
+                    {gmailLiveResults && gmailLiveResults.length > 0 && (
+                      <>
+                        <div style={{fontSize:10,fontWeight:800,color:"#ea4335",letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>
+                          📧 Live from Gmail · {gmailLiveResults.length} message{gmailLiveResults.length===1?'':'s'}
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+                          {gmailLiveResults.map(renderRow)}
+                        </div>
+                        {counts.emails > 0 && (
+                          <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",letterSpacing:.5,textTransform:"uppercase",marginBottom:6,marginTop:6}}>
+                            Cached emails ({counts.emails})
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {gmailLiveResults && gmailLiveResults.length === 0 && (
+                      <div style={{padding:"8px 10px",marginBottom:10,background:"rgba(184,134,75,.08)",border:"1px solid rgba(184,134,75,.25)",borderRadius:8,fontSize:11,color:"#e0b370"}}>
+                        🔍 Gmail returned no messages with that address. Double-check the lead's email is correct.
+                      </div>
+                    )}
+                    {/* Cached emails (from the 1-year backfill + ongoing sync) */}
+                    {counts.emails === 0 && !gmailLiveResults
                       ? renderEmpty("No emails yet — drip campaigns, FUB sync, or manual emails will appear here")
-                      : <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.filter(e=>e.type==='email').map(renderRow)}</div>
+                      : counts.emails > 0 && <div style={{display:"flex",flexDirection:"column",gap:6}}>{all.filter(e=>e.type==='email').map(renderRow)}</div>
                     }
                   </div>
                 )}
@@ -7724,6 +7796,62 @@ async function gmailGetMessage(token,msgId){
   if(!r.ok) return null;
   return r.json();
 }
+// Live search: pulls ALL Gmail messages to/from a specific email address
+// regardless of date, with full bodies. Used by ContactDetail's
+// "Search Gmail history" button — results live in component state only,
+// never written to localStorage (so storage quota stays safe).
+//
+// Returns an array of {id, ts, type:'email', source, icon, color, title,
+// body, direction, status, raw} objects shaped like timeline events.
+async function gmailSearchForLead(token, email, opts={}){
+  if(!token || !email) return [];
+  const max = opts.max || 200;
+  // Gmail query: any message where this address is the sender OR recipient
+  const q = encodeURIComponent(`from:${email} OR to:${email}`);
+  const list = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=${max}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if(!list.ok) throw new Error(`Gmail search ${list.status}`);
+  const ld = await list.json();
+  const msgs = ld.messages || [];
+  // Parallel detail fetch in batches of 10 — same pattern as the sync worker
+  const events = [];
+  const BATCH = 10;
+  for(let i=0; i<msgs.length; i+=BATCH){
+    const slice = msgs.slice(i, i+BATCH);
+    const dets = await Promise.all(slice.map(m => gmailGetMessage(token, m.id)));
+    for(let j=0; j<dets.length; j++){
+      const detail = dets[j];
+      if(!detail) continue;
+      const headers = detail.payload?.headers || [];
+      const from = headers.find(h=>h.name==='From')?.value || '';
+      const to = headers.find(h=>h.name==='To')?.value || '';
+      const subject = headers.find(h=>h.name==='Subject')?.value || '(no subject)';
+      const dateHeader = headers.find(h=>h.name==='Date')?.value;
+      const ts = dateHeader ? new Date(dateHeader).getTime() : (parseInt(detail.internalDate)||Date.now());
+      const fromEmail = gmailExtractEmail(from);
+      const isInbound = fromEmail === email.toLowerCase().trim();
+      const body = gmailExtractBody(detail.payload);
+      events.push({
+        id: 'gsearch_' + msgs[i+j].id,
+        ts,
+        type: 'email',
+        source: 'Gmail (live)',
+        icon: '📧',
+        color: '#ea4335',
+        title: subject,
+        body,
+        direction: isInbound ? 'inbound' : 'outbound',
+        status: 'sent',
+        raw: { from, to, gmailId: msgs[i+j].id },
+      });
+    }
+  }
+  events.sort((a,b)=>b.ts-a.ts);
+  return events;
+}
+
 // Recursively walk Gmail's MIME tree to find the most useful body part.
 // Prefers text/plain (clean), falls back to text/html (we strip tags
 // downstream in ContactDetail). Returns "" if nothing renderable found.
@@ -7951,15 +8079,15 @@ const GmailSyncWorker = ({notify, toast}) => {
       const expiry=parseInt(localStorage.getItem('gmail_token_expiry')||'0');
       if(!token||Date.now()>expiry) return;
       try{
-        // First sync (no previous timestamp): look back 90 DAYS so the contact
-        // timelines pre-populate with historical email. Subsequent syncs use
-        // the saved timestamp (incremental, fast). Backfill caps at 3000 msgs
-        // total — enough for normal volumes, prevents runaway on huge accounts.
+        // First sync (no previous timestamp): look back 365 DAYS so the
+        // contact timelines pre-populate with the past year of email.
+        // Older mail is available via the "Search Gmail" button on each
+        // contact's Emails tab (live, no storage).
         const lastSync=parseInt(localStorage.getItem('gmail_last_sync')||'0');
         const isFirstSync=!lastSync;
-        const since=lastSync||(Date.now()-90*24*3600*1000); // 90 days ago
+        const since=lastSync||(Date.now()-365*24*3600*1000); // 1 year ago
         if(isFirstSync){
-          toast.info('📧 First Gmail sync — backfilling last 90 days. This may take a minute…');
+          toast.info('📧 First Gmail sync — backfilling last year of email. This may take 2-3 minutes…');
         }
         const msgs=await gmailFetchNewEmails(token,since,{hardCap:isFirstSync?3000:1000});
         let logged=0;
