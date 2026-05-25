@@ -20,238 +20,6 @@ import {
   Search, Bookmark,
 } from 'lucide-react';
 
-// ── READY-TO-FILM TEMPLATES — Monica's dummy-proof plug-and-play library ────
-// 15 complete Metro Detroit-specific posts. Each has: hook, full caption,
-// shot list (literally what to film), hashtags, best posting time, and the
-// creator style it copies. Just pick one and post — zero thinking required.
-const READY_TO_FILM_TEMPLATES = [
-  {
-    id: 't1', inspiredBy: 'Glennda Baker', style: 'storytelling',
-    platform: 'Instagram Reel', effort: '15min', bestTime: 'Tue/Thu 7-9pm EST',
-    title: 'The "I saved my buyer $X" story',
-    hook: '"I saved my Birmingham buyer $47,000 in 48 hours. Here\'s how."',
-    caption: `I saved my Birmingham buyer $47,000 in 48 hours. Here's how 👇\n\nThey were ready to offer FULL ASKING on a Bloomfield Hills home they loved.\n\nBefore they did, I ran the numbers:\n• Days on market: 92\n• Two price drops already\n• Sewer scope needed (older home)\n• HVAC end-of-life\n\nI told them: offer $47K below ask + ask seller to credit inspection items.\n\nSeller countered $35K below. We took it.\n\nMy clients walked into the home of their dreams under budget — with money set aside for renovations.\n\nThis is what an agent who actually represents YOU looks like.\n\nNeed someone in your corner? My DMs are open.`,
-    hashtags: ['#BirminghamMI', '#MetroDetroitRealEstate', '#BuyerAgent', '#NegotiationWin', '#MichiganRealtor'],
-    shotList: [
-      'OPEN: Talking head, sitting in car or at desk. Direct eye contact.',
-      'Hold up phone/screenshot of original asking price vs. final price.',
-      'Cut to drone exterior of the home (if you have permission to show)',
-      'Back to talking head for the lesson + CTA',
-    ],
-    visual: 'Casual professional, soft natural light, captions on screen',
-  },
-  {
-    id: 't2', inspiredBy: 'Madison Sutton', style: 'price-comparison',
-    platform: 'Instagram Reel', effort: '20min', bestTime: 'Wed/Sat 12-2pm EST',
-    title: '"What $500K gets you in [city A] vs [city B]"',
-    hook: '"What $500,000 buys you in Birmingham vs Royal Oak"',
-    caption: `What $500K gets you in Birmingham vs Royal Oak 👀\n\n📍 BIRMINGHAM ($500K)\n• 3 bed | 2 bath | 1,400 sqft\n• 1950s colonial\n• 0.18 acres\n• Walk to downtown ☑️\n\n📍 ROYAL OAK ($500K)\n• 4 bed | 3 bath | 2,100 sqft\n• 1980s ranch\n• 0.32 acres\n• Walk to downtown ☑️\n\nSame budget. Wildly different homes.\n\nWhich would YOU pick? Drop a 🏛️ for Birmingham or 🎨 for Royal Oak in the comments.`,
-    hashtags: ['#BirminghamMI', '#RoyalOakMI', '#MetroDetroitHomes', '#HomeBuying', '#MichiganRealEstate'],
-    shotList: [
-      'OPEN: Split screen of both homes (use 2 photos from MLS — get listing agent permission)',
-      'Quick zoom on each property — 3 seconds each',
-      'On-screen text overlays with the price + stats',
-      'CLOSE: Talking head with the question',
-    ],
-    visual: 'Side-by-side split screen, on-screen price labels, upbeat music',
-  },
-  {
-    id: 't3', inspiredBy: 'Ryan Serhant', style: 'wow-feature-tour',
-    platform: 'TikTok', effort: '30min', bestTime: 'Mon/Fri 6-9pm EST',
-    title: 'Lead with the wildest feature, reveal price at end',
-    hook: '"This Bloomfield Hills home has a HEATED outdoor walkway to the pool. Wait for the price."',
-    caption: `When the homeowner says "comfort over everything." 🥶☀️\n\nThis Bloomfield Hills luxury home:\n✨ Heated outdoor walkway to the pool (yes, in Michigan winters)\n✨ Saltwater pool with underwater speakers\n✨ Outdoor kitchen with pizza oven\n✨ Wine cellar fits 800 bottles\n✨ 6-car heated garage\n\nGuess the asking price before you swipe through the listing 👇\n\nDM "TOUR" for the full walk-through video.`,
-    hashtags: ['#BloomfieldHills', '#LuxuryRealEstate', '#MetroDetroitLuxury', '#LuxuryHomeTour', '#MichiganLuxury'],
-    shotList: [
-      'OPEN: Tight shot of the WILDEST feature (heated walkway, wine cellar, etc.) — 2 sec',
-      'Quick gimbal tour: feature → another feature → another (5-7 sec each)',
-      'Drone exterior reveal of the property',
-      'Big text card with the price at the very end',
-    ],
-    visual: 'Gimbal/Osmo Pocket for smooth motion, drone for exterior, music swells at price reveal',
-  },
-  {
-    id: 't4', inspiredBy: 'Loida Velasquez', style: 'day-in-life-prospecting',
-    platform: 'Instagram Reel', effort: '2hrs', bestTime: 'Sun 7-9pm EST',
-    title: 'A day in the life of a Metro Detroit luxury agent',
-    hook: '"6am to 9pm: a real day as a Metro Detroit luxury agent"',
-    caption: `Asked what a "normal" day looks like 👇\n\n☕ 6am — Coffee + email triage in Birmingham\n🚗 8am — Drive Bloomfield → preview new listing on the market\n📞 10am — Listing presentation in Novi (got the contract ✍️)\n🥗 12pm — Quick lunch + tour 2 homes for relocation buyers\n📋 2pm — Inspection meeting at a Pending in Northville\n🏡 4pm — Showing at a $1.2M West Bloomfield home\n🎉 6pm — Closing for past clients (their first home!)\n🍷 8pm — Glass of wine + planning tomorrow\n\nThis job is wild. And I love every minute.`,
-    hashtags: ['#DayInTheLife', '#MichiganRealtor', '#MetroDetroitLuxury', '#WomenInRealEstate', '#RealtorLife'],
-    shotList: [
-      'OPEN: 6am coffee shot, soft morning light',
-      'Quick clips throughout the day: driving, in homes, with clients (face away/blurred for privacy)',
-      'Time-stamp text overlays on each clip',
-      'CLOSE: Glass of wine + handwritten planner shot',
-    ],
-    visual: 'Multiple short clips, time-of-day text overlays, golden hour shots, upbeat music',
-  },
-  {
-    id: 't5', inspiredBy: 'Tom Ferry', style: 'educational-questions',
-    platform: 'Instagram Reel', effort: '15min', bestTime: 'Tue/Thu 8-10am EST',
-    title: '5 questions to ask before hiring a luxury listing agent',
-    hook: '"5 questions to ask BEFORE hiring a luxury listing agent in Metro Detroit"',
-    caption: `Most sellers hire the first agent they meet. Don't.\n\nAsk these 5 questions instead:\n\n1️⃣ "How many homes did you sell in MY ZIP code last year?"\n→ Need actual numbers, not "lots"\n\n2️⃣ "What's your average days-on-market vs the MLS average?"\n→ Should beat the average by 30%+\n\n3️⃣ "Can I see your last 5 listings' marketing photos?"\n→ Quality predicts your home's outcome\n\n4️⃣ "What's your marketing budget for MY listing?"\n→ Twilight photos? Drone? Print? Social ads?\n\n5️⃣ "How will you negotiate against my buyer's agent?"\n→ Most agents fold under pressure\n\nIf they can't answer all 5 confidently — keep looking.\n\nSave this 📌 for when you're ready to sell.`,
-    hashtags: ['#HomeSellingTips', '#ListingAgent', '#MetroDetroitRealEstate', '#MichiganHomeSelling', '#LuxuryRealEstate'],
-    shotList: [
-      'OPEN: Direct-to-camera talking head, clean professional background',
-      'Each question = 5-7 sec clip, big text overlay with the question number',
-      'CLOSE: Direct CTA "Save this for later"',
-    ],
-    visual: 'Talking head with bold text overlays for each question, calm music',
-  },
-  {
-    id: 't6', inspiredBy: 'Hina Khan', style: 'shock-comparison',
-    platform: 'TikTok', effort: '20min', bestTime: 'Wed/Sun 6-9pm EST',
-    title: '"What $1M buys you in Metro Detroit vs Manhattan"',
-    hook: '"What $1 MILLION buys you in Bloomfield Hills vs Manhattan"',
-    caption: `Coastal buyers — wake up call 👇\n\n📍 MANHATTAN ($1M)\n• 600 sqft studio apartment\n• 1 bedroom (technically)\n• HOA $2,000/mo on top\n• View of the building next door\n\n📍 BLOOMFIELD HILLS ($1M)\n• 4,200 sqft luxury home\n• 4 beds | 3.5 baths\n• 0.8 acres of land\n• Pool, 3-car garage, top schools\n\nThis is why Metro Detroit relocation is HOT right now.\n\nWant the relocation guide? DM "MOVE" 📩`,
-    hashtags: ['#MetroDetroit', '#RelocateToMichigan', '#BloomfieldHills', '#NYCvsDetroit', '#LuxuryRealEstate'],
-    shotList: [
-      'OPEN: Phone-shot of skyscrapers (NYC) — could be stock footage',
-      'Split-screen with Bloomfield Hills home aerial',
-      'Bullet-point text overlays for the comparison',
-      'CLOSE: "Move home." + agent talking head CTA',
-    ],
-    visual: 'Split-screen contrast, dramatic music, on-screen stats',
-  },
-  {
-    id: 't7', inspiredBy: 'Dean Adler', style: 'tease-the-wow',
-    platform: 'YouTube Short', effort: '30min', bestTime: 'Fri 5-8pm EST',
-    title: 'Inside a luxury home — wait until you see the closet',
-    hook: '"Inside this $1.4M Birmingham home. Wait until you see the primary closet."',
-    caption: `New listing in Birmingham — and YOU need to see this closet.\n\n5 beds | 4.5 baths | 4,800 sqft | $1.4M\n\nHighlights:\n✨ Updated kitchen w/ Wolf appliances\n✨ Heated 3-car garage\n✨ Walk-in primary closet bigger than most NYC apartments (you'll see)\n✨ Wine cellar in basement\n✨ Walk to downtown Birmingham\n\nShowings start Friday. DM for the link.`,
-    hashtags: ['#BirminghamMI', '#LuxuryRealEstate', '#NewListing', '#WalkInCloset', '#MetroDetroitHomes'],
-    shotList: [
-      'OPEN: Front door shot, tease "wait until you see..." text',
-      'Quick tour through ordinary rooms (kitchen, living, etc.) — 3 sec each',
-      'Build anticipation toward the closet',
-      'BIG REVEAL: slow gimbal pull-back as you walk into the closet',
-      'CLOSE: Talking head with showings info',
-    ],
-    visual: 'Gimbal smooth movements, music builds to closet reveal, golden hour through windows',
-  },
-  {
-    id: 't8', inspiredBy: 'Tatiana Londono', style: 'bold-opinion',
-    platform: 'Instagram Reel', effort: '15min', bestTime: 'Mon/Thu 7-10am EST',
-    title: 'Controversial take about Metro Detroit pricing',
-    hook: '"Most Birmingham agents UNDERPRICE older homes by $50K. Here\'s why."',
-    caption: `Hot take that's about to get me hate mail 🙃\n\nMost Birmingham agents underprice older Birmingham homes by $30-50K.\n\nWhy:\n\n❌ They use Zestimate (which can't see hidden value)\n❌ They look only at recent SOLDS (not active comps trending up)\n❌ They don't price for the BUYER POOL\n❌ They're scared sellers will fire them if home doesn't sell in 7 days\n\nThe truth:\nBirmingham buyers have $$$$. They'll PAY for the right home. Pricing $35K higher and getting 11 offers vs pricing safe and getting 1 — happens every week.\n\nIf you're selling in Birmingham this spring — get a SECOND opinion before you list.\n\nMy DMs are open. Free consult, no pressure.`,
-    hashtags: ['#BirminghamMI', '#HomeSelling', '#ListingAgent', '#MichiganRealEstate', '#MetroDetroitLuxury'],
-    shotList: [
-      'OPEN: Direct eye contact, serious tone, controversial hook',
-      'Talking head with text overlay showing the 4 reasons',
-      'Close with strong CTA and confident smile',
-    ],
-    visual: 'Direct-to-camera, intense lighting, bold text overlays, serious tone',
-  },
-  {
-    id: 't9', inspiredBy: 'Brittany Loeffler', style: 'lifestyle-aspiration',
-    platform: 'Instagram Reel', effort: '30min', bestTime: 'Sat 11am-2pm EST',
-    title: 'Aesthetic POV: luxury agent in Metro Detroit',
-    hook: '"POV: you wake up as a Metro Detroit luxury agent"',
-    caption: `Romanticizing the grind 💫\n\nThere's something special about pouring coffee at 6am, knowing you get to help people find their forever home today.\n\nThe early calls.\nThe drives through Birmingham at sunrise.\nThe excited "we got it!" texts from clients.\n\nThis isn't just a job. It's a craft.\n\nGrateful every day. 🙏\n\n📍 Metro Detroit luxury real estate`,
-    hashtags: ['#LuxuryAgent', '#MichiganRealtor', '#WomenInRealEstate', '#MetroDetroit', '#RealEstateLifestyle'],
-    shotList: [
-      'OPEN: Coffee being poured slow-mo, soft morning light',
-      'Aesthetic shots: planner open, keys on counter, well-dressed agent walking out',
-      'Driving shot through Birmingham',
-      'Quick clip in front of a beautiful home',
-      'CLOSE: Smiling at camera with text overlay',
-    ],
-    visual: 'Cinematic, soft natural light, slow movements, dreamy music',
-  },
-  {
-    id: 't10', inspiredBy: 'Ricky Carruth', style: 'free-value-giveaway',
-    platform: 'Instagram Carousel', effort: '25min', bestTime: 'Wed 10am-12pm EST',
-    title: 'Free seller prep checklist (carousel)',
-    hook: '"Free: my seller prep checklist (the same one I give $1M+ clients)"',
-    caption: `Selling your home in Metro Detroit?\n\nI'm giving you the same prep checklist I use with my $1M+ clients. Free. No catch.\n\nSwipe through ➡️\n\nSlide 1: 8 weeks out — declutter list\nSlide 2: 4 weeks out — pre-listing inspection\nSlide 3: 2 weeks out — staging refresh\nSlide 4: 1 week out — final touches\nSlide 5: Showing day — must-do list\nSlide 6: After offer — 11-day checklist\n\nSave this 📌\n\nNeed someone to walk you through it personally? My DMs are open. Free consult, no pressure.`,
-    hashtags: ['#HomeSellingTips', '#SellerChecklist', '#MetroDetroitRealEstate', '#MichiganHomeSelling', '#ListingPrep'],
-    shotList: [
-      '6 slide carousel: simple branded background per slide',
-      'Each slide = ONE timeframe with 4-6 checkbox items',
-      'Use consistent fonts/colors throughout',
-      'Final slide: branded "Save + Share" CTA',
-    ],
-    visual: 'Canva templates with your brand colors, clean professional look',
-  },
-  {
-    id: 't11', inspiredBy: 'Phil Hawkins', style: 'fast-paced-day-montage',
-    platform: 'TikTok', effort: '25min', bestTime: 'Sun 6-9pm EST',
-    title: 'Closing 3 deals before noon — speed montage',
-    hook: '"Watch me close 3 Metro Detroit deals before noon"',
-    caption: `Productivity ≠ stress.\n\nIt's about systems.\n\nThis morning:\n✅ 8am — Closed buyer rep agreement (Birmingham)\n✅ 9:30am — Listing presentation signed (Novi)\n✅ 11am — Multiple offers reviewed + accepted (Bloomfield)\n\nDoesn't happen by accident.\n\nHappens because I have the right systems + the right team + Diet Coke ☕\n\nWhat are you closing today? 💪`,
-    hashtags: ['#RealEstateHustle', '#MichiganRealtor', '#MetroDetroitClosings', '#WomenInRealEstate', '#RealtorLife'],
-    shotList: [
-      'OPEN: Fast clip of you typing/on phone at 7am',
-      'Rapid cuts: 8am stamp + handshake clip, 9:30am stamp + presentation clip, 11am stamp + signing clip',
-      'Music keeps tempo high — no breaks',
-      'CLOSE: Coffee cup on dashboard with smile',
-    ],
-    visual: 'Time-stamp overlays, jump cuts, upbeat/intense music, no slow moments',
-  },
-  {
-    id: 't12', inspiredBy: 'Jonathan Garbutt', style: 'script-teardown',
-    platform: 'TikTok', effort: '15min', bestTime: 'Tue/Fri 8-10am EST',
-    title: 'What to say when an agent pressures you',
-    hook: '"What to say when an agent pressures you to make an offer"',
-    caption: `Save this for your next showing 📌\n\nWhen an agent says:\n"You\'ll lose this home if you don't offer TODAY."\n\nSay this:\n"I appreciate the urgency, but I make decisions based on fit and value — not pressure. If this home is right for me, I'll act. If it's gone, the next one comes."\n\nReal agents respect your timeline.\n\nPressure tactics = look elsewhere.\n\nAlways representing you 💛`,
-    hashtags: ['#HomeBuying', '#BuyerTips', '#RealEstateAdvice', '#MichiganRealEstate', '#MetroDetroit'],
-    shotList: [
-      'Talking head, casual setting (car or living room)',
-      'Big text overlay with the EXACT script',
-      'Pace matters — slow enough to read, urgent enough to feel important',
-      'CLOSE: Strong personal CTA',
-    ],
-    visual: 'Bold text overlay with the script, calm professional delivery',
-  },
-  {
-    id: 't13', inspiredBy: 'Sarah Knauer', style: 'personal-story',
-    platform: 'Instagram Reel', effort: '25min', bestTime: 'Sun 7-9pm EST',
-    title: 'Your real estate journey origin story',
-    hook: '"Why I left [previous career] to become a Metro Detroit luxury agent"',
-    caption: `Honest moment.\n\n[Insert your own story here — replace this part]\n\nThe real estate path isn\'t glamorous. There are no salaries. No vacation days. You eat what you kill.\n\nBut I wouldn\'t trade it for anything.\n\nEvery closing day, when someone gets the keys to a home they\'ll raise their family in — I remember why I do this.\n\nIf you\'re thinking about buying or selling in Metro Detroit, I\'d love to be on your team. 💛`,
-    hashtags: ['#MichiganRealtor', '#WomenInRealEstate', '#WhyIDoThis', '#MetroDetroitLuxury', '#RealEstateJourney'],
-    shotList: [
-      'OPEN: Direct to camera, emotional but composed',
-      'B-roll: throwback photos of you + present-day shots',
-      'Talking head with personal story (your real one — replace the placeholder)',
-      'CLOSE: Genuine smile + heart hand to camera',
-    ],
-    visual: 'Soft warm lighting, personal photos as B-roll, emotional music',
-  },
-  {
-    id: 't14', inspiredBy: 'Brennan Adams', style: 'investor-numbers',
-    platform: 'Instagram Reel', effort: '30min', bestTime: 'Mon/Wed 7-9pm EST',
-    title: 'Metro Detroit duplex investment breakdown',
-    hook: '"This Ferndale duplex pays its owner $1,800/mo. Here are the numbers."',
-    caption: `Real numbers from a real Metro Detroit investment property 👇\n\n📍 Ferndale duplex\n💰 Purchase: $245,000 (Dec 2024)\n🔨 Reno: $18,000 (paint, flooring, kitchens)\n📈 Now appraised: $310,000\n\nMonthly:\n💵 Rent (upper): $1,500\n💵 Rent (lower): $1,400\n💸 Mortgage + tax + insurance: $1,100\n\n✅ Net cash flow: ~$1,800/mo\n\nThat's $21,600/year — PLUS $65K of equity gain in 18 months.\n\nMetro Detroit investing isn't dead. It just requires picking the RIGHT zips. Ferndale, Royal Oak, Hamtramck, parts of Detroit proper.\n\nWant me to find your next deal? DM 📩`,
-    hashtags: ['#RealEstateInvesting', '#MetroDetroit', '#FerndaleMI', '#CashFlow', '#DuplexInvestor'],
-    shotList: [
-      'OPEN: Drone or street-level exterior shot of duplex (use stock if needed)',
-      'On-screen text with each number as you say it',
-      'B-roll of interior — kitchens, living rooms',
-      'CLOSE: Talking head with CTA',
-    ],
-    visual: 'Numbers on screen at all times, clean P&L style, mix of property + agent shots',
-  },
-  {
-    id: 't15', inspiredBy: 'Mauricio Umansky', style: 'aspirational-listing',
-    platform: 'Instagram Reel', effort: '45min', bestTime: 'Fri 5-8pm EST',
-    title: 'Premium listing announcement with subtle authority',
-    hook: '"Just listed: $2.8M private estate in Bloomfield Hills"',
-    caption: `Honored to represent this exclusive Bloomfield Hills estate. ✨\n\n5 bed | 5.5 bath | 6,800 sqft on 1.4 acres\n\nFeatures:\n• Gated entry + circular drive\n• Indoor saltwater pool\n• Home theater for 12\n• Wine cellar (1,200 bottles)\n• Heated 4-car garage\n• Private lake access\n\nFor serious inquiries only. DM to schedule a private showing.\n\n📍 Bloomfield Hills, MI\n📞 [Your phone]`,
-    hashtags: ['#BloomfieldHills', '#LuxuryEstate', '#MetroDetroitLuxury', '#NewListing', '#PrivateShowingsOnly'],
-    shotList: [
-      'OPEN: Drone aerial of the property — wide establishing shot',
-      'Cinematic gimbal walkthrough — slow, deliberate',
-      'Lingering shots on each premium feature (5-6 sec each)',
-      'CLOSE: Address card + your photo + phone number',
-    ],
-    visual: 'High-production, slow camera moves, classical or soft cinematic music, golden hour exterior',
-  },
-];
-
 // ── CONTENT ENGINE — Top US RE creators + their viral content formulas ──────
 // Monica's actual ask: she wants to see what TOP US agents are posting that's
 // going viral, then click "Adapt for Me" to get HER version of that style.
@@ -483,51 +251,13 @@ const CONTENT_ENGINE_SEED = [
   },
 ];
 
-// The prompt used by the "Refresh with AI" button. Calls /api/claude/messages
-// which falls back to GOOGLE_GEMINI_API_KEY when ANTHROPIC isn't set. Output
-// must be JSON array matching the seed shape for the UI to render.
-// Monica explicitly wants TOP US CREATORS + their viral content, not local
-// caption ideas. The seed is high-engagement US RE creators with proven viral
-// content + the formula behind why it worked + an adapt-this-for-Monica idea.
-const CONTENT_ENGINE_PROMPT_OLD_METRO = `You are an elite real estate content strategist generating viral content ideas for Monica Iskra, a RE/MAX Classic luxury agent in Metro Detroit (Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield, Oakland County, I-275 corridor, $350K+ homes).
-
-Generate 30 fresh, ready-to-post content ideas she can execute THIS WEEK.
-
-OUTPUT REQUIREMENT: Return ONLY a valid JSON array, no preamble, no markdown code fences. Each object must have EXACTLY these fields:
-{
-  "hook": "First 3 seconds — what stops the scroll",
-  "platform": "Instagram Reel" | "TikTok" | "YouTube Short" | "Instagram Carousel" | "Instagram Story",
-  "niche": "luxury-tour" | "market" | "educational" | "day-in-life" | "hyperlocal" | "investor" | "agent-story" | "lifestyle" | "listing-promo",
-  "effort": "5min" | "15min" | "20min" | "25min" | "30min" | "45min" | "60min" | "2hrs",
-  "engagement": "LOW" | "MED" | "HIGH",
-  "caption": "Full ready-to-paste caption in Monica's voice (warm, professional, confident, never pushy). Include emoji where natural. End with a clear CTA.",
-  "hashtags": ["array of 5 hashtags optimized for Metro Detroit luxury"],
-  "visual": "One sentence describing the visual/b-roll"
-}
-
-MIX REQUIREMENT (must include all):
-- 10 luxury home walkthroughs (name specific Metro Detroit suburbs)
-- 5 market commentary (Birmingham appreciation, Bloomfield prices, etc.)
-- 5 day-in-the-life as a luxury agent
-- 5 educational ("3 mistakes...", "What to check...", etc.)
-- 5 hyper-local Metro Detroit cultural moments (Dream Cruise, Auto Show, Tigers Opening Day, Birmingham Restaurant Week, etc.)
-
-QUALITY RULES:
-- Every idea must name a real Metro Detroit neighborhood, not generic
-- No vague "real estate tips" — be hyper-specific
-- Hashtags must reasonably exist (no #made_up_hashtag)
-- Captions must be in HER voice (warm, professional, confident — like a luxury concierge, not a used-car salesman)
-- Avoid clichés ("don't miss out", "act fast", "click link in bio")
-
-OUTPUT ONLY THE JSON ARRAY. NO OTHER TEXT.`;
-
 // The ACTIVE prompt — fetches TOP US viral creators + their content formulas.
 // Used by the "Refresh with AI" button on the Content Engine tab.
 const CONTENT_ENGINE_PROMPT = `You are an expert real estate content researcher tracking the highest-engagement US real estate creators on Instagram, TikTok, and YouTube in 2026.
 
 Your client is Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent). She wants to study the BEST US RE creators and adapt their winning formulas to her market.
 
-Return 20 top US real estate creators currently going viral. PRIORITIZE creators with proven high engagement (50K+ views per post regularly). Skip coaching influencers if possible — focus on PRACTICING agents who post about real estate.
+Return the 15 top US real estate creators currently going viral, ranked by their PEAK viral view counts (biggest single-post reach first). PRIORITIZE creators with proven high engagement (50K+ views per post regularly). Skip coaching influencers if possible — focus on PRACTICING agents who post about real estate.
 
 OUTPUT REQUIREMENT: Return ONLY a valid JSON array, no preamble, no markdown code fences. Each object must have EXACTLY these fields:
 {
@@ -867,6 +597,16 @@ function platformUrl(platform, handle) {
   }
 }
 
+// Parse a "viralViews" string like "10M+", "500K+ per video", "8M+ on top reels"
+// into a sortable number so the Content Engine can rank creators by peak reach.
+const parseViews = (str) => {
+  const m = String(str || '').match(/([\d.]+)\s*([KMB]?)/i);
+  if (!m) return 0;
+  const n = parseFloat(m[1]) || 0;
+  const mult = { K: 1e3, M: 1e6, B: 1e9 }[(m[2] || '').toUpperCase()] || 1;
+  return n * mult;
+};
+
 const InfluencerWatch = ({ setPage, toast }) => {
   const [tab, setTab] = useState('engine'); // engine | feed | directory | youtube | inspiration | library
   // Content Engine — Gemini-powered viral idea generator (Monica's #1 ask)
@@ -918,69 +658,50 @@ const InfluencerWatch = ({ setPage, toast }) => {
     if (navigator.clipboard) navigator.clipboard.writeText(brief);
     toast?.success?.(`✅ "${idea.creator}" formula saved + brief copied to clipboard`);
   };
-  // Posted-log: every template Monica marks as posted gets logged here
-  // (separate from contentDrafts so we can show "X posts in last 30 days")
-  const [postedLog, setPostedLog] = useLS('posted_content_log', []);
-  const markAsPosted = (template) => {
-    const entry = {
-      id: 'posted_' + Date.now(),
-      templateId: template.id,
-      title: template.title,
-      platform: template.platform,
-      inspiredBy: template.inspiredBy,
-      postedAt: new Date().toISOString(),
-    };
-    setPostedLog(p => [entry, ...p]);
-    toast?.success?.(`✅ Marked as posted! ${postedLog.length + 1} total posts logged.`);
-  };
-  // Today's Pick — deterministic based on day-of-year so each day she sees
-  // a different one but it's stable through the day (not re-randomizing per
-  // render). Picks from READY_TO_FILM_TEMPLATES which are fully complete.
+  // Top 15 US creators, ranked by peak viral views (the number in viralViews).
+  const rankedCreators = React.useMemo(
+    () => [...contentIdeas]
+      .sort((a, b) => parseViews(b.viralViews) - parseViews(a.viralViews))
+      .slice(0, 15)
+      .map((c, i) => ({ ...c, rank: i + 1 })),
+    [contentIdeas]
+  );
+  // Creator Spotlight — deterministic daily rotation through the ranked top 15,
+  // so each day features a different top creator but stays stable through the day.
   const todaysPick = React.useMemo(() => {
+    if (!rankedCreators.length) return null;
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-    return READY_TO_FILM_TEMPLATES[dayOfYear % READY_TO_FILM_TEMPLATES.length];
-  }, []);
-  const copyTemplateAndMarkPosted = (template) => {
-    const fullText = `${template.caption}\n\n${(template.hashtags || []).join(' ')}`;
-    if (navigator.clipboard) navigator.clipboard.writeText(fullText);
-    markAsPosted(template);
-  };
-  const copyTemplateOnly = (template) => {
-    const fullText = `${template.caption}\n\n${(template.hashtags || []).join(' ')}`;
-    if (navigator.clipboard) navigator.clipboard.writeText(fullText);
-    toast?.success?.('📋 Caption + hashtags copied to clipboard');
-  };
+    return rankedCreators[dayOfYear % rankedCreators.length];
+  }, [rankedCreators]);
 
-  // ── GEMINI OPTIMIZATION — sharpens any template into 3 variations ─────
+  // ── GEMINI OPTIMIZATION — turn a top creator's formula into ready posts ─────
   // Monica's ask: "use Gemini for optimization to get the best content."
-  // Each variation targets a different angle (more emotional / more educational /
-  // more punchy) so she picks what fits the moment. Uses /api/claude/messages
+  // Takes a top US creator's viral formula and writes 3 ready-to-post captions
+  // adapted to Monica's market, each in a different angle. Uses /api/claude/messages
   // which falls back to GOOGLE_GEMINI_API_KEY (free) when ANTHROPIC isn't set.
-  const [optimizing, setOptimizing] = useState(null); // template.id being optimized
-  const [optimizedVariants, setOptimizedVariants] = useState({}); // {templateId: [variants]}
-  const optimizeTemplate = async (template) => {
-    setOptimizing(template.id);
+  const [optimizing, setOptimizing] = useState(null); // creator name being optimized
+  const [optimizedVariants, setOptimizedVariants] = useState({}); // {creatorName: [variants]}
+  const optimizeCreator = async (creator) => {
+    setOptimizing(creator.creator);
     try {
-      const prompt = `You are a viral real estate content optimizer. Rewrite the caption below into 3 sharper variations for Monica Iskra (RE/MAX Classic luxury agent, Metro Detroit — Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield).
+      const prompt = `You are a viral real estate content writer. Study this top US creator's winning formula, then write 3 ready-to-post captions adapting their style for Monica Iskra (RE/MAX Classic luxury agent, Metro Detroit — Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield).
 
-ORIGINAL CAPTION:
-"""
-${template.caption}
-"""
+CREATOR: ${creator.creator} (${creator.handle})
+SIGNATURE HOOK: "${creator.hook}"
+CONTENT TYPE: ${creator.contentType}
+WHY THEIR CONTENT WORKS: ${creator.caption}
+THEIR FORMULA: ${creator.formula}
+PLATFORM: ${creator.platform}
 
-PLATFORM: ${template.platform}
-INSPIRED BY: ${template.inspiredBy} (study their voice)
-
-Generate 3 distinct rewrites:
+Generate 3 distinct ready-to-post captions in DIFFERENT angles:
 1. EMOTIONAL — lead with feeling, tell the human story harder
 2. EDUCATIONAL — lead with the lesson, make the value clearer
 3. PUNCHY — shorter, more shocking, designed to stop the scroll
 
 Rules:
-- Match Monica's voice: warm, professional, confident, never pushy
-- Keep the platform format (Reel = punchier, Carousel = more list-like)
-- Each rewrite must still include a clear CTA
-- Each must be COMPLETE and ready to post (no placeholders)
+- Follow ${creator.creator}'s proven formula, but in Monica's voice: warm, professional, confident, never pushy
+- Make it specific to Metro Detroit luxury (name real neighborhoods)
+- Each caption must include a clear CTA and be COMPLETE (no placeholders)
 
 Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
 [
@@ -1003,20 +724,20 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
       const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
       if (!jsonMatch) throw new Error('AI returned no parseable variations');
       const variants = JSON.parse(jsonMatch[0]);
-      setOptimizedVariants(prev => ({...prev, [template.id]: variants}));
-      toast?.success?.(`✨ ${variants.length} optimized variations generated`);
+      setOptimizedVariants(prev => ({...prev, [creator.creator]: variants}));
+      toast?.success?.(`✨ ${variants.length} ${creator.creator}-style captions generated`);
     } catch (e) {
       toast?.error?.('Optimize failed: ' + e.message);
     }
     setOptimizing(null);
   };
-  const copyVariant = (variant, template) => {
-    const fullText = `${variant.caption}\n\n${(template.hashtags || []).join(' ')}`;
+  const copyVariant = (variant, creator) => {
+    const fullText = `${variant.caption}\n\n${(creator.hashtags || []).join(' ')}`;
     if (navigator.clipboard) navigator.clipboard.writeText(fullText);
     toast?.success?.(`📋 ${variant.angle} version copied to clipboard`);
   };
 
-  const filteredIdeas = contentIdeas.filter(i =>
+  const filteredIdeas = rankedCreators.filter(i =>
     (engineFilter.platform === 'all' || (i.platform || '').toLowerCase().includes(engineFilter.platform)) &&
     (engineFilter.effort === 'all' || i.effort === engineFilter.effort) &&
     (engineFilter.niche === 'all' || i.niche === engineFilter.niche)
@@ -1060,7 +781,7 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 18, borderBottom: '1px solid rgba(255,255,255,.06)', paddingBottom: 2, flexWrap: 'wrap' }}>
         {[
-          { id: 'engine', label: '🚀 Content Engine', desc: '30 viral ideas, dummy-proof' },
+          { id: 'engine', label: '🚀 Content Engine', desc: 'Top 15 US creators + their formulas' },
           { id: 'feed', label: '🔥 Feed', desc: 'Unified inspiration feed' },
           { id: 'directory', label: '📋 Directory', desc: 'Curated 20+ creators' },
           { id: 'inspiration', label: '✨ Adapt a Post', desc: 'Paste any URL, AI adapts' },
@@ -1085,226 +806,122 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
       {/* CONTENT ENGINE TAB — Monica's #1 ask: dummy-proof viral idea generator */}
       {tab === 'engine' && (
         <div>
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-              TODAY'S PICK — the dummy-proof "just post this" magic
-              ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div style={{
-            padding:'20px 24px',marginBottom:20,
-            background:'linear-gradient(135deg, rgba(184,134,75,.18), rgba(167,139,250,.10))',
-            border:'2px solid rgba(184,134,75,.45)',borderRadius:16,
-          }}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-              <div>
-                <div style={{fontSize:10,fontWeight:800,color:'#e0b370',letterSpacing:.8,textTransform:'uppercase',marginBottom:2}}>
-                  🌟 Today's Pick · {new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}
-                </div>
-                <div style={{fontSize:18,fontWeight:900,color:'#fff',fontFamily:"'DM Serif Display',serif",lineHeight:1.2}}>
-                  {todaysPick.title}
-                </div>
-                <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>
-                  Inspired by <strong style={{color:'#e0b370'}}>{todaysPick.inspiredBy}</strong> · {todaysPick.platform} · ⏱ {todaysPick.effort} · 📅 Best: {todaysPick.bestTime}
-                </div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontSize:32}}>🎬</div>
-              </div>
-            </div>
-
-            {/* Hook */}
-            <div style={{padding:'10px 14px',background:'rgba(0,0,0,.25)',borderRadius:8,marginBottom:12}}>
-              <div style={{fontSize:9,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.5,marginBottom:3}}>HOOK (FIRST 3 SECONDS)</div>
-              <div style={{fontSize:14,fontWeight:700,color:'#fff',fontStyle:'italic'}}>"{todaysPick.hook}"</div>
-            </div>
-
-            {/* Caption preview + shot list side-by-side */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
-              <div style={{padding:'10px 14px',background:'rgba(0,0,0,.2)',borderRadius:8}}>
-                <div style={{fontSize:9,fontWeight:800,color:'#a78bfa',textTransform:'uppercase',letterSpacing:.5,marginBottom:5}}>📝 CAPTION (ready to paste)</div>
-                <div style={{fontSize:11,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,maxHeight:160,overflow:'auto'}}>
-                  {todaysPick.caption}
-                </div>
-              </div>
-              <div style={{padding:'10px 14px',background:'rgba(0,0,0,.2)',borderRadius:8}}>
-                <div style={{fontSize:9,fontWeight:800,color:'#6ee7b7',textTransform:'uppercase',letterSpacing:.5,marginBottom:5}}>🎥 SHOT LIST</div>
-                <div style={{fontSize:11,color:'#cbd5e1',lineHeight:1.6}}>
-                  {todaysPick.shotList.map((s, i) => (
-                    <div key={i} style={{marginBottom:4}}>{i+1}. {s}</div>
-                  ))}
-                </div>
-                <div style={{fontSize:10,color:'#94a3b8',marginTop:8,fontStyle:'italic'}}>
-                  🎨 {todaysPick.visual}
-                </div>
-              </div>
-            </div>
-
-            {/* Hashtags */}
-            <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:14}}>
-              {todaysPick.hashtags.map((h,i) => (
-                <span key={i} style={{fontSize:10.5,color:'#7eb8f7',fontWeight:600}}>{h}</span>
-              ))}
-            </div>
-
-            {/* Big action buttons */}
-            <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-              <button onClick={()=>copyTemplateAndMarkPosted(todaysPick)} style={{
-                flex:1,minWidth:180,padding:'14px 18px',
-                background:'linear-gradient(135deg, #10b981, #6ee7b7)',
-                color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:800,cursor:'pointer',
-                boxShadow:'0 4px 14px rgba(16,185,129,.3)',
-              }}>
-                ✅ Copy Caption + Mark Posted
-              </button>
-              <button onClick={()=>copyTemplateOnly(todaysPick)} style={{
-                padding:'14px 18px',
-                background:'rgba(126,184,247,.15)',color:'#7eb8f7',
-                border:'1px solid rgba(126,184,247,.35)',borderRadius:10,fontSize:13,fontWeight:800,cursor:'pointer',
-              }}>
-                📋 Just Copy
-              </button>
-              <button onClick={()=>optimizeTemplate(todaysPick)} disabled={optimizing === todaysPick.id} style={{
-                padding:'14px 18px',
-                background: optimizing === todaysPick.id ? 'rgba(167,139,250,.2)' : 'linear-gradient(135deg, #a78bfa, #c4b5fd)',
-                color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:800,cursor: optimizing === todaysPick.id ? 'wait' : 'pointer',
-              }}>
-                {optimizing === todaysPick.id ? '⏳ Optimizing…' : '✨ Optimize with Gemini'}
-              </button>
-            </div>
-
-            {/* Gemini-optimized variations (appear after "Optimize" is clicked) */}
-            {optimizedVariants[todaysPick.id] && (
-              <div style={{marginTop:14,padding:'14px 16px',background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.3)',borderRadius:10}}>
-                <div style={{fontSize:10.5,fontWeight:800,color:'#a78bfa',textTransform:'uppercase',letterSpacing:.6,marginBottom:10}}>
-                  ✨ Gemini-Optimized Variations — pick the angle that fits today's vibe
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))',gap:10}}>
-                  {optimizedVariants[todaysPick.id].map((v, i) => {
-                    const angleColors = { EMOTIONAL: '#f87171', EDUCATIONAL: '#7eb8f7', PUNCHY: '#10b981' };
-                    const c = angleColors[v.angle] || '#a78bfa';
-                    return (
-                      <div key={i} style={{
-                        padding:'10px 12px',background:'rgba(0,0,0,.25)',borderRadius:8,
-                        borderLeft:`3px solid ${c}`,display:'flex',flexDirection:'column',gap:6,
-                      }}>
-                        <div style={{fontSize:9.5,fontWeight:900,color:c,letterSpacing:.5}}>
-                          {v.angle}
-                        </div>
-                        <div style={{fontSize:10,color:'#94a3b8',fontStyle:'italic'}}>
-                          {v.whyBetter}
-                        </div>
-                        <div style={{fontSize:11,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,maxHeight:140,overflow:'auto'}}>
-                          {v.caption}
-                        </div>
-                        <button onClick={()=>copyVariant(v, todaysPick)} style={{
-                          marginTop:'auto',padding:'6px 10px',
-                          background:`${c}22`,color:c,border:`1px solid ${c}55`,
-                          borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer',
-                        }}>
-                          📋 Use this version
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Posted count badge */}
-            {postedLog.length > 0 && (
-              <div style={{marginTop:10,fontSize:11,color:'#6ee7b7',fontWeight:600}}>
-                ✨ You've posted {postedLog.length} time{postedLog.length===1?'':'s'} using my-re-hub. Keep going.
-              </div>
-            )}
-          </div>
-
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-              READY-TO-FILM TEMPLATES — browse all 15
-              ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div style={{marginBottom:24}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <div style={{fontSize:14,fontWeight:800,color:'#fff'}}>
-                📚 Browse All {READY_TO_FILM_TEMPLATES.length} Plug-and-Play Templates
-              </div>
-              <div style={{fontSize:10.5,color:'#94a3b8'}}>
-                Each one is fully written — caption, hashtags, shot list. Just film + post.
-              </div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))',gap:10}}>
-              {READY_TO_FILM_TEMPLATES.map(t => (
-                <div key={t.id} style={{
-                  padding:'12px 14px',background:'#0d1117',border:'1px solid rgba(255,255,255,.08)',borderRadius:10,
-                  display:'flex',flexDirection:'column',gap:6,
-                }}>
-                  <div style={{fontSize:12,fontWeight:800,color:'#fff',lineHeight:1.3}}>{t.title}</div>
-                  <div style={{fontSize:10,color:'#e0b370',fontStyle:'italic'}}>"{t.hook}"</div>
-                  <div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:2}}>
-                    <span style={{fontSize:8.5,padding:'1px 6px',borderRadius:8,background:'rgba(126,184,247,.12)',color:'#7eb8f7',fontWeight:700}}>{t.platform}</span>
-                    <span style={{fontSize:8.5,padding:'1px 6px',borderRadius:8,background:'rgba(167,139,250,.12)',color:'#a78bfa',fontWeight:700}}>⏱ {t.effort}</span>
-                    <span style={{fontSize:8.5,padding:'1px 6px',borderRadius:8,background:'rgba(255,255,255,.04)',color:'#94a3b8',fontWeight:700}}>Inspired by {t.inspiredBy}</span>
+          {/* CREATOR SPOTLIGHT — daily-featured top US creator */}
+          {todaysPick && (() => {
+            const sp = todaysPick;
+            const handleClean = (sp.handle || '').replace('@','');
+            const profileUrl = (sp.platform || '').toLowerCase().includes('tiktok')
+              ? `https://tiktok.com/@${handleClean}`
+              : (sp.platform || '').toLowerCase().includes('youtube')
+              ? `https://youtube.com/@${handleClean}`
+              : `https://instagram.com/${handleClean}`;
+            return (
+            <div style={{
+              padding:'20px 24px',marginBottom:24,
+              background:'linear-gradient(135deg, rgba(184,134,75,.18), rgba(167,139,250,.10))',
+              border:'2px solid rgba(184,134,75,.45)',borderRadius:16,
+            }}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14,gap:12}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:10,fontWeight:800,color:'#e0b370',letterSpacing:.8,textTransform:'uppercase',marginBottom:2}}>
+                    🌟 Creator of the Day · {new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}
                   </div>
-                  <div style={{display:'flex',gap:6,marginTop:6}}>
-                    <button onClick={()=>copyTemplateAndMarkPosted(t)} style={{
-                      flex:1,padding:'6px 10px',background:'linear-gradient(135deg, #b8864b, #e0b370)',
-                      color:'#fff',border:'none',borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer',
-                    }}>
-                      ✅ Copy + Post
-                    </button>
-                    <button onClick={()=>copyTemplateOnly(t)} title="Just copy"
-                      style={{padding:'6px 10px',background:'rgba(126,184,247,.12)',color:'#7eb8f7',
-                      border:'1px solid rgba(126,184,247,.25)',borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer'}}>
-                      📋
-                    </button>
-                    <button onClick={()=>optimizeTemplate(t)} disabled={optimizing === t.id} title="Optimize with Gemini"
-                      style={{padding:'6px 10px',background:'rgba(167,139,250,.12)',color:'#a78bfa',
-                      border:'1px solid rgba(167,139,250,.25)',borderRadius:6,fontSize:10.5,fontWeight:800,cursor: optimizing === t.id ? 'wait' : 'pointer'}}>
-                      {optimizing === t.id ? '⏳' : '✨'}
-                    </button>
+                  <div style={{fontSize:22,fontWeight:900,color:'#fff',fontFamily:"'DM Serif Display',serif",lineHeight:1.15}}>
+                    #{sp.rank} · {sp.creator}
                   </div>
-                  {/* Inline variations for this template */}
-                  {optimizedVariants[t.id] && (
-                    <div style={{marginTop:8,padding:'8px 10px',background:'rgba(167,139,250,.08)',borderLeft:'2px solid #a78bfa',borderRadius:6,display:'flex',flexDirection:'column',gap:6}}>
-                      {optimizedVariants[t.id].map((v, i) => {
-                        const angleColors = { EMOTIONAL: '#f87171', EDUCATIONAL: '#7eb8f7', PUNCHY: '#10b981' };
-                        const c = angleColors[v.angle] || '#a78bfa';
-                        return (
-                          <div key={i} style={{display:'flex',alignItems:'center',gap:6,fontSize:10}}>
-                            <span style={{padding:'1px 5px',borderRadius:4,background:`${c}22`,color:c,fontWeight:800,fontSize:8.5}}>{v.angle}</span>
-                            <span style={{flex:1,color:'#cbd5e1',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{v.caption.slice(0,60)}…</span>
-                            <button onClick={()=>copyVariant(v, t)} style={{background:'none',border:'none',color:c,cursor:'pointer',fontSize:11}}>📋</button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <a href={profileUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:'#7eb8f7',textDecoration:'none',fontWeight:600}}>
+                    {sp.handle} ↗
+                  </a>
+                  <div style={{fontSize:11,color:'#94a3b8',marginTop:3}}>
+                    {sp.platform} · {sp.location} · {sp.niche}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Posted log */}
-          {postedLog.length > 0 && (
-            <div style={{marginBottom:24,padding:'14px 16px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.2)',borderRadius:12}}>
-              <div style={{fontSize:11,fontWeight:800,color:'#6ee7b7',textTransform:'uppercase',letterSpacing:.5,marginBottom:10}}>
-                📊 Your Posting History · {postedLog.length} posts logged
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontSize:20,fontWeight:900,color:'#e0b370',fontFamily:"'DM Serif Display',serif"}}>{sp.viralViews}</div>
+                  <div style={{fontSize:9.5,color:'#94a3b8'}}>peak reach · {sp.followers} followers</div>
+                </div>
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:200,overflow:'auto'}}>
-                {postedLog.slice(0,10).map(p => (
-                  <div key={p.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 8px',background:'rgba(0,0,0,.2)',borderRadius:6,fontSize:11}}>
-                    <span style={{color:'#fff'}}>{p.title}</span>
-                    <span style={{color:'#94a3b8'}}>{new Date(p.postedAt).toLocaleDateString()}</span>
-                  </div>
+
+              <div style={{padding:'10px 14px',background:'rgba(0,0,0,.25)',borderRadius:8,marginBottom:12}}>
+                <div style={{fontSize:9,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.5,marginBottom:3}}>SIGNATURE HOOK</div>
+                <div style={{fontSize:14,fontWeight:700,color:'#fff',fontStyle:'italic'}}>"{sp.hook}"</div>
+                <div style={{fontSize:10.5,color:'#94a3b8',marginTop:4}}>{sp.contentType}</div>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
+                <div style={{padding:'10px 14px',background:'rgba(0,0,0,.2)',borderRadius:8}}>
+                  <div style={{fontSize:9,fontWeight:800,color:'#a78bfa',textTransform:'uppercase',letterSpacing:.5,marginBottom:5}}>💡 WHY IT WORKS</div>
+                  <div style={{fontSize:11,color:'#cbd5e1',lineHeight:1.5}}>{sp.caption}</div>
+                  {sp.formula && <div style={{fontSize:10.5,color:'#a78bfa',marginTop:8}}>📐 {sp.formula}</div>}
+                </div>
+                <div style={{padding:'10px 14px',background:'rgba(16,185,129,.06)',borderRadius:8,borderLeft:'2px solid #10b981'}}>
+                  <div style={{fontSize:9,fontWeight:800,color:'#6ee7b7',textTransform:'uppercase',letterSpacing:.5,marginBottom:5}}>🎯 ADAPT FOR YOU</div>
+                  <div style={{fontSize:11,color:'#cbd5e1',lineHeight:1.5}}>{sp.adaptIdea}</div>
+                  {sp.visual && <div style={{fontSize:10,color:'#94a3b8',marginTop:8,fontStyle:'italic'}}>🎬 {sp.visual}</div>}
+                </div>
+              </div>
+
+              <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:14}}>
+                {(sp.hashtags||[]).map((h,i) => (
+                  <span key={i} style={{fontSize:10.5,color:'#7eb8f7',fontWeight:600}}>{h}</span>
                 ))}
               </div>
-            </div>
-          )}
 
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-              TOP CREATORS LIBRARY (existing section)
-              ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+              <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                <a href={profileUrl} target="_blank" rel="noreferrer" style={{
+                  padding:'14px 18px',background:'rgba(126,184,247,.15)',color:'#7eb8f7',
+                  border:'1px solid rgba(126,184,247,.35)',borderRadius:10,fontSize:13,fontWeight:800,textDecoration:'none',
+                }}>
+                  👁 View their {(sp.platform||'').split(' ')[0]}
+                </a>
+                <button onClick={()=>handleUseIdea(sp)} style={{
+                  padding:'14px 18px',background:'rgba(184,134,75,.18)',color:'#e0b370',
+                  border:'1px solid rgba(184,134,75,.4)',borderRadius:10,fontSize:13,fontWeight:800,cursor:'pointer',
+                }}>
+                  📋 Save Their Formula
+                </button>
+                <button onClick={()=>optimizeCreator(sp)} disabled={optimizing === sp.creator} style={{
+                  flex:1,minWidth:200,padding:'14px 18px',
+                  background: optimizing === sp.creator ? 'rgba(167,139,250,.2)' : 'linear-gradient(135deg, #a78bfa, #c4b5fd)',
+                  color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:800,cursor: optimizing === sp.creator ? 'wait' : 'pointer',
+                }}>
+                  {optimizing === sp.creator ? '⏳ Writing captions…' : '✨ Optimize with Gemini — write me 3 posts in their style'}
+                </button>
+              </div>
+
+              {optimizedVariants[sp.creator] && (
+                <div style={{marginTop:14,padding:'14px 16px',background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.3)',borderRadius:10}}>
+                  <div style={{fontSize:10.5,fontWeight:800,color:'#a78bfa',textTransform:'uppercase',letterSpacing:.6,marginBottom:10}}>
+                    ✨ {sp.creator}-style posts, written for your market — pick an angle
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))',gap:10}}>
+                    {optimizedVariants[sp.creator].map((v, i) => {
+                      const angleColors = { EMOTIONAL: '#f87171', EDUCATIONAL: '#7eb8f7', PUNCHY: '#10b981' };
+                      const c = angleColors[v.angle] || '#a78bfa';
+                      return (
+                        <div key={i} style={{padding:'10px 12px',background:'rgba(0,0,0,.25)',borderRadius:8,borderLeft:`3px solid ${c}`,display:'flex',flexDirection:'column',gap:6}}>
+                          <div style={{fontSize:9.5,fontWeight:900,color:c,letterSpacing:.5}}>{v.angle}</div>
+                          <div style={{fontSize:10,color:'#94a3b8',fontStyle:'italic'}}>{v.whyBetter}</div>
+                          <div style={{fontSize:11,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,maxHeight:140,overflow:'auto'}}>{v.caption}</div>
+                          <button onClick={()=>copyVariant(v, sp)} style={{marginTop:'auto',padding:'6px 10px',background:`${c}22`,color:c,border:`1px solid ${c}55`,borderRadius:6,fontSize:10.5,fontWeight:800,cursor:'pointer'}}>
+                            📋 Use this version
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            );
+          })()}
+
+          {/* TOP 15 US CREATORS — ranked by peak viral views */}
           <div style={{fontSize:13,fontWeight:800,color:'#fff',marginBottom:8}}>
-            🌎 Top US Real Estate Creators (for inspiration)
+            🌎 Top 15 US Real Estate Creators — ranked by peak views
           </div>
           <div style={{fontSize:11,color:'#94a3b8',marginBottom:14}}>
-            Study how these creators built massive audiences. Click "Adapt for Me" to save their formula adapted for Metro Detroit.
+            The highest-engagement real estate creators in the country, ranked #1–15 by their biggest viral posts. Click "Adapt for Me" to save their formula, or "Optimize with Gemini" to get ready-to-post captions in their style.
           </div>
           {/* Hero with Refresh button */}
           <div style={{
@@ -1316,7 +933,7 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:11,fontWeight:800,color:'#e0b370',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>🚀 Top US Viral Real Estate Creators</div>
               <div style={{fontSize:14,color:'#fff',fontWeight:700,marginBottom:3}}>
-                {contentIdeas.length} highest-engagement US RE creators + their viral formulas
+                Top {rankedCreators.length} highest-engagement US RE creators + their viral formulas
               </div>
               <div style={{fontSize:11.5,color:'#94a3b8'}}>
                 Each card shows a top creator's signature hook, why it works, the exact formula, and how to adapt it for YOUR market. Click <strong>"Adapt for Me"</strong> to save the brief.
@@ -1375,7 +992,7 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
               <option value="agent-story">Agent Story</option>
               <option value="sales-training">Sales Training</option>
             </select>
-            <span style={{fontSize:10.5,color:'#475569',marginLeft:'auto'}}>{filteredIdeas.length} of {contentIdeas.length} creators · {contentDrafts.length} saved briefs</span>
+            <span style={{fontSize:10.5,color:'#475569',marginLeft:'auto'}}>{filteredIdeas.length} of {rankedCreators.length} creators · {contentDrafts.length} saved briefs</span>
           </div>
 
           {/* Creator grid — each card shows a top US RE creator + their viral formula */}
@@ -1397,7 +1014,15 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
                 }}>
                   {/* Creator header */}
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10}}>
-                    <div style={{flex:1,minWidth:0}}>
+                    <div style={{flex:1,minWidth:0,display:'flex',gap:10,alignItems:'flex-start'}}>
+                      <div style={{
+                        flexShrink:0,width:30,height:30,borderRadius:8,
+                        background:idea.rank<=3?'linear-gradient(135deg, #b8864b, #e0b370)':'rgba(255,255,255,.06)',
+                        color:idea.rank<=3?'#fff':'#94a3b8',
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        fontSize:13,fontWeight:900,fontFamily:"'DM Serif Display',serif",
+                      }}>{idea.rank}</div>
+                      <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:16,fontWeight:900,color:'#fff',fontFamily:"'DM Serif Display',serif",lineHeight:1.1}}>
                         {idea.creator}
                       </div>
@@ -1407,6 +1032,7 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
                         {idea.handle} ↗
                       </a>
                       <div style={{fontSize:10,color:'#64748b',marginTop:2}}>{idea.location}</div>
+                      </div>
                     </div>
                     <div style={{textAlign:'right'}}>
                       <div style={{fontSize:14,fontWeight:900,color:engagementColor,fontFamily:"'DM Serif Display',serif"}}>
@@ -1483,12 +1109,39 @@ Return ONLY a valid JSON array. No preamble, no markdown fences. Format:
                     </a>
                     <button onClick={()=>handleUseIdea(idea)} style={{
                       flex:1,padding:'8px 12px',
-                      background:'linear-gradient(135deg, #b8864b, #e0b370)',
-                      color:'#fff',border:'none',borderRadius:8,fontSize:11.5,fontWeight:800,cursor:'pointer',
+                      background:'rgba(184,134,75,.18)',color:'#e0b370',
+                      border:'1px solid rgba(184,134,75,.4)',borderRadius:8,fontSize:11.5,fontWeight:800,cursor:'pointer',
                     }}>
-                      ✨ Adapt for Me
+                      📋 Adapt for Me
+                    </button>
+                    <button onClick={()=>optimizeCreator(idea)} disabled={optimizing === idea.creator} title="Write me 3 posts in this creator's style"
+                      style={{
+                        flex:1,padding:'8px 12px',
+                        background: optimizing === idea.creator ? 'rgba(167,139,250,.2)' : 'linear-gradient(135deg, #a78bfa, #c4b5fd)',
+                        color:'#fff',border:'none',borderRadius:8,fontSize:11.5,fontWeight:800,cursor: optimizing === idea.creator ? 'wait' : 'pointer',
+                      }}>
+                      {optimizing === idea.creator ? '⏳ Writing…' : '✨ Optimize'}
                     </button>
                   </div>
+
+                  {/* Gemini-written variations for this creator */}
+                  {optimizedVariants[idea.creator] && (
+                    <div style={{marginTop:4,padding:'10px 12px',background:'rgba(167,139,250,.08)',borderLeft:'2px solid #a78bfa',borderRadius:8,display:'flex',flexDirection:'column',gap:8}}>
+                      {optimizedVariants[idea.creator].map((v, i) => {
+                        const angleColors = { EMOTIONAL: '#f87171', EDUCATIONAL: '#7eb8f7', PUNCHY: '#10b981' };
+                        const c = angleColors[v.angle] || '#a78bfa';
+                        return (
+                          <div key={i} style={{display:'flex',flexDirection:'column',gap:4}}>
+                            <div style={{display:'flex',alignItems:'center',gap:6}}>
+                              <span style={{padding:'1px 6px',borderRadius:4,background:`${c}22`,color:c,fontWeight:800,fontSize:8.5}}>{v.angle}</span>
+                              <button onClick={()=>copyVariant(v, idea)} style={{marginLeft:'auto',background:'none',border:'none',color:c,cursor:'pointer',fontSize:11,fontWeight:800}}>📋 Copy</button>
+                            </div>
+                            <div style={{fontSize:10.5,color:'#cbd5e1',whiteSpace:'pre-wrap',lineHeight:1.5,maxHeight:120,overflow:'auto'}}>{v.caption}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
