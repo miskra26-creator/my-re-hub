@@ -121,26 +121,38 @@ export default function DailyOutreach({ toast, setPage }) {
     } catch { return 0; }
   });
 
-  // Build today's prioritized list — top 30 contacts most due for outreach
-  const ranked = useMemo(() => {
+  // Build today's prioritized list — top 30 contacts most due for outreach.
+  // Lowered threshold from 50 → 0 so anyone reachable shows up (was filtering
+  // too aggressively when leads had minimal status/data from FUB sync).
+  // Also tracks counts so empty state can explain what was filtered out.
+  const { ranked, debugCounts, todayContacted } = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    // Skip anyone already contacted today
-    const alreadyContacted = new Set(
-      outreachLog.filter(e => (e.ts || '').slice(0, 10) === today).map(e => e.leadId)
-    );
-    return leads
-      .filter(l => l.status !== 'Trash')
-      .filter(l => !alreadyContacted.has(l.id))
-      .filter(l => l.phone || l.email)
-      .map(l => ({
+    const todayLog = outreachLog.filter(e => (e.ts || '').slice(0, 10) === today);
+    const alreadyContacted = new Set(todayLog.map(e => e.leadId));
+    const contactedDetails = todayLog
+      .map(e => ({ ...e, lead: leads.find(l => l.id === e.leadId) }))
+      .filter(e => e.lead);
+
+    const debug = { total: leads.length, trash: 0, noContact: 0, contactedToday: 0 };
+    const withPriority = [];
+    for (const l of leads) {
+      if (l.status === 'Trash') { debug.trash++; continue; }
+      if (alreadyContacted.has(l.id)) { debug.contactedToday++; continue; }
+      if (!l.phone && !l.email) { debug.noContact++; continue; }
+      withPriority.push({
         ...l,
         _priority: priorityScore(l),
         _lastContact: getLastContactDate(l),
         _daysSince: daysSince(getLastContactDate(l)),
-      }))
-      .filter(l => l._priority > 50)
-      .sort((a, b) => b._priority - a._priority)
-      .slice(0, 30);
+      });
+    }
+    debug.eligible = withPriority.length;
+
+    return {
+      ranked: withPriority.sort((a, b) => b._priority - a._priority).slice(0, 30),
+      debugCounts: debug,
+      todayContacted: contactedDetails,
+    };
   }, [leads, outreachLog]);
 
   // Priority: user's manual edits > AI-personalized > fallback template.
@@ -458,21 +470,60 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
         )}
       </div>
 
-      {/* Empty state */}
+      {/* ━━━ CONTACTED TODAY — what you've already sent ━━━ */}
+      {todayContacted.length > 0 && (
+        <div style={{
+          padding: '14px 18px', marginBottom: 22,
+          background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.25)',
+          borderRadius: 12,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#6ee7b7', letterSpacing: .6, textTransform: 'uppercase', marginBottom: 8 }}>
+            ✅ Contacted today · {todayContacted.length}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {todayContacted.map(c => {
+              const chMap = { sms: '💬 Text', email: '✉️ Email', call: '📞 Call', skipped: '⏭️ Skipped' };
+              return (
+                <div key={c.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '6px 10px', background: 'rgba(0,0,0,.2)', borderRadius: 6, fontSize: 11.5,
+                }}>
+                  <span style={{ color: '#fff', fontWeight: 700 }}>{c.lead.name}</span>
+                  <span style={{ color: '#94a3b8' }}>
+                    {chMap[c.channel] || c.channel} · {new Date(c.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state with diagnostic counts */}
       {ranked.length === 0 && (
         <div style={{
           padding: '40px 22px', textAlign: 'center',
           background: 'rgba(255,255,255,.02)', border: '1px solid rgba(255,255,255,.05)', borderRadius: 14,
         }}>
-          <div style={{ fontSize: 48, marginBottom: 10 }}>{isDone ? '🏆' : '🌅'}</div>
+          <div style={{ fontSize: 48, marginBottom: 10 }}>{isDone ? '🏆' : debugCounts.total === 0 ? '⏳' : '🌅'}</div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 5 }}>
-            {isDone ? "You're done for today!" : "No one needs outreach right now"}
+            {isDone ? "You're done for today!"
+              : debugCounts.total === 0 ? "Loading your leads…"
+              : "No one queued right now"}
           </div>
-          <div style={{ fontSize: 13, color: '#94a3b8' }}>
+          <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 14 }}>
             {isDone
               ? "Take the win. Come back tomorrow for tomorrow's list."
-              : "Either everyone's been contacted recently, or you need to import more leads. Check Lead Tracker."}
+              : debugCounts.total === 0
+                ? "Waiting for leads to sync from the cloud. Refresh in a moment, or check that you're signed in."
+                : `Out of ${debugCounts.total.toLocaleString()} total leads: ${debugCounts.contactedToday} contacted today, ${debugCounts.noContact} have no phone/email, ${debugCounts.trash} marked trash.`
+            }
           </div>
+          {debugCounts.total > 0 && !isDone && (
+            <div style={{ fontSize: 11, color: '#475569' }}>
+              ✏️ If this seems wrong, check your leads in Lead Tracker. Most likely they need phone/email populated to surface here.
+            </div>
+          )}
         </div>
       )}
 
