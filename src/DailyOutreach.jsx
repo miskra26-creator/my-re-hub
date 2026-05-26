@@ -335,9 +335,6 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
           <h1 style={{ margin: 0, fontFamily: "'DM Serif Display',serif", fontSize: 28, fontWeight: 900, color: '#fff' }}>
             Daily Outreach
           </h1>
-          <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 8, background: 'rgba(184,134,75,.15)', color: '#e0b370' }}>
-            BEATS BOLDTRAIL
-          </span>
         </div>
         <div style={{ fontSize: 14, color: '#94a3b8', maxWidth: 720 }}>
           The fastest path to real leads: text 20 contacts from your sphere today. AI personalizes each message based on their history. One-click sends via your phone's native SMS app — free, no Twilio needed.
