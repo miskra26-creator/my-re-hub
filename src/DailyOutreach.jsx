@@ -103,6 +103,7 @@ function fallbackTemplate(lead) {
 export default function DailyOutreach({ toast, setPage }) {
   const [leads] = useLS('leads', []);
   const [aiDrafts, setAiDrafts] = useLS('outreach_ai_drafts', {}); // {leadId: {message, generatedAt}}
+  const [editedMessages, setEditedMessages] = useLS('outreach_edited_messages', {}); // {leadId: edited text} — overrides AI/template
   const [outreachLog, setOutreachLog] = useLS('outreach_log', []); // [{leadId, channel, ts}]
   const [generatingFor, setGeneratingFor] = useState(null); // leadId currently being AI-personalized
   // Video link — record ONCE in Loom (or anywhere), paste here, every outgoing
@@ -141,21 +142,45 @@ export default function DailyOutreach({ toast, setPage }) {
       .slice(0, 30);
   }, [leads, outreachLog]);
 
-  // Generate or fetch the personalized message for a lead, with video link
-  // appended if one is set (so 1 video → 20 personal texts containing it).
-  const getMessage = (lead) => {
-    const cached = aiDrafts[lead.id]?.message;
-    const base = cached || fallbackTemplate(lead);
+  // Priority: user's manual edits > AI-personalized > fallback template.
+  // The video link auto-appends only when sending (in sendSMS) so the editable
+  // textarea shows the BASE message and the preview line below shows what
+  // actually goes out.
+  const getBaseMessage = (lead) => {
+    if (editedMessages[lead.id]) return editedMessages[lead.id];
+    return aiDrafts[lead.id]?.message || fallbackTemplate(lead);
+  };
+  const getFullMessage = (lead) => {
+    const base = getBaseMessage(lead);
     if (videoLink && videoLink.trim()) {
       return `${base}\n\n${videoCaption} ${videoLink.trim()}`;
     }
     return base;
   };
+  // Backward-compat alias for any leftover refs
+  const getMessage = getFullMessage;
+  // Save the user's manual edit (overrides AI/template until they clear it)
+  const editMessage = (leadId, text) => {
+    setEditedMessages(p => ({ ...p, [leadId]: text }));
+  };
+  const resetEdit = (leadId) => {
+    setEditedMessages(p => {
+      const next = { ...p };
+      delete next[leadId];
+      return next;
+    });
+    toast?.info?.('Reset to AI-generated message');
+  };
 
-  // Call Gemini to personalize the message based on the lead's full context
+  // Call Gemini to either personalize fresh OR improve the user's existing edits.
+  // Smart routing: if she's edited the message, we IMPROVE her version (preserves
+  // her voice). If it's the default template, we PERSONALIZE from scratch.
   const personalizeWithAI = async (lead) => {
     setGeneratingFor(lead.id);
     try {
+      const hasUserEdits = !!editedMessages[lead.id];
+      const currentText = getBaseMessage(lead);
+
       // Pull recent activities for context
       let recentActivity = '';
       try {
@@ -163,9 +188,7 @@ export default function DailyOutreach({ toast, setPage }) {
         recentActivity = acts.slice(0, 3).map(a => `${a.type || 'note'}: ${a.note || a.subject || ''}`).join('\n');
       } catch {}
 
-      const prompt = `You are writing a friendly, warm check-in text from Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent) to one of her contacts. The goal: re-open conversation, not sell.
-
-CONTACT DETAILS:
+      const contactContext = `CONTACT DETAILS:
 - Name: ${lead.name}
 - Status: ${lead.status || 'Contact'}
 - Area/interest: ${lead.area || lead.address || 'Metro Detroit'}
@@ -174,7 +197,32 @@ CONTACT DETAILS:
 - Tags: ${(lead.tags || []).join(', ') || 'none'}
 - Notes: ${(lead.notes || '').slice(0, 200) || 'none'}
 - Recent activity:
-${recentActivity || 'none'}
+${recentActivity || 'none'}`;
+
+      const prompt = hasUserEdits
+        ? `You are sharpening a check-in text written by Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent). She wrote a draft — refine it to sound BETTER while preserving her voice and intent.
+
+${contactContext}
+
+MONICA'S DRAFT (preserve the meaning and voice):
+"""
+${currentText}
+"""
+
+REFINE RULES:
+- Keep her core message and intent — don't change WHAT she's saying, just HOW
+- Make it tighter, more natural, more personal-sounding
+- Fix any awkward phrasing
+- Reference specifics from the contact details if her draft is generic
+- Same length or shorter (never longer)
+- Same warm tone — not pushy, not salesy
+- Keep any specific details she included (names, places, prior context)
+- 2-4 sentences
+
+Return ONLY the refined message. No preamble, no quotes, no explanation. Just the polished text.`
+        : `You are writing a friendly, warm check-in text from Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent) to one of her contacts. The goal: re-open conversation, not sell.
+
+${contactContext}
 
 RULES:
 - 2-4 sentences max
@@ -201,10 +249,18 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
       const data = await r.json();
       const message = (data?.content?.[0]?.text || data?.choices?.[0]?.message?.content || '').trim();
       if (!message) throw new Error('AI returned empty message');
-      setAiDrafts(p => ({ ...p, [lead.id]: { message, generatedAt: new Date().toISOString() } }));
-      toast?.success?.(`✨ Personalized message for ${lead.name.split(' ')[0]}`);
+
+      if (hasUserEdits) {
+        // She edited it — save the refined version as HER edit, so further AI
+        // calls keep refining her direction (not starting over).
+        setEditedMessages(p => ({ ...p, [lead.id]: message }));
+        toast?.success?.(`✨ Refined your draft for ${lead.name.split(' ')[0]}`);
+      } else {
+        setAiDrafts(p => ({ ...p, [lead.id]: { message, generatedAt: new Date().toISOString() } }));
+        toast?.success?.(`✨ Personalized message for ${lead.name.split(' ')[0]}`);
+      }
     } catch (e) {
-      toast?.error?.('AI personalize failed — using template: ' + e.message);
+      toast?.error?.('AI failed: ' + e.message);
     }
     setGeneratingFor(null);
   };
@@ -425,8 +481,9 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
       {/* Outreach cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 14 }}>
         {ranked.map((lead, idx) => {
-          const message = getMessage(lead);
-          const isAI = !!aiDrafts[lead.id];
+          const baseMessage = getBaseMessage(lead);
+          const hasEdits = !!editedMessages[lead.id];
+          const isAI = !!aiDrafts[lead.id] && !hasEdits;
           const generating = generatingFor === lead.id;
           const priorityColor =
             lead._daysSince > 365 ? '#ef4444' :
@@ -473,19 +530,41 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
                 </div>
               </div>
 
-              {/* Message preview */}
+              {/* Editable message — type to edit, ✨ to AI-improve YOUR edits */}
               <div style={{
-                padding: '8px 10px',
-                background: isAI ? 'rgba(167,139,250,.06)' : 'rgba(184,134,75,.04)',
-                borderLeft: `2px solid ${isAI ? '#a78bfa' : '#b8864b'}`,
+                background: hasEdits ? 'rgba(110,231,183,.06)' : isAI ? 'rgba(167,139,250,.06)' : 'rgba(184,134,75,.04)',
+                borderLeft: `2px solid ${hasEdits ? '#10b981' : isAI ? '#a78bfa' : '#b8864b'}`,
                 borderRadius: 6,
-                fontSize: 11.5, color: '#cbd5e1', lineHeight: 1.5,
+                padding: '6px 8px',
               }}>
-                {message}
-                <div style={{ fontSize: 9, color: isAI ? '#a78bfa' : '#94a3b8', marginTop: 4, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span>{isAI ? '✨ AI personalized' : '📝 Template (click ✨ to personalize)'}</span>
+                <textarea
+                  value={baseMessage}
+                  onChange={e => editMessage(lead.id, e.target.value)}
+                  rows={Math.max(3, Math.min(8, baseMessage.split('\n').length + 1))}
+                  style={{
+                    width: '100%',
+                    background: 'transparent', color: '#cbd5e1', border: 'none', outline: 'none',
+                    fontSize: 11.5, lineHeight: 1.5, fontFamily: 'inherit',
+                    resize: 'vertical', minHeight: 60,
+                  }}
+                  placeholder="Edit message here, then tap ✨ to have AI sharpen it…"
+                />
+                <div style={{ fontSize: 9, color: hasEdits ? '#10b981' : isAI ? '#a78bfa' : '#94a3b8', marginTop: 2, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span>
+                    {hasEdits ? '✏️ Your edits (✨ refines what you wrote)'
+                      : isAI ? '✨ AI personalized · type to edit'
+                      : '📝 Template · type to edit OR tap ✨ to personalize'}
+                  </span>
                   {videoLink && (
-                    <span style={{ color: '#ea4335', fontWeight: 800 }}>🎥 + video</span>
+                    <span style={{ color: '#ea4335', fontWeight: 800 }}>🎥 + video on send</span>
+                  )}
+                  {hasEdits && (
+                    <button onClick={() => resetEdit(lead.id)} style={{
+                      marginLeft: 'auto', background: 'none', border: 'none',
+                      color: '#94a3b8', fontSize: 9, cursor: 'pointer', textDecoration: 'underline',
+                    }}>
+                      reset
+                    </button>
                   )}
                 </div>
               </div>
