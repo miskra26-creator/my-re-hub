@@ -13,6 +13,7 @@ import VirtualStaging from './VirtualStaging';
 import PastClientAgent, { PastClientAgentWorker } from './PastClientAgent';
 import SmartLists from './SmartLists';
 import FubMigration from './FubMigration';
+import DailyOutreach from './DailyOutreach';
 import { idbGet as cloudIdbGet } from './cloudHooks';
 import { getLeadTimeline, summarizeTimeline, timeAgo, formatTs } from './leadActivity';
 import AIStudio from './AIStudio';
@@ -915,6 +916,7 @@ const NAV = [
   { id:"video-script",        label:"Video Script Writer",  icon:Film },
   { id:"market-report",       label:"Market Report Builder",icon:BarChart3 },
   { section:"GROW" },
+  { id:"daily-outreach",      label:"⚡ Daily Outreach",   icon:Zap },
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
   { id:"smart-lists",         label:"🎯 Smart Lists + Bulk Actions", icon:Filter },
   { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
@@ -10781,6 +10783,7 @@ export default function App() {
     "showing-calendar":   <ShowingCalendar {...props}/>,
     "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
+    "daily-outreach":     <DailyOutreach {...props}/>,
     "smart-lists":        <SmartLists {...props}/>,
     "ai-concierge":       <AILeadConcierge {...props}/>,
     "past-client-agent":  <PastClientAgent {...props}/>,
