@@ -105,6 +105,11 @@ export default function DailyOutreach({ toast, setPage }) {
   const [aiDrafts, setAiDrafts] = useLS('outreach_ai_drafts', {}); // {leadId: {message, generatedAt}}
   const [outreachLog, setOutreachLog] = useLS('outreach_log', []); // [{leadId, channel, ts}]
   const [generatingFor, setGeneratingFor] = useState(null); // leadId currently being AI-personalized
+  // Video link — record ONCE in Loom (or anywhere), paste here, every outgoing
+  // text auto-appends "Quick video for you: [link]" so all 20 contacts get
+  // the video without you copy/pasting per send.
+  const [videoLink, setVideoLink] = useLS('outreach_video_link', '');
+  const [videoCaption, setVideoCaption] = useLS('outreach_video_caption', 'Recorded a quick video for you 👉');
   const [contactedToday, setContactedToday] = useState(() => {
     // count today's outreach from the log
     const today = new Date().toISOString().slice(0, 10);
@@ -136,11 +141,15 @@ export default function DailyOutreach({ toast, setPage }) {
       .slice(0, 30);
   }, [leads, outreachLog]);
 
-  // Generate or fetch the personalized message for a lead
+  // Generate or fetch the personalized message for a lead, with video link
+  // appended if one is set (so 1 video → 20 personal texts containing it).
   const getMessage = (lead) => {
     const cached = aiDrafts[lead.id]?.message;
-    if (cached) return cached;
-    return fallbackTemplate(lead);
+    const base = cached || fallbackTemplate(lead);
+    if (videoLink && videoLink.trim()) {
+      return `${base}\n\n${videoCaption} ${videoLink.trim()}`;
+    }
+    return base;
   };
 
   // Call Gemini to personalize the message based on the lead's full context
@@ -319,6 +328,82 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
         )}
       </div>
 
+      {/* ━━━ VIDEO LINK BAR — paste once, attaches to ALL outgoing texts ━━━ */}
+      <div style={{
+        padding: '14px 18px', marginBottom: 22,
+        background: videoLink
+          ? 'linear-gradient(135deg, rgba(234,67,53,.10), rgba(167,139,250,.06))'
+          : 'rgba(255,255,255,.02)',
+        border: `1px solid ${videoLink ? 'rgba(234,67,53,.3)' : 'rgba(255,255,255,.06)'}`,
+        borderRadius: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: videoLink ? 10 : 0 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: videoLink ? '#ea4335' : '#94a3b8', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>
+              🎥 {videoLink ? 'Video attached to all texts today' : 'Add a video to all outgoing texts'}
+            </div>
+            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>
+              {videoLink
+                ? 'Every text below auto-includes your video link. Past clients love personal videos — 3-5x reply rate vs text-only.'
+                : 'Record once in Loom (or any tool), paste the link here, every text below auto-includes it. 30 seconds setup → real video outreach to 20 contacts.'}
+            </div>
+          </div>
+          {!videoLink && (
+            <a href="https://www.loom.com" target="_blank" rel="noreferrer" style={{
+              padding: '8px 14px', background: 'rgba(234,67,53,.12)', color: '#ea4335',
+              border: '1px solid rgba(234,67,53,.3)', borderRadius: 8,
+              fontSize: 11, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap',
+            }}>
+              Open Loom ↗
+            </a>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="url"
+            placeholder="Paste video link here (Loom, YouTube, Drive, etc.)…"
+            value={videoLink}
+            onChange={e => setVideoLink(e.target.value)}
+            style={{
+              flex: 2, minWidth: 180,
+              padding: '10px 12px',
+              background: 'rgba(255,255,255,.04)', color: '#fff',
+              border: '1px solid rgba(255,255,255,.1)', borderRadius: 8,
+              fontSize: 12, fontFamily: 'monospace',
+            }}
+          />
+          {videoLink && (
+            <>
+              <input
+                type="text"
+                placeholder="Video intro text"
+                value={videoCaption}
+                onChange={e => setVideoCaption(e.target.value)}
+                style={{
+                  flex: 1, minWidth: 140,
+                  padding: '10px 12px',
+                  background: 'rgba(255,255,255,.04)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,.1)', borderRadius: 8,
+                  fontSize: 12,
+                }}
+              />
+              <button onClick={() => setVideoLink('')} style={{
+                padding: '10px 12px', background: 'rgba(239,68,68,.1)', color: '#f87171',
+                border: '1px solid rgba(239,68,68,.25)', borderRadius: 8,
+                fontSize: 11, fontWeight: 800, cursor: 'pointer',
+              }}>
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+        {videoLink && (
+          <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(234,67,53,.06)', borderRadius: 6, fontSize: 10.5, color: '#94a3b8', fontFamily: 'monospace' }}>
+            Preview: <span style={{ color: '#cbd5e1' }}>"{videoCaption} {videoLink}"</span> will be appended to every text below.
+          </div>
+        )}
+      </div>
+
       {/* Empty state */}
       {ranked.length === 0 && (
         <div style={{
@@ -397,8 +482,11 @@ Return ONLY the text message. No preamble, no quotes, no explanation. Just the m
                 fontSize: 11.5, color: '#cbd5e1', lineHeight: 1.5,
               }}>
                 {message}
-                <div style={{ fontSize: 9, color: isAI ? '#a78bfa' : '#94a3b8', marginTop: 4, fontWeight: 700 }}>
-                  {isAI ? '✨ AI personalized' : '📝 Template (click ✨ to personalize)'}
+                <div style={{ fontSize: 9, color: isAI ? '#a78bfa' : '#94a3b8', marginTop: 4, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span>{isAI ? '✨ AI personalized' : '📝 Template (click ✨ to personalize)'}</span>
+                  {videoLink && (
+                    <span style={{ color: '#ea4335', fontWeight: 800 }}>🎥 + video</span>
+                  )}
                 </div>
               </div>
 
