@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paper-Trading Bot</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Paper-Trading Bot</h1>
+      <p class="sub">Runs a strategy and auto-places <strong>simulated</strong> orders on Alpaca. Fake money only.</p>
+      <nav class="nav">
+        <a href="/">Backtester</a>
+        <a href="/bot.html" class="active">Live Bot</a>
+      </nav>
+    </header>
+
+    <div class="disclaimer">
+      <strong>Paper trading = fake money. Not financial advice.</strong>
+      This bot can place orders on its own. Always test with <em>Dry run</em> first. It only ever
+      talks to Alpaca's <em>paper</em> endpoint, so no real money is at risk — but a bot that trades
+      poorly with fake money would trade poorly with real money too. Prove an edge here before you
+      ever think about real funds.
+    </div>
+
+    <div id="setup" class="panel setup hidden">
+      <h2>One-time setup</h2>
+      <ol>
+        <li>Create a free account at <strong>alpaca.markets</strong> and open the <strong>Paper Trading</strong> dashboard.</li>
+        <li>Generate API keys (Key ID + Secret) for paper trading.</li>
+        <li>Create a file named <code>.env</code> inside the <code>trading-platform</code> folder with:
+          <pre>APCA_API_KEY_ID=your_key_id
+APCA_API_SECRET_KEY=your_secret_key</pre>
+        </li>
+        <li>Restart the app (<code>npm start</code>). This page will then show your paper account.</li>
+      </ol>
+    </div>
+
+    <main>
+      <section class="panel controls">
+        <h2>Bot setup</h2>
+        <label>
+          Symbol
+          <input id="symbol" type="text" value="AAPL" autocomplete="off" />
+          <small>A real ticker the bot will trade, e.g. <code>AAPL</code>, <code>SPY</code>, <code>MSFT</code>.</small>
+        </label>
+        <label>
+          Strategy
+          <select id="strategy"></select>
+        </label>
+        <p id="strategyBlurb" class="blurb"></p>
+        <div id="params" class="params"></div>
+        <label>
+          Dollars per trade ($)
+          <input id="notional" type="number" value="1000" min="1" step="50" />
+        </label>
+        <label class="checkbox">
+          <input id="dryRun" type="checkbox" checked />
+          Dry run (decide but don't place orders)
+        </label>
+
+        <button id="run">Run once</button>
+
+        <div class="auto-box">
+          <h3>Auto-run</h3>
+          <div class="row">
+            <label>Every (minutes)
+              <input id="autoMinutes" type="number" value="60" min="1" step="5" />
+            </label>
+            <label>&nbsp;
+              <button id="autoToggle" class="secondary">Start auto</button>
+            </label>
+          </div>
+          <small>While the app stays running, the bot re-checks on this interval.</small>
+        </div>
+        <p id="status" class="status"></p>
+      </section>
+
+      <section class="panel-col">
+        <div class="panel">
+          <h2>Paper account <span id="acctMeta" class="meta"></span>
+            <button id="refresh" class="secondary tiny">Refresh</button>
+          </h2>
+          <div id="account" class="metrics"></div>
+          <div class="table-wrap">
+            <table id="positionsTable">
+              <thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Value</th><th>Unrealized P/L</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Bot activity <span id="autoMeta" class="meta"></span></h2>
+          <div class="table-wrap">
+            <table id="logTable">
+              <thead><tr><th>Time</th><th>Symbol</th><th>Signal</th><th>Action</th><th>Note</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/bot.js"></script>
+  </body>
+</html>

@@ -26,6 +26,50 @@ header {
 header h1 { margin: 0; font-size: 1.6rem; }
 header .sub { margin: 4px 0 0; color: var(--muted); }
 
+.nav {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.nav a {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.nav a.active { background: var(--panel-2); color: var(--text); border-color: var(--accent); }
+.nav a:hover { color: var(--text); }
+
+.panel-col { min-width: 0; }
+
+.setup { background: #11241c; border-color: #1d4d36; }
+.setup ol { margin: 0; padding-left: 18px; }
+.setup li { margin-bottom: 8px; font-size: 0.9rem; }
+.setup pre {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px; overflow-x: auto; font-size: 0.82rem; margin: 6px 0 0;
+}
+
+label.checkbox {
+  display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 0.9rem;
+}
+label.checkbox input { width: auto; margin: 0; }
+
+.auto-box {
+  margin: 8px 0 4px; padding: 12px; border: 1px dashed var(--border); border-radius: 8px;
+}
+.auto-box h3 { margin: 0 0 8px; font-size: 0.95rem; }
+
+button.secondary {
+  width: 100%; padding: 9px; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 7px; cursor: pointer; font-size: 0.9rem;
+}
+button.secondary:hover { filter: brightness(1.15); }
+button.secondary.danger { border-color: var(--red); color: var(--red); }
+button.tiny { width: auto; padding: 3px 10px; font-size: 0.78rem; float: right; }
+
 .disclaimer {
   margin: 12px 24px;
   padding: 12px 16px;

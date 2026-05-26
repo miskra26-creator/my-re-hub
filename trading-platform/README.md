@@ -62,11 +62,45 @@ Uses Node's built-in test runner — no extra tooling.
 - **Overfitting risk.** Tuning parameters until the backtest looks great almost
   always produces a strategy that fails on new data.
 
+## Live paper-trading bot
+
+Open **http://localhost:4000/bot.html** (or click "Live Bot" in the nav). The
+bot runs a strategy on recent data and **auto-places simulated orders** through
+Alpaca's paper API — fake money, $0 risk.
+
+### One-time setup
+
+1. Make a free account at [alpaca.markets](https://alpaca.markets) → **Paper Trading**.
+2. Generate paper API keys (Key ID + Secret).
+3. Copy `.env.example` to `.env` and paste your keys:
+   ```
+   APCA_API_KEY_ID=your_key_id
+   APCA_API_SECRET_KEY=your_secret_key
+   ```
+4. `npm start` again. The bot page will show your paper account.
+
+### How the bot decides
+
+On each "tick" it pulls recent daily bars, computes the strategy's signal for
+the latest bar (LONG or FLAT), checks your current paper position, and:
+
+- wants LONG + no position → **BUY** (market order, `$ per trade`)
+- wants FLAT + holding → **SELL** (close the position)
+- otherwise → **HOLD**
+
+Use **Dry run** to see the decision without placing an order. **Auto-run**
+re-checks on an interval while the app stays open (orders only go through during
+market hours).
+
+> The keys live only in your local `.env` and are used server-side — they are
+> never exposed to the browser. The bot only ever calls Alpaca's *paper*
+> endpoint, so real money is never at risk.
+
 ## Roadmap (suggested next steps)
 
-1. **Live paper trading** via a free [Alpaca](https://alpaca.markets) paper
-   account (real simulated order execution, $0). Robinhood has no public API, so
-   Alpaca is the practical choice for hooking up live data + simulated trades.
+1. ~~Live paper trading via Alpaca~~ ✅ done (see above).
 2. **Options probability tools** — probability of profit, Greeks, expected value.
 3. **Position sizing & risk controls** — stop losses, % risk per trade.
-4. **Intraday data** for actual day-trading research (requires a paid feed).
+4. **Intraday data + faster bot loop** for real day-trading research (paid feed).
+5. **Persistence** — the bot log/auto-run state is in-memory and resets on
+   restart; add a small store if you want history to survive restarts.
