@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trading Strategy Backtester</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Trading Strategy Backtester</h1>
+      <p class="sub">Test ideas against historical data with fake money — before risking real money.</p>
+    </header>
+
+    <div class="disclaimer">
+      <strong>Research & education only — not financial advice.</strong>
+      Past performance never guarantees future results. A strategy that looks great here can still
+      lose money live. Backtests are easy to fool yourself with (overfitting, no slippage, survivorship).
+      Treat good results as "worth paper-trading next," not "guaranteed profit."
+    </div>
+
+    <main>
+      <section class="panel controls">
+        <h2>Setup</h2>
+        <label>
+          Symbol
+          <input id="symbol" type="text" value="DEMO" autocomplete="off" />
+          <small>Use <code>DEMO</code> to run offline, or a real ticker like <code>AAPL</code>, <code>SPY</code>, <code>MSFT</code> (free end-of-day data).</small>
+        </label>
+
+        <label>
+          Strategy
+          <select id="strategy"></select>
+        </label>
+        <p id="strategyBlurb" class="blurb"></p>
+
+        <div id="params" class="params"></div>
+
+        <div class="row">
+          <label>
+            Years of history
+            <input id="years" type="number" value="2" min="1" max="20" step="1" />
+          </label>
+          <label>
+            Starting cash ($)
+            <input id="startCash" type="number" value="10000" min="100" step="100" />
+          </label>
+          <label>
+            Commission / trade ($)
+            <input id="commission" type="number" value="0" min="0" step="0.5" />
+          </label>
+        </div>
+
+        <button id="run">Run Backtest</button>
+        <p id="status" class="status"></p>
+      </section>
+
+      <section id="results" class="results hidden">
+        <div class="panel">
+          <h2>Results <span id="resultMeta" class="meta"></span></h2>
+          <div id="metrics" class="metrics"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Equity curve <span class="meta">strategy vs. buy &amp; hold</span></h2>
+          <canvas id="equityChart" height="320"></canvas>
+          <div class="legend">
+            <span class="key strat">Strategy</span>
+            <span class="key bh">Buy &amp; Hold</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Price &amp; trades</h2>
+          <canvas id="priceChart" height="280"></canvas>
+          <div class="legend">
+            <span class="key buy">Buy</span>
+            <span class="key sell">Sell</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Trade log</h2>
+          <div class="table-wrap">
+            <table id="tradesTable">
+              <thead>
+                <tr>
+                  <th>#</th><th>Entry date</th><th>Entry</th><th>Exit date</th><th>Exit</th><th>Return</th><th>P/L</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

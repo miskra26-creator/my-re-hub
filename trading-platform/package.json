@@ -1,0 +1,13 @@
+{
+  "name": "trading-research-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backtesting & trading-strategy research tool. Educational/research use only — not financial advice.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
