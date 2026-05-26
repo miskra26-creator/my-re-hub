@@ -1,14 +1,15 @@
 /**
  * DailyOutreach.jsx — Monica's "I need leads RIGHT NOW" tool.
  *
- * Beats BoldTrail's daily action list because:
- *   1. AI-personalized message per contact (Gemini reads their notes/status/history,
- *      writes a unique opener) vs BoldTrail's generic templates
- *   2. One-click SMS via your phone's native Messages app (free, opens prefilled)
- *      vs BoldTrail's paid dialer ($499/mo)
- *   3. Smart priority ranking — surfaces who's MOST overdue × MOST likely to convert
- *   4. Multi-channel from one screen — text / email / call task / mark done
- *   5. Progress tracking — daily streak, "12 of 30 contacted today"
+ * What it does:
+ *   1. AI-personalized message per contact (Gemini reads their notes/status/
+ *      history, writes a unique opener) — editable inline before sending
+ *   2. One-click SMS via your phone's native Messages app — free, opens
+ *      prefilled with the personalized text + your video link
+ *   3. Smart priority ranking — surfaces who's MOST overdue × MOST likely
+ *      to convert
+ *   4. Multi-channel from one screen — text / email / call / skip
+ *   5. Progress tracking — daily streak, "12 of 20 contacted today"
  *
  * Goal: 20 outreach actions in 15 minutes → real conversations tomorrow.
  *
