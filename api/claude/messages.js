@@ -29,6 +29,8 @@ export default async function handler(req, res) {
   // Try Anthropic first if configured
   if (ANTHROPIC_API_KEY) {
     try {
+      // google_search is a Gemini-only flag; strip it before forwarding to Anthropic.
+      const { google_search, ...anthropicBody } = req.body || {};
       const upstream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -36,7 +38,7 @@ export default async function handler(req, res) {
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
         },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(anthropicBody),
       });
       const data = await upstream.json();
       if (upstream.ok) return res.status(upstream.status).json(data);
@@ -99,6 +101,11 @@ export default async function handler(req, res) {
       if (body.system) {
         geminiBody.systemInstruction = { parts: [{ text: body.system }] };
       }
+      // Live web research: enable Google Search grounding (free tier) so the
+      // model can pull public info instead of relying on training data alone.
+      if (body.google_search) {
+        geminiBody.tools = [{ google_search: {} }];
+      }
 
       // gemini-flash-latest is the most reliably-available free-tier model
       // as of Q2 2026. 2.0-flash and 2.0-flash-lite often show quota=0
@@ -118,14 +125,20 @@ export default async function handler(req, res) {
         });
       }
       // Translate Gemini response → Anthropic shape
-      const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+      const cand = data?.candidates?.[0];
+      const text = cand?.content?.parts?.map(p => p.text).join('') || '';
+      // Surface the public web sources the model grounded on, if any.
+      const grounding = (cand?.groundingMetadata?.groundingChunks || [])
+        .map(c => (c.web ? { title: c.web.title || c.web.uri, url: c.web.uri } : null))
+        .filter(Boolean);
       return res.status(200).json({
         id: 'gemini_' + Date.now(),
         type: 'message',
         role: 'assistant',
         model,
         content: [{ type: 'text', text }],
-        stop_reason: data?.candidates?.[0]?.finishReason || 'end_turn',
+        grounding,
+        stop_reason: cand?.finishReason || 'end_turn',
         usage: {
           input_tokens: data?.usageMetadata?.promptTokenCount || 0,
           output_tokens: data?.usageMetadata?.candidatesTokenCount || 0,

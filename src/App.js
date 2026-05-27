@@ -21,6 +21,7 @@ import AdComposer from './AdComposer';
 import GoogleBusiness from './GoogleBusiness';
 import ViralStudio from './ViralStudio';
 import InfluencerWatch from './InfluencerWatch';
+import LeadResearch from './LeadResearch';
 import Finances from './Finances';
 import {
   Sparkles, MessageSquare, Video, Film, Calendar, FolderOpen, Heart,
@@ -918,6 +919,7 @@ const NAV = [
   { section:"GROW" },
   { id:"daily-outreach",      label:"⚡ Daily Outreach",   icon:Zap },
   { id:"lead-inbox",          label:"Lead Inbox",          icon:Bell },
+  { id:"lead-research",       label:"🔎 Lead Research",     icon:Search },
   { id:"smart-lists",         label:"🎯 Smart Lists + Bulk Actions", icon:Filter },
   { id:"ai-concierge",        label:"AI Lead Concierge",   icon:Zap },
   { id:"past-client-agent",   label:"🏡 Past Client Care Agent", icon:Heart },
@@ -10784,6 +10786,7 @@ export default function App() {
     "ad-composer":        <AdComposer {...props}/>,
     "lead-inbox":         <LeadInbox {...props} setInboxCount={setInboxCount}/>,
     "daily-outreach":     <DailyOutreach {...props}/>,
+    "lead-research":      <LeadResearch {...props}/>,
     "smart-lists":        <SmartLists {...props}/>,
     "ai-concierge":       <AILeadConcierge {...props}/>,
     "past-client-agent":  <PastClientAgent {...props}/>,
