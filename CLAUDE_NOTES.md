@@ -100,6 +100,56 @@ way (all turned out to be things she already has or doesn't need).
   today by explicitly requesting the Content Engine rewrite + Lead Research).
 - Anti-spending — don't push paid services unless she asks.
 
+### Update — same session, later: AI ISA assessed → Twilio SMS SHIPPED
+
+Monica picked "build the AI ISA" then "build in Twilio," then had to step away and
+said "keep working," so this was finished autonomously.
+
+**Key finding (agent audit):** the AI ISA is ~90% ALREADY BUILT and working —
+AI Lead Concierge auto-RESPONDS to new leads (sub-second, Supabase realtime on
+`lead_inbox` INSERT), email auto-SENDS for real via Gmail, lead intake works from
+6+ webhook sources, DB Intelligence scores the 6,041 leads into buckets, drip
+scheduling fires real emails. **The ONLY missing piece was SMS auto-send.** So
+Twilio was the whole job — not a rebuild.
+
+**What shipped (live on main):**
+- `api/twilio.js` — server-side SMS send. POST {to,body} with the Supabase session
+  token as Bearer auth (only Monica can send). Inert until env vars set → returns
+  {configured:false} so the app falls back to drafting a task.
+- `src/twilioSms.js` — client helper `sendSms({to,body})` + `smsAutoSendEnabled()`.
+- `AILeadConciergeWorker` (App.js ~8392) now AUTO-SENDS the text via Twilio when
+  `localStorage.sms_autosend === 'on'` AND Twilio is configured; otherwise drafts
+  the Text task exactly as before. Falls back to a draft on ANY send error.
+  **DEFAULT OFF — zero behavior change until Monica turns it on.**
+- AI Lead Concierge settings (`/ai-concierge` → Channels): new "⚡ Auto-send texts
+  via Twilio" toggle + a "Send test text" button + setup instructions.
+
+**⚠ Vercel function cap:** repo was at 12/12 (Hobby limit). To fit `api/twilio.js`
+I removed **`api/mls-lookup.js`** (the Realtor.com scraper — already Kasada-blocked
+& dead, only used by the dormant AutoReel). `AutoReel.jsx` still calls
+`/api/mls-lookup` (now 404s) — left untouched per the "don't touch AutoReel" rule.
+If AutoReel is ever revived, restore that endpoint. **Any further new endpoint
+(e.g. Twilio inbound) needs another slot** — best candidate is consolidating the 6
+lead webhooks into one `api/webhook/[source].js` (frees 5), but that's surgery on
+LIVE lead intake — do it carefully with tests.
+
+**MONICA'S TWILIO SETUP CHECKLIST (her actions — none done yet; she's doing it
+over the next couple days):**
+1. Create a Twilio account + buy a number (~$1-2/mo).
+2. Complete **US A2P 10DLC registration** — carrier requirement; a form + a few
+   dollars; takes minutes to a few days; CANNOT be skipped or texts get blocked.
+3. Add 3 Vercel env vars: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+   `TWILIO_PHONE_NUMBER`.
+4. In hub → AI Lead Concierge → Channels: type her cell, hit "Send test text" to
+   confirm, then flip "Auto-send texts via Twilio" ON.
+
+**NOT done / next (Twilio fast-follows):**
+- Inbound replies / true two-way ISA conversation (Twilio inbound webhook + store/
+  match/auto-reply) — NOT built. Outbound only for now. Needs another function slot.
+- Other SMS spots still draft-only: DatabaseIntel `quickText`, SmartLists bulk,
+  DailyOutreach, PastClientAgent — upgrade them to call `sendSms()` (helper ready).
+- Lead Research grounding still UNCONFIRMED (free Gemini quota — see gotcha above).
+
 ---
 
 ## Previous session: 2026-05-22 (home-pc, evening into late night — FUB migration architecture pivot)
