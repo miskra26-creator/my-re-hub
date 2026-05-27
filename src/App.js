@@ -22,6 +22,7 @@ import GoogleBusiness from './GoogleBusiness';
 import ViralStudio from './ViralStudio';
 import InfluencerWatch from './InfluencerWatch';
 import LeadResearch from './LeadResearch';
+import { sendSms, smsAutoSendEnabled } from './twilioSms';
 import Finances from './Finances';
 import {
   Sparkles, MessageSquare, Video, Film, Calendar, FolderOpen, Heart,
@@ -6197,6 +6198,30 @@ const AILeadConcierge = ({setPage, toast}) => {
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
 
+  // Twilio SMS auto-send toggle + test
+  const [smsAuto, setSmsAuto] = useState(() => { try { return localStorage.getItem("sms_autosend") === "on"; } catch { return false; } });
+  const [smsTestTo, setSmsTestTo] = useState("");
+  const [smsTesting, setSmsTesting] = useState(false);
+  const toggleSmsAuto = () => {
+    const next = !smsAuto;
+    setSmsAuto(next);
+    try { localStorage.setItem("sms_autosend", next ? "on" : "off"); } catch {}
+    toast?.success?.(next ? "📱 Auto-text ON — new leads will be texted automatically" : "Auto-text off — texts will draft as tasks");
+  };
+  const sendTestSms = async () => {
+    if (!smsTestTo.trim()) { toast?.error?.("Enter a phone number to test"); return; }
+    setSmsTesting(true);
+    try {
+      await sendSms({ to: smsTestTo, body: "Test from my-re-hub — your AI Concierge texting is working. 🎉" });
+      toast?.success?.("✅ Test text sent! Check that phone.");
+    } catch (e) {
+      toast?.error?.(e.notConfigured
+        ? "Twilio isn't set up yet — add your 3 keys in Vercel first (see the note below)."
+        : "Test failed: " + e.message);
+    }
+    setSmsTesting(false);
+  };
+
   // Daily counter (read-only display)
   const todayKey = new Date().toISOString().slice(0, 10);
   const [logTick, setLogTick] = useState(0);
@@ -6300,9 +6325,30 @@ const AILeadConcierge = ({setPage, toast}) => {
               </label>
               <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
                 <input type="checkbox" checked={!!settings.channels?.sms} onChange={e=>set("channels.sms", e.target.checked)} style={{width:16,height:16}}/>
-                <span style={{fontSize:13,fontWeight:600,color:"#cbd5e1"}}>📱 SMS — drafted as a Text task (tap Send on mobile)</span>
+                <span style={{fontSize:13,fontWeight:600,color:"#cbd5e1"}}>📱 SMS — text new leads</span>
               </label>
-              <div style={{fontSize:11,color:"#64748b",marginTop:6,paddingLeft:26}}>SMS auto-send via Twilio coming in Phase 2. For now, tap "Send" on the task and your phone's SMS app opens pre-filled.</div>
+
+              {/* Twilio auto-send */}
+              <div style={{marginTop:10,marginLeft:26,padding:"12px 14px",background:"rgba(126,184,247,.05)",border:"1px solid rgba(126,184,247,.18)",borderRadius:10}}>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                  <input type="checkbox" checked={smsAuto} onChange={toggleSmsAuto} style={{width:16,height:16}}/>
+                  <span style={{fontSize:13,fontWeight:700,color:smsAuto?"#6ee7b7":"#cbd5e1"}}>⚡ Auto-send texts via Twilio (zero-touch)</span>
+                </label>
+                <div style={{fontSize:11,color:"#64748b",marginTop:6}}>
+                  {smsAuto
+                    ? "ON — new leads are texted automatically within seconds. If Twilio isn't configured or a send fails, it safely falls back to a draft task."
+                    : "OFF — texts draft as a Task; tap \"Send\" on your phone. Turn on once your Twilio keys are in Vercel."}
+                </div>
+                <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center"}}>
+                  <input className="input" value={smsTestTo} onChange={e=>setSmsTestTo(e.target.value)} placeholder="Your cell, e.g. 248-555-0199" style={{flex:1,maxWidth:220}}/>
+                  <button className="btn btn-ghost btn-sm" onClick={sendTestSms} disabled={smsTesting}>
+                    {smsTesting ? "Sending…" : "Send test text"}
+                  </button>
+                </div>
+                <div style={{fontSize:10.5,color:"#475569",marginTop:8,lineHeight:1.5}}>
+                  Setup: create a Twilio account, complete US A2P 10DLC registration, then add <code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code> and <code>TWILIO_PHONE_NUMBER</code> in Vercel → Settings → Environment Variables.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -8368,7 +8414,7 @@ const AILeadConciergeWorker = ({ notify, toast }) => {
       }
 
       const firstName = (row.name || "").split(" ")[0] || "there";
-      let didEmail = false, didSms = false;
+      let didEmail = false, didSms = false, smsSentLive = false;
 
       // Queue email
       if (wantEmail && drafted.emailSubject && drafted.emailBody) {
@@ -8389,24 +8435,36 @@ const AILeadConciergeWorker = ({ notify, toast }) => {
         didEmail = true;
       }
 
-      // Create SMS task with smsBody pre-filled
+      // SMS — auto-send via Twilio when turned on + configured; otherwise draft
+      // a Text task (the original behavior). Falls back to a draft on any error.
       if (wantSms && drafted.smsBody) {
-        setTasks(p => [...p, {
-          id: `concierge_sms_${row.id}_${Date.now()}`,
-          title: `📱 Send AI text to ${firstName} (${source} lead, just arrived)`,
-          type: "Text",
-          leadId: row.id,
-          leadName: row.name,
-          dueDate: todayKey,
-          notes: drafted.smsBody,
-          smsBody: drafted.smsBody,
-          campaignId: "concierge",
-          campaignName: "AI Concierge — instant response",
-          stepIndex: 0,
-          completed: false,
-          createdAt: new Date().toISOString(),
-        }]);
-        didSms = true;
+        if (smsAutoSendEnabled()) {
+          try {
+            await sendSms({ to: row.phone, body: drafted.smsBody });
+            smsSentLive = true;
+            didSms = true;
+          } catch (e) {
+            console.warn("[Concierge] Twilio send failed, drafting task instead:", e?.message);
+          }
+        }
+        if (!smsSentLive) {
+          setTasks(p => [...p, {
+            id: `concierge_sms_${row.id}_${Date.now()}`,
+            title: `📱 Send AI text to ${firstName} (${source} lead, just arrived)`,
+            type: "Text",
+            leadId: row.id,
+            leadName: row.name,
+            dueDate: todayKey,
+            notes: drafted.smsBody,
+            smsBody: drafted.smsBody,
+            campaignId: "concierge",
+            campaignName: "AI Concierge — instant response",
+            stepIndex: 0,
+            completed: false,
+            createdAt: new Date().toISOString(),
+          }]);
+          didSms = true;
+        }
       }
 
       // Bump daily counter
@@ -8419,7 +8477,7 @@ const AILeadConciergeWorker = ({ notify, toast }) => {
         const existing = JSON.parse(localStorage.getItem(actKey) || "[]");
         existing.unshift({
           id: uid(), type: "concierge", direction: "outbound",
-          note: `🤖 AI Concierge drafted ${didEmail?"email":""}${didEmail&&didSms?" + ":""}${didSms?"text":""} for new ${source} lead`,
+          note: `🤖 AI Concierge ${didEmail?"queued email":""}${didEmail&&didSms?" + ":""}${didSms?(smsSentLive?"SENT text":"drafted text"):""} for new ${source} lead`,
           createdAt: new Date().toISOString(),
         });
         localStorage.setItem(actKey, JSON.stringify(existing));
@@ -8433,7 +8491,7 @@ const AILeadConciergeWorker = ({ notify, toast }) => {
       } catch (e) { console.warn("[Concierge] mark fired failed:", e?.message); }
 
       // Toast + notification
-      const channels = [didEmail && "email", didSms && "text"].filter(Boolean).join(" + ");
+      const channels = [didEmail && "email", didSms && (smsSentLive ? "text (sent)" : "text")].filter(Boolean).join(" + ");
       toast?.success?.(`🤖 AI Concierge ${channels} queued for ${row.name || "new lead"}`);
       notify?.(`AI Concierge fired`, `${channels} response queued for ${row.name || "new lead"} (${source})`, "concierge");
     };
