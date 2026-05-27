@@ -6,7 +6,103 @@
 
 ---
 
-## Last session: 2026-05-22 (home-pc, evening into late night — FUB migration architecture pivot)
+## Last session: 2026-05-27 (web session via Claude Code on the web — Content Engine Top-15 rewrite + new Lead Research feature)
+
+### Headline
+
+Monica wanted the Influencer Watch "Content Engine" to stop showing Metro
+Detroit caption templates and instead show the **top 15 US real estate
+creators ranked by engagement/views**. Done. Then she asked for **prospect
+lead research built into the hub** — built a new Lead Research page that uses
+Gemini's free Google Search grounding. Several Instagram ads reviewed along the
+way (all turned out to be things she already has or doesn't need).
+
+### What shipped (all live on main / Vercel)
+
+1. **Content Engine → Top 15 US creators** (`src/InfluencerWatch.jsx`)
+   - Deleted the Metro Detroit READY_TO_FILM_TEMPLATES + the dead OLD prompt.
+   - Creators now ranked #1–15 by **peak viral views** (parseViews helper sorts
+     the viralViews string). Top 5: Glennda Baker, Madison Sutton, Ryan Serhant,
+     Mauricio Umansky, Phil Hawkins. Cut the 5 lowest (Tom Ferry, Ricky Carruth,
+     Krista Mashore, Loida Velasquez, Brandon Mulrenin).
+   - New **"Creator of the Day" spotlight** (daily rotation through the 15).
+   - Repurposed the Gemini **Optimize** button: it now writes 3 ready-to-post
+     captions in that creator's style (emotional/educational/punchy), keyed by
+     creator name. Rank badges on every card. Refresh-with-AI prompt asks for 15.
+
+2. **NEW: Lead Research** (`src/LeadResearch.jsx` + `src/aiLeadResearch.js`)
+   - Sidebar → GROW → 🔎 Lead Research. Takes name/email/phone/address (or
+     prefill from a saved lead) and returns a prep brief: identity + confidence,
+     facts found online, public profiles w/ links, property/area context,
+     buyer/seller signals, talking points, questions to ask, gaps, sources.
+   - Uses **Gemini Google Search grounding** to pull PUBLIC web info. Honest
+     scope (told Monica): cannot pull private IG/FB by phone/email — Meta killed
+     email/phone lookup in 2018; no API does it. Public web only.
+
+3. **AI proxy change** (`api/claude/messages.js`)
+   - Added optional `google_search: true` request flag → enables the Gemini
+     `tools: [{ google_search: {} }]` grounding tool and returns the public
+     `grounding` sources. Flag is stripped before forwarding to Anthropic.
+     Backward-compatible — no other feature behaves differently.
+
+### ⚠ GOTCHAS / OPEN ITEMS (read before touching Lead Research)
+
+- **Grounding is UNCONFIRMED on her free tier.** Couldn't live-test from the web
+  session (no GOOGLE_GEMINI_API_KEY in this env). Monica's first real search hit
+  **"quota exceeded"** — so the call DID reach Gemini, but free-tier limits
+  (per-minute + daily, shared across DB Intel / Concierge / Content Engine) blocked
+  it. We have NOT yet seen a successful grounded result. If, after quota resets, it
+  errors with something other than quota (e.g. tool-not-supported / billing), the
+  likely fix is the grounding tool name in `api/claude/messages.js`
+  (`google_search` for Gemini 2.x vs `googleSearchRetrieval` for 1.5).
+- **Verizon Gemini ≠ the hub's Gemini.** Monica is adding **Verizon Google AI Pro
+  / Google One AI Premium** (~$10/mo myPlan perk) in the next couple of days. THAT
+  IS THE CONSUMER GEMINI APP — a totally separate "door" from the hub's developer
+  API key. It does NOT raise the hub's quota and does NOT connect to the app. Her
+  hub's Lead Research button stays rate-limited regardless. The Verizon app is a
+  MANUAL workaround (paste-prompt into the Gemini app). To make the hub button
+  unlimited would require billing on the API key (she hasn't, and is anti-spending).
+- **Two-machine collision today:** home-pc auto-synced a **Daily Outreach** feature
+  (`src/DailyOutreach.jsx` + nav/pages entries) while this session was building.
+  Rebased cleanly — both Daily Outreach AND Lead Research are on main now. The
+  App.js NAV array + pages object (~line 920 / ~10788) is the recurring collision
+  point when both machines add features; resolve by keeping BOTH entries.
+
+### Instagram ads Monica asked about (verdicts, for context)
+
+- **Upsurge CRM Pros** = white-label GoHighLevel reseller (~$97/mo). Skip. Only
+  real gap vs her hub = auto-sending SMS (Twilio, still not wired).
+- **Filmora AI Spark** (photo→video) = legit (Wondershare). Complementary to her
+  AI Studio, has a free tier, but generative video warps homes — test before
+  client use. Don't need to buy.
+- **"Full Claude Course for Real Estate Agents"** (3rd-party, "Jobscape") = ~11 of
+  its 15 lessons are already features in her hub. Don't buy; use syllabus as a
+  feature-gap checklist. Genuine gaps it surfaced: listing/buyer **presentation
+  builder** (already queued), objection-handling roleplay, call-prep briefs.
+
+### Queued / next
+
+1. Confirm Gemini grounding actually returns a result (after quota resets or if she
+   adds API billing). If it errors non-quota, fix the grounding tool name.
+2. Optional polish: auto-pace/retry on quota in Lead Research so she never sees a
+   raw "quota exceeded" error.
+3. Older roadmap still open: **Phase 1 AI ISA + DB activation** (biggest ROI),
+   battle-test existing AI features (her "nothing really works yet"), Twilio SMS,
+   presentation builder.
+
+### Binding Monica rules (still in effect)
+
+- Honest upfront — flag paid / 3rd-party / her-action in the FIRST message. No
+  dead-end "try this, try this" loops. (Followed this re: IG/FB lookup being
+  impossible and grounding being untested.)
+- She is NOT a developer — just do things for her; don't make her debug.
+- No new features until existing ones are battle-tested (she relaxed this twice
+  today by explicitly requesting the Content Engine rewrite + Lead Research).
+- Anti-spending — don't push paid services unless she asks.
+
+---
+
+## Previous session: 2026-05-22 (home-pc, evening into late night — FUB migration architecture pivot)
 
 ### Headline
 
