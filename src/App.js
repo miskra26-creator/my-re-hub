@@ -3996,10 +3996,18 @@ const LeadTracker = ({setPage,toast}) => {
         .lead-tracker-v2 .lt-pipeline {
           display: flex; gap: 14px;
           overflow-x: auto;
+          overflow-y: hidden;
           padding-bottom: 14px;
           margin-bottom: 24px;
           scrollbar-width: thin;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-x: contain;
+          scroll-snap-type: x proximity;
+          /* extend the scroll region edge-to-edge so swiping feels natural on mobile */
+          margin-left: -28px; margin-right: -28px;
+          padding-left: 28px; padding-right: 28px;
         }
+        .lead-tracker-v2 .lt-pipe-col { scroll-snap-align: start; }
         .lead-tracker-v2 .lt-pipeline::-webkit-scrollbar { height: 8px; }
         .lead-tracker-v2 .lt-pipeline::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 99px; }
         .lead-tracker-v2 .lt-pipe-col {
@@ -10966,15 +10974,58 @@ const Sidebar = ({current,setPage,mobileOpen,setMobileOpen,inboxCount=0}) => {
   const todayStr = new Date().toISOString().slice(0,10);
   const dueTasks = tasks.filter(t=>!t.completed&&t.dueDate<=todayStr).length;
   const dueEmails = emailQueue.filter(e=>!e.sent&&e.dueDate<=todayStr).length;
+
+  // Drag-to-reorder NAV items. Persists per browser. Sections drag too —
+  // anything in NAV can move. New items appended to NAV (in future builds)
+  // are auto-added to the end of the saved order so nothing disappears.
+  const defaultOrder = NAV.map((n,i) => n.id || `__sec_${i}_${n.section}`);
+  const [navOrder, setNavOrder] = useLS("nav_order_v1", defaultOrder);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+
+  // Reconcile order with any NAV changes (new builds adding/removing items).
+  useEffect(() => {
+    const expected = NAV.map((n,i) => n.id || `__sec_${i}_${n.section}`);
+    const missing = expected.filter(id => !navOrder.includes(id));
+    const stale = navOrder.filter(id => !expected.includes(id));
+    if (missing.length || stale.length) {
+      setNavOrder(navOrder.filter(id => expected.includes(id)).concat(missing));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const navById = {};
+  NAV.forEach((n,i) => { navById[n.id || `__sec_${i}_${n.section}`] = n; });
+  const orderedNav = navOrder.map(id => navById[id]).filter(Boolean);
+
+  const onDragStart = (e, idx) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", String(idx)); } catch {} };
+  const onDragOver  = (e, idx) => { e.preventDefault(); setHoverIdx(idx); };
+  const onDragLeave = () => setHoverIdx(null);
+  const onDrop = (e, idx) => {
+    e.preventDefault();
+    const from = dragIdx;
+    if (from === null || from === idx) { setDragIdx(null); setHoverIdx(null); return; }
+    const next = [...navOrder];
+    const [moved] = next.splice(from, 1);
+    next.splice(idx > from ? idx - 1 : idx, 0, moved);
+    setNavOrder(next);
+    setDragIdx(null); setHoverIdx(null);
+  };
+
   return (
     <div className={`sidebar ${mobileOpen?"open":""}`}>
       <div className="sidebar-logo">
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
           <img src="/logo-transparent.png" alt="" style={{width:40,height:40,objectFit:'contain',flexShrink:0}}/>
-          <div>
+          <div style={{flex:1,minWidth:0}}>
             <div className="sidebar-title">Real Estate Hub</div>
             <div className="sidebar-sub">Intelligence Platform</div>
           </div>
+          <button onClick={()=>setEditMode(v=>!v)} title={editMode?"Done reordering":"Rearrange tabs"}
+            style={{background:editMode?"rgba(126,184,247,.18)":"transparent",border:"1px solid "+(editMode?"rgba(126,184,247,.5)":"rgba(255,255,255,.08)"),color:editMode?"#7eb8f7":"#64748b",borderRadius:7,padding:"4px 7px",fontSize:10,fontWeight:800,cursor:"pointer",letterSpacing:.3,whiteSpace:"nowrap"}}>
+            {editMode?"✓ Done":"⇅ Edit"}
+          </button>
         </div>
       </div>
 
@@ -10982,11 +11033,34 @@ const Sidebar = ({current,setPage,mobileOpen,setMobileOpen,inboxCount=0}) => {
         <button className={`nav-item ${current==="dashboard"?"active":""}`} onClick={()=>{setPage("dashboard");setMobileOpen(false);}} style={{width:"calc(100% - 16px)"}}>
           <Home size={14}/>Dashboard
         </button>
-        {NAV.map((item,i) => {
-          if(item.section) return <div key={i} className="nav-section">{item.section}</div>;
+        {orderedNav.map((item,i) => {
+          const isOver = editMode && hoverIdx === i && dragIdx !== null && dragIdx !== i;
+          const isDragging = dragIdx === i;
+          const dragProps = editMode ? {
+            draggable: true,
+            onDragStart: (e)=>onDragStart(e,i),
+            onDragOver:  (e)=>onDragOver(e,i),
+            onDragLeave,
+            onDrop:      (e)=>onDrop(e,i),
+            onDragEnd:   ()=>{setDragIdx(null);setHoverIdx(null);},
+          } : {};
+          const dropStyle = isOver ? {boxShadow:"0 -2px 0 #7eb8f7 inset, 0 0 0 1px rgba(126,184,247,.4)"} : isDragging ? {opacity:.35} : {};
+          if (item.section) {
+            return (
+              <div key={`sec-${i}`} className="nav-section" {...dragProps}
+                style={{...dropStyle, cursor: editMode ? "grab" : "default", display:"flex", alignItems:"center", gap:6}}>
+                {editMode && <span style={{color:"#475569",fontSize:11}}>⋮⋮</span>}
+                {item.section}
+              </div>
+            );
+          }
           const Icon=item.icon;
           return (
-            <button key={item.id} className={`nav-item ${current===item.id?"active":""}`} onClick={()=>{setPage(item.id);setMobileOpen(false);}}>
+            <button key={item.id} className={`nav-item ${current===item.id?"active":""}`}
+              onClick={editMode ? (e)=>e.preventDefault() : ()=>{setPage(item.id);setMobileOpen(false);}}
+              {...dragProps}
+              style={{...dropStyle, cursor: editMode ? "grab" : "pointer"}}>
+              {editMode && <span style={{color:"#64748b",fontSize:11,marginLeft:-2,marginRight:2}}>⋮⋮</span>}
               <Icon size={14}/>{item.label}
               {item.id==="lead-inbox" && inboxCount>0 && (
                 <span style={{marginLeft:"auto",background:"#ef4444",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:10,fontWeight:800}}>{inboxCount}</span>

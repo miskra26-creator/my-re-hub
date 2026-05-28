@@ -1,5 +1,5 @@
 /* Real Estate Hub — Service Worker */
-const CACHE = 're-hub-v3';
+const CACHE = 're-hub-v5';
 const PRECACHE = ['/', '/manifest.json', '/favicon.ico'];
 
 self.addEventListener('install', e => {
