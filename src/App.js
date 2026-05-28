@@ -3675,7 +3675,7 @@ const LeadTracker = ({setPage,toast}) => {
 
   const del = id => { setLeads(p=>p.filter(x=>x.id!==id)); toast.success("Lead removed"); };
   const statusColors = {"Hot Prospect":"badge-red","Contact":"badge-blue","Buyer":"badge-blue","Seller":"badge-gold","Casually Browsing":"badge-gray","Nurture 3-6 Months":"badge-gold","Nurture 1+ Year":"badge-gold","Buy/Sell Nurture":"badge-gold","Pending":"badge-gold","Past Client":"badge-green","Closed":"badge-green","Trash":"badge-gray"};
-  const statusBorderCls = {"Hot Prospect":"lead-status-hot","Contact":"lead-status-warm","Buyer":"lead-status-warm","Seller":"lead-status-warm","Casually Browsing":"lead-status-cold","Nurture 3-6 Months":"lead-status-cold","Nurture 1+ Year":"lead-status-cold","Buy/Sell Nurture":"lead-status-cold","Pending":"lead-status-warm","Past Client":"lead-status-closed","Closed":"lead-status-closed","Trash":""};
+  const statusBorderCls = {"Hot Prospect":"border-red","Contact":"border-blue","Buyer":"border-blue","Seller":"border-gold","Casually Browsing":"border-gray","Nurture 3-6 Months":"border-gold","Nurture 1+ Year":"border-gold","Buy/Sell Nurture":"border-gold","Pending":"border-gold","Past Client":"border-green","Closed":"border-green","Trash":"border-gray"};
 
   // ── Bulk actions ──────────────────────────────────────────────────────────
   const toggleSelect = id => setSelected(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
@@ -3726,269 +3726,185 @@ const LeadTracker = ({setPage,toast}) => {
   return (
     <div className="page-content lead-tracker-v2">
       <style>{`
-        @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800,900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
         .lead-tracker-v2 {
-          background: linear-gradient(180deg, #FAF6EE 0%, #F0E7D2 100%);
+          background: #F6F8FB;
           margin: -28px -32px;
-          padding: 32px 36px 60px;
+          padding: 24px 28px 60px;
           min-height: 100vh;
-          position: relative;
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          color: #0F172A;
         }
-        /* Only override the elements that reset font in their UA stylesheet */
         .lead-tracker-v2 input,
         .lead-tracker-v2 textarea,
         .lead-tracker-v2 select,
         .lead-tracker-v2 button { font-family: inherit; }
+
+        /* Page header text */
         .lead-tracker-v2 .page-title,
-        .lead-tracker-v2 [style*="DM Serif Display"],
-        .lead-tracker-v2 .empty-state h3 {
-          font-family: 'Cabinet Grotesk', 'Inter', sans-serif !important;
+        .lead-tracker-v2 [style*="DM Serif Display"] {
+          font-family: 'Inter', sans-serif !important;
           font-weight: 800 !important;
           letter-spacing: -.025em !important;
+          color: #0F172A !important;
         }
+        .lead-tracker-v2 .page-sub { color: #64748B !important; }
 
-        /* Smart-list label + pills */
-        .lead-tracker-v2 .lt-smart-label {
-          font-size: 11px;
-          font-weight: 700;
-          color: #6B5D4B;
-          text-transform: uppercase;
-          letter-spacing: 1.2px;
-          margin-right: 6px;
+        /* ─── Stat cards row ───────────────────────────────────────── */
+        .lead-tracker-v2 .lt-stats {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 12px;
+          margin-bottom: 18px;
         }
-        .lead-tracker-v2 .lt-smart-pill {
-          padding: 6px 14px;
-          border-radius: 99px;
-          font-size: 12.5px;
-          font-weight: 600;
-          cursor: pointer;
-          border: 1px solid rgba(63,53,40,.15);
+        .lead-tracker-v2 .lt-stat {
           background: #FFFFFF;
-          color: #2C2418;
-          transition: all .15s;
-          font-family: 'Inter', sans-serif;
-        }
-        .lead-tracker-v2 .lt-smart-pill:hover {
-          background: #FFF9EC;
-          border-color: #C99A2C;
-          color: #2C2418;
-          transform: translateY(-1px);
-        }
-        .lead-tracker-v2 .lt-smart-pill-dashed {
-          background: transparent;
-          border: 1px dashed rgba(63,53,40,.3);
-          color: #6B5D4B;
-        }
-        .lead-tracker-v2 .lt-smart-pill-dashed:hover {
-          background: rgba(255,255,255,.5);
-          color: #2C2418;
-        }
-        .lead-tracker-v2 .lt-smart-x {
-          margin-left: 6px;
-          opacity: .5;
-          font-size: 14px;
-        }
-        .lead-tracker-v2 .lt-smart-x:hover { opacity: 1; color: #DC2626; }
-
-        .lead-tracker-v2::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(ellipse 50% 30% at 90% 0%, rgba(201,154,44,.10) 0%, transparent 60%),
-            radial-gradient(ellipse 40% 25% at 0% 100%, rgba(26,90,160,.06) 0%, transparent 60%);
-          pointer-events: none;
-          z-index: 0;
-        }
-        .lead-tracker-v2 > * { position: relative; z-index: 1; }
-
-        /* Typography reset — make most text dark on light bg */
-        .lead-tracker-v2, .lead-tracker-v2 div, .lead-tracker-v2 span,
-        .lead-tracker-v2 h1, .lead-tracker-v2 h2, .lead-tracker-v2 h3,
-        .lead-tracker-v2 p, .lead-tracker-v2 button, .lead-tracker-v2 label {
-          color: #3F3528;
-        }
-
-        /* Page header text overrides */
-        .lead-tracker-v2 .page-title { color: #2C2418 !important; font-size: 30px; letter-spacing: -.5px; }
-        .lead-tracker-v2 .page-sub { color: #8B7A5F !important; font-size: 13px; }
-        .lead-tracker-v2 .btn-back {
-          background: rgba(255,255,255,.7) !important;
-          border: 1px solid rgba(26,90,160,.18) !important;
-          color: #2C2418 !important;
-        }
-        .lead-tracker-v2 .btn-back:hover { background: #fff !important; }
-
-        /* Cards — cream paper with soft warm shadow */
-        .lead-tracker-v2 .glass-card,
-        .lead-tracker-v2 .lead-card {
-          background: #FFFFFF !important;
-          border: 1px solid rgba(26,90,160,.10) !important;
-          box-shadow: 0 2px 14px rgba(26,90,160,.06), 0 1px 3px rgba(0,0,0,.04) !important;
-          border-radius: 14px !important;
-          backdrop-filter: none !important;
-          padding: 18px 20px;
-        }
-        .lead-tracker-v2 .lead-card { padding: 16px 20px; transition: transform .15s, box-shadow .15s; }
-        .lead-tracker-v2 .lead-card:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(26,90,160,.14), 0 2px 6px rgba(0,0,0,.06) !important;
-        }
-        .lead-tracker-v2 .lead-card.lead-status-hot { border-left: 4px solid #DC2626 !important; }
-        .lead-tracker-v2 .lead-card.lead-status-warm { border-left: 4px solid #1A5AA0 !important; }
-        .lead-tracker-v2 .lead-card.lead-status-cold { border-left: 4px solid #D97706 !important; }
-        .lead-tracker-v2 .lead-card.lead-status-closed { border-left: 4px solid #16A34A !important; }
-
-        /* Lead name (the DM Serif inline style is dark grey on dark bg) — force dark text */
-        .lead-tracker-v2 .lead-card [style*="DM Serif Display"] {
-          color: #2C2418 !important;
-          font-size: 18px !important;
-        }
-
-        /* Status badges — vibrant solid pills */
-        .lead-tracker-v2 .badge {
-          padding: 5px 11px !important;
-          border-radius: 99px !important;
-          font-size: 10.5px !important;
-          font-weight: 800 !important;
-          letter-spacing: .3px !important;
-          text-transform: uppercase !important;
-          color: #fff !important;
-          display: inline-flex;
+          border: 1px solid #EEF0F2;
+          border-radius: 14px;
+          padding: 14px 16px;
+          display: flex;
+          gap: 12px;
           align-items: center;
-          line-height: 1;
+          transition: all .15s ease;
         }
-        .lead-tracker-v2 .badge-red { background: #DC2626 !important; }
-        .lead-tracker-v2 .badge-blue { background: #1A5AA0 !important; }
-        .lead-tracker-v2 .badge-gold { background: #C99A2C !important; }
-        .lead-tracker-v2 .badge-green { background: #16A34A !important; }
-        .lead-tracker-v2 .badge-gray { background: #6B7280 !important; }
+        .lead-tracker-v2 .lt-stat:hover {
+          border-color: #D8E1EC;
+          box-shadow: 0 4px 14px rgba(15,23,42,.05);
+        }
+        .lead-tracker-v2 .lt-stat-icon {
+          width: 40px; height: 40px;
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .lead-tracker-v2 .lt-stat-body { flex: 1; min-width: 0; }
+        .lead-tracker-v2 .lt-stat-label {
+          font-size: 11.5px; font-weight: 700;
+          color: #64748B; letter-spacing: .15px;
+          margin-bottom: 2px;
+        }
+        .lead-tracker-v2 .lt-stat-value {
+          font-size: 22px; font-weight: 800;
+          color: #0F172A; letter-spacing: -.5px;
+          line-height: 1.1;
+        }
+        .lead-tracker-v2 .lt-stat-sub {
+          font-size: 10.5px; color: #94A3B8; margin-top: 2px;
+        }
+        @media (max-width: 1280px) { .lead-tracker-v2 .lt-stats { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 720px)  { .lead-tracker-v2 .lt-stats { grid-template-columns: repeat(2, 1fr); } }
 
-        /* Inputs / selects — bright white on cream */
+        /* ─── Search + filter row ──────────────────────────────────── */
+        .lead-tracker-v2 .lt-search-wrap {
+          position: relative;
+          flex: 1;
+          max-width: 460px;
+        }
+        .lead-tracker-v2 .lt-search-wrap .lt-search-icon {
+          position: absolute; left: 12px; top: 50%;
+          transform: translateY(-50%); color: #94A3B8;
+          pointer-events: none;
+        }
+        .lead-tracker-v2 .lt-search-wrap input {
+          width: 100%;
+          background: #FFFFFF !important;
+          border: 1px solid #E5E7EB !important;
+          border-radius: 10px !important;
+          padding: 10px 14px 10px 38px !important;
+          font-size: 13px !important;
+          color: #0F172A !important;
+        }
+        .lead-tracker-v2 .lt-search-wrap input::placeholder { color: #94A3B8 !important; }
+        .lead-tracker-v2 .lt-search-wrap input:focus {
+          outline: none !important;
+          border-color: #3B82F6 !important;
+          box-shadow: 0 0 0 3px rgba(59,130,246,.15) !important;
+        }
+
         .lead-tracker-v2 .input,
         .lead-tracker-v2 .select {
           background: #FFFFFF !important;
-          border: 1.5px solid rgba(26,90,160,.18) !important;
-          color: #2C2418 !important;
-          font-weight: 600 !important;
+          border: 1px solid #E5E7EB !important;
+          border-radius: 8px !important;
+          color: #0F172A !important;
         }
-        .lead-tracker-v2 .input::placeholder { color: #98A2B5 !important; opacity: 1 !important; }
+        .lead-tracker-v2 .input::placeholder { color: #94A3B8 !important; }
         .lead-tracker-v2 .input:focus,
         .lead-tracker-v2 .select:focus {
-          border-color: #1A5AA0 !important;
-          box-shadow: 0 0 0 3px rgba(26,90,160,.15) !important;
           outline: none !important;
+          border-color: #3B82F6 !important;
+          box-shadow: 0 0 0 3px rgba(59,130,246,.12) !important;
         }
-        .lead-tracker-v2 .label {
-          color: #6B5D4B !important;
-          font-weight: 700 !important;
-          font-size: 11px !important;
-          letter-spacing: .3px !important;
-          text-transform: uppercase !important;
+        .lead-tracker-v2 .label { color: #64748B !important; font-weight: 600 !important; }
+
+        /* Tabs (filter chips) */
+        .lead-tracker-v2 .tabs { background: transparent !important; border: none !important; gap: 4px; flex-wrap: wrap; }
+        .lead-tracker-v2 .tab {
+          background: #FFFFFF !important;
+          color: #475569 !important;
+          border: 1px solid #E5E7EB !important;
+          border-radius: 8px !important;
+          padding: 6px 11px !important;
+          font-size: 12px !important;
+          font-weight: 600 !important;
+          transition: all .12s ease;
+        }
+        .lead-tracker-v2 .tab:hover { border-color: #CBD5E1 !important; }
+        .lead-tracker-v2 .tab.active {
+          background: #1A5AA0 !important;
+          color: #FFFFFF !important;
+          border-color: #1A5AA0 !important;
         }
 
         /* Buttons */
-        .lead-tracker-v2 .btn-ghost {
-          background: rgba(255,255,255,.85) !important;
-          color: #2C2418 !important;
-          border: 1px solid rgba(26,90,160,.18) !important;
-          font-weight: 700 !important;
-        }
-        .lead-tracker-v2 .btn-ghost:hover { background: #fff !important; border-color: rgba(26,90,160,.35) !important; }
         .lead-tracker-v2 .btn-blue {
-          background: linear-gradient(135deg,#1A5AA0,#2D7DD2) !important;
-          color: #fff !important;
-          font-weight: 700 !important;
-          box-shadow: 0 3px 12px rgba(26,90,160,.32) !important;
+          background: #1A5AA0 !important; color: #FFFFFF !important;
+          border: none !important; font-weight: 700 !important;
+          box-shadow: 0 1px 2px rgba(26,90,160,.18) !important;
         }
-        .lead-tracker-v2 .btn-blue:hover { box-shadow: 0 6px 20px rgba(26,90,160,.45) !important; transform: translateY(-1px); }
+        .lead-tracker-v2 .btn-blue:hover { background: #154A85 !important; }
+        .lead-tracker-v2 .btn-ghost {
+          background: #FFFFFF !important; color: #475569 !important;
+          border: 1px solid #E5E7EB !important;
+        }
+        .lead-tracker-v2 .btn-ghost:hover { background: #F8FAFC !important; border-color: #CBD5E1 !important; }
         .lead-tracker-v2 .btn-danger {
-          background: rgba(220,38,38,.08) !important;
-          color: #DC2626 !important;
-          border: 1px solid rgba(220,38,38,.22) !important;
+          background: #FFFFFF !important; color: #DC2626 !important;
+          border: 1px solid #FCA5A5 !important;
         }
-        .lead-tracker-v2 .btn-danger:hover { background: rgba(220,38,38,.15) !important; }
+        .lead-tracker-v2 .btn-danger:hover { background: #FEF2F2 !important; }
 
-        /* Empty state */
-        .lead-tracker-v2 .empty-state { color: #8B7A5F !important; padding: 50px 24px !important; }
-        .lead-tracker-v2 .empty-state h3 { color: #2C2418 !important; font-size: 17px !important; }
-        .lead-tracker-v2 .empty-state p { color: #8B7A5F !important; }
-        .lead-tracker-v2 .empty-state svg { color: #C99A2C !important; opacity: .7; }
-
-        /* Smart-list pill buttons (inline-styled) — apply via attribute is fragile,
-           so we target buttons with rounded-pill geometry via known wrappers */
-        .lead-tracker-v2 button[style*="borderRadius"][style*="99"] {
-          background: rgba(255,255,255,.85) !important;
-          color: #2C2418 !important;
-          border: 1px solid rgba(26,90,160,.18) !important;
-          font-weight: 700 !important;
+        /* Smart Lists pills */
+        .lead-tracker-v2 .lt-smart-label {
+          font-size: 11px; font-weight: 700;
+          color: #64748B; text-transform: uppercase;
+          letter-spacing: 1.2px; margin-right: 6px;
         }
+        .lead-tracker-v2 .lt-smart-pill {
+          padding: 5px 12px; border-radius: 99px;
+          font-size: 12px; font-weight: 600; cursor: pointer;
+          border: 1px solid #E5E7EB; background: #FFFFFF;
+          color: #475569;
+        }
+        .lead-tracker-v2 .lt-smart-pill:hover { border-color: #1A5AA0; color: #1A5AA0; }
+        .lead-tracker-v2 .lt-smart-pill-dashed { border-style: dashed; color: #94A3B8; }
+        .lead-tracker-v2 .lt-smart-x { margin-left: 4px; color: #94A3B8; }
 
-        /* Tag pills inside lead cards */
-        .lead-tracker-v2 .lead-card div[style*="rgba(26,90,160,.15)"] {
-          background: rgba(26,90,160,.10) !important;
+        /* ─── Bulk-select hint banner ──────────────────────────────── */
+        .lead-tracker-v2 .lt-bulk-hint {
+          background: rgba(26,90,160,.06) !important;
+          border: 1px dashed rgba(26,90,160,.4) !important;
           color: #1A5AA0 !important;
         }
+        .lead-tracker-v2 .lt-bulk-hint span,
+        .lead-tracker-v2 .lt-bulk-hint strong { color: #1A5AA0 !important; }
 
-        /* Checkbox accent */
-        .lead-tracker-v2 input[type="checkbox"] { accent-color: #1A5AA0; }
-
-        /* Secondary text (FUB badge, last synced, meta lines) */
-        .lead-tracker-v2 [style*="color:\\"#64748b\\""],
-        .lead-tracker-v2 [style*="color:\\"#94a3b8\\""],
-        .lead-tracker-v2 [style*="color:\\"#475569\\""],
-        .lead-tracker-v2 [style*="color:\\"#374151\\""] {
-          color: #8B7A5F !important;
-        }
-
-        /* Lead card meta row (email/phone/budget/area) */
-        .lead-tracker-v2 .lead-card div[style*="flexWrap"][style*="fontSize:12"] {
-          color: #6B5D4B !important;
-        }
-        .lead-tracker-v2 .lead-card div[style*="flexWrap"][style*="fontSize:12"] span {
-          color: #6B5D4B !important;
-        }
-
-        /* ─── Filter tabs (Status + Type) ─────────────────────────── */
-        .lead-tracker-v2 .tabs {
-          background: rgba(255,255,255,.5);
-          border: 1px solid rgba(63,53,40,.12);
-          border-radius: 12px;
-          padding: 3px;
-          display: inline-flex;
-          gap: 2px;
-        }
-        .lead-tracker-v2 .tab {
-          padding: 7px 14px;
-          border: none;
-          background: transparent;
-          color: #6B5D4B !important;
-          font-weight: 600;
-          font-size: 12.5px;
-          border-radius: 9px;
-          cursor: pointer;
-          font-family: 'Inter', sans-serif;
-          transition: all .15s;
-        }
-        .lead-tracker-v2 .tab:hover {
-          background: rgba(255,255,255,.7);
-          color: #2C2418 !important;
-        }
-        .lead-tracker-v2 .tab.active {
-          background: #FFFFFF !important;
-          color: #2C2418 !important;
-          box-shadow: 0 1px 4px rgba(26,90,160,.12), 0 0 0 1px rgba(26,90,160,.10);
-          font-weight: 700;
-        }
-
-        /* ─── Bulk action bar (when leads are checkbox-selected) ──── */
+        /* ─── Bulk action bar (selected) ───────────────────────────── */
         .lead-tracker-v2 .lt-bulk-bar {
           background: linear-gradient(135deg, #1A5AA0 0%, #2E7CD6 100%) !important;
           border: 1.5px solid rgba(26,90,160,.55) !important;
-          box-shadow: 0 8px 22px rgba(26,90,160,.30), 0 2px 5px rgba(0,0,0,.08) !important;
+          box-shadow: 0 8px 22px rgba(26,90,160,.30) !important;
         }
         .lead-tracker-v2 .lt-bulk-bar span,
         .lead-tracker-v2 .lt-bulk-bar button { color: #FFFFFF !important; }
@@ -4001,10 +3917,10 @@ const LeadTracker = ({setPage,toast}) => {
         .lead-tracker-v2 .lt-bulk-bar .btn:hover { background: rgba(255,255,255,.28) !important; }
         .lead-tracker-v2 .lt-bulk-bar .btn-blue { background: #FFFFFF !important; color: #1A5AA0 !important; border: none !important; font-weight: 800 !important; }
 
-        /* ─── Make the bulk-select checkboxes obvious on cream cards ─── */
+        /* ─── Bulk-select checkboxes ───────────────────────────────── */
         .lead-tracker-v2 .lt-bulk-check {
           appearance: none; -webkit-appearance: none;
-          border: 2px solid rgba(26,90,160,.5);
+          border: 2px solid #CBD5E1;
           border-radius: 5px;
           background: #FFFFFF;
           position: relative;
@@ -4019,64 +3935,90 @@ const LeadTracker = ({setPage,toast}) => {
           transform: rotate(45deg);
         }
 
-        /* ─── Add Lead / Edit Lead form text overrides ────────────── */
-        .lead-tracker-v2 .glass-card div[style*="color:\\"#f1f5f9\\""] {
-          color: #2C2418 !important;
-        }
-        .lead-tracker-v2 .glass-card .label { color: #6B5D4B !important; }
-
-        /* ─── ContactDetail drawer (slide-in lead detail panel) ───── */
-        .lead-tracker-v2 .lt-detail-panel {
-          background: linear-gradient(180deg, #FAF6EE 0%, #F2EAD8 100%) !important;
-          border-left: 1px solid rgba(63,53,40,.12) !important;
-          box-shadow: -10px 0 40px rgba(63,53,40,.15);
-        }
-        .lead-tracker-v2 .lt-detail-header {
-          background: rgba(250,246,238,.95) !important;
-          border-bottom: 1px solid rgba(63,53,40,.08) !important;
-          backdrop-filter: blur(8px);
-        }
-        .lead-tracker-v2 .lt-detail-panel div { color: #3F3528; }
-        .lead-tracker-v2 .lt-detail-panel [style*="color:\\"#fff\\""],
-        .lead-tracker-v2 .lt-detail-panel [style*="color:\\"#ffffff\\""],
-        .lead-tracker-v2 .lt-detail-panel [style*="color:\\"#f1f5f9\\""] {
-          color: #2C2418 !important;
-        }
-        .lead-tracker-v2 .lt-detail-panel [style*="DM Serif Display"] {
-          color: #2C2418 !important;
-          font-family: 'Cabinet Grotesk', 'Inter', sans-serif !important;
-          letter-spacing: -.02em !important;
-        }
-        /* Section dividers inside the drawer */
-        .lead-tracker-v2 .lt-detail-panel div[style*="border-bottom"][style*="rgba(255,255,255"],
-        .lead-tracker-v2 .lt-detail-panel div[style*="borderBottom"][style*="rgba(255,255,255"] {
-          border-bottom-color: rgba(63,53,40,.08) !important;
-        }
-        .lead-tracker-v2 .lt-detail-panel div[style*="border-top"][style*="rgba(255,255,255"],
-        .lead-tracker-v2 .lt-detail-panel div[style*="borderTop"][style*="rgba(255,255,255"] {
-          border-top-color: rgba(63,53,40,.08) !important;
-        }
-        /* Buttons inside the drawer keep their colors but text becomes legible */
-        .lead-tracker-v2 .lt-detail-panel .btn-ghost {
-          background: rgba(255,255,255,.85) !important;
-          color: #2C2418 !important;
-          border: 1px solid rgba(63,53,40,.15) !important;
-        }
-        .lead-tracker-v2 .lt-detail-panel .btn-blue { color: #fff !important; }
-        .lead-tracker-v2 .lt-detail-panel input,
-        .lead-tracker-v2 .lt-detail-panel textarea,
-        .lead-tracker-v2 .lt-detail-panel select {
+        /* ─── Lead cards ───────────────────────────────────────────── */
+        .lead-tracker-v2 .lead-card {
           background: #FFFFFF !important;
-          border: 1.5px solid rgba(26,90,160,.18) !important;
-          color: #2C2418 !important;
+          border: 1px solid #EEF0F2 !important;
+          border-left: 4px solid #E5E7EB !important;
+          border-radius: 12px !important;
+          padding: 14px 16px !important;
+          margin-bottom: 10px !important;
+          color: #0F172A !important;
+          transition: all .15s ease;
         }
-        .lead-tracker-v2 .lt-detail-panel input::placeholder,
-        .lead-tracker-v2 .lt-detail-panel textarea::placeholder { color: #98A2B5 !important; }
-        /* Activity log timeline entries */
-        .lead-tracker-v2 .lt-detail-panel div[style*="rgba(255,255,255,.03)"],
-        .lead-tracker-v2 .lt-detail-panel div[style*="rgba(255,255,255,.04)"] {
-          background: rgba(255,255,255,.7) !important;
-          border: 1px solid rgba(63,53,40,.08) !important;
+        .lead-tracker-v2 .lead-card:hover {
+          border-color: #CBD5E1 !important;
+          box-shadow: 0 4px 14px rgba(15,23,42,.06) !important;
+        }
+        .lead-tracker-v2 .lead-card * { color: inherit; }
+        .lead-tracker-v2 .lead-card [style*="DM Serif"] {
+          color: #0F172A !important;
+          font-family: 'Inter', sans-serif !important;
+          font-weight: 700 !important;
+          letter-spacing: -.01em !important;
+        }
+        /* Map all white/light-on-dark inline color overrides → dark text */
+        .lead-tracker-v2 .lead-card [style*="color:\"#ffffff\""],
+        .lead-tracker-v2 .lead-card [style*="color: \"#ffffff\""],
+        .lead-tracker-v2 .lead-card [style*="color:#ffffff"],
+        .lead-tracker-v2 .lead-card [style*="color:\"#fff\""],
+        .lead-tracker-v2 .lead-card [style*="color:#fff"] { color: #0F172A !important; }
+        .lead-tracker-v2 .lead-card [style*="color:\"#94a3b8\""],
+        .lead-tracker-v2 .lead-card [style*="color:#94a3b8"] { color: #64748B !important; }
+        .lead-tracker-v2 .lead-card [style*="color:\"#f1f5f9\""],
+        .lead-tracker-v2 .lead-card [style*="color:#f1f5f9"] { color: #0F172A !important; }
+
+        /* Status left-border colors (driven by statusBorderCls) */
+        .lead-tracker-v2 .lead-card.border-red    { border-left-color: #EF4444 !important; }
+        .lead-tracker-v2 .lead-card.border-blue   { border-left-color: #3B82F6 !important; }
+        .lead-tracker-v2 .lead-card.border-gold   { border-left-color: #F59E0B !important; }
+        .lead-tracker-v2 .lead-card.border-green  { border-left-color: #10B981 !important; }
+        .lead-tracker-v2 .lead-card.border-gray   { border-left-color: #94A3B8 !important; }
+        .lead-tracker-v2 .lead-card.border-purple { border-left-color: #8B5CF6 !important; }
+
+        /* Badges */
+        .lead-tracker-v2 .badge {
+          font-size: 10px !important; font-weight: 700 !important;
+          padding: 3px 8px !important; border-radius: 99px !important;
+          letter-spacing: .3px;
+        }
+        .lead-tracker-v2 .badge-red   { background: #FEE2E2 !important; color: #B91C1C !important; }
+        .lead-tracker-v2 .badge-blue  { background: #DBEAFE !important; color: #1D4ED8 !important; }
+        .lead-tracker-v2 .badge-gold  { background: #FEF3C7 !important; color: #92400E !important; }
+        .lead-tracker-v2 .badge-green { background: #D1FAE5 !important; color: #047857 !important; }
+        .lead-tracker-v2 .badge-gray  { background: #F1F5F9 !important; color: #475569 !important; }
+
+        /* Lead avatar */
+        .lead-tracker-v2 .lt-avatar {
+          width: 38px; height: 38px;
+          border-radius: 999px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12.5px; font-weight: 800;
+          flex-shrink: 0; color: #FFFFFF;
+          letter-spacing: .3px;
+        }
+
+        /* Empty / loading states */
+        .lead-tracker-v2 .glass-card {
+          background: #FFFFFF !important;
+          border: 1px solid #EEF0F2 !important;
+          border-radius: 12px !important;
+          color: #0F172A !important;
+          box-shadow: 0 1px 2px rgba(15,23,42,.03) !important;
+        }
+        .lead-tracker-v2 .glass-card * { color: inherit; }
+        .lead-tracker-v2 .glass-card [style*="color:\"#f1f5f9\""],
+        .lead-tracker-v2 .glass-card [style*="color:#f1f5f9"] { color: #0F172A !important; }
+
+        /* Slide-out detail panel — keep readable on the new white theme */
+        .lead-tracker-v2 .lt-detail-panel { color: #0F172A; }
+        .lead-tracker-v2 .lt-detail-panel [style*="color:\"#fff\""],
+        .lead-tracker-v2 .lt-detail-panel [style*="color:\"#ffffff\""],
+        .lead-tracker-v2 .lt-detail-panel [style*="color:\"#f1f5f9\""] { color: #0F172A !important; }
+        .lead-tracker-v2 .lt-detail-panel [style*="DM Serif Display"] {
+          color: #0F172A !important;
+          font-family: 'Inter', sans-serif !important;
+          letter-spacing: -.01em !important;
         }
       `}</style>
       <PageHeader title="Lead Tracker" sub={`${leads.length} total leads`} setPage={setPage} parent="dashboard"
@@ -4115,6 +4057,42 @@ const LeadTracker = ({setPage,toast}) => {
         </div>
       )}
 
+      {/* ── Stat cards row ──────────────────────────────────────────────── */}
+      {(() => {
+        const todayISO = new Date().toISOString().slice(0,10);
+        const in7 = new Date(); in7.setDate(in7.getDate()+7);
+        const in7ISO = in7.toISOString().slice(0,10);
+        const hot = leads.filter(l => l.status === "Hot Prospect").length;
+        const buyers = leads.filter(l => l.status === "Buyer").length;
+        const sellers = leads.filter(l => l.status === "Seller").length;
+        const followUps = leads.filter(l => l.followUp && l.followUp >= todayISO && l.followUp <= in7ISO).length;
+        const overdue = leads.filter(l => l.followUp && l.followUp < todayISO).length;
+        const vip = leads.filter(l => (l.tags||[]).some(t => /vip/i.test(t))).length;
+        const pct = (n) => leads.length ? Math.round((n / leads.length) * 100) : 0;
+        const stats = [
+          { label: "Hot Leads",     value: hot,       sub: `${pct(hot)}% of book`,    icon: "🔥", iconBg: "#FEE2E2", iconColor: "#DC2626" },
+          { label: "Active Buyers", value: buyers,    sub: `${pct(buyers)}% of book`, icon: "👥", iconBg: "#D1FAE5", iconColor: "#059669" },
+          { label: "Sellers",       value: sellers,   sub: `${pct(sellers)}% of book`,icon: "🏠", iconBg: "#EDE9FE", iconColor: "#7C3AED" },
+          { label: "Follow Ups",    value: followUps, sub: "due this week",           icon: "⏰", iconBg: "#FEF3C7", iconColor: "#D97706" },
+          { label: "Overdue",       value: overdue,   sub: "need attention",          icon: "⚠️", iconBg: "#FEE2E2", iconColor: "#DC2626" },
+          { label: "VIP Leads",     value: vip,       sub: "high priority",           icon: "⭐", iconBg: "#DBEAFE", iconColor: "#1D4ED8" },
+        ];
+        return (
+          <div className="lt-stats">
+            {stats.map(s => (
+              <div key={s.label} className="lt-stat">
+                <div className="lt-stat-icon" style={{ background: s.iconBg, color: s.iconColor, fontSize: 18 }}>{s.icon}</div>
+                <div className="lt-stat-body">
+                  <div className="lt-stat-label">{s.label}</div>
+                  <div className="lt-stat-value">{s.value}</div>
+                  <div className="lt-stat-sub">{s.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Smart Lists */}
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
@@ -4139,7 +4117,10 @@ const LeadTracker = ({setPage,toast}) => {
       </div>
 
       <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-        <input className="input" style={{maxWidth:220}} placeholder="Search leads..." value={search==="__followup__"?"":search} onChange={e=>setSearch(e.target.value)}/>
+        <div className="lt-search-wrap">
+          <Search size={15} className="lt-search-icon"/>
+          <input placeholder="Search leads by name, phone, email, status, or notes…" value={search==="__followup__"?"":search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
         {allTags.length>0&&(
           <select className="select" style={{maxWidth:160}} value={filterTag} onChange={e=>setFilterTag(e.target.value)}>
             <option value="all">All Tags</option>
@@ -4240,6 +4221,13 @@ const LeadTracker = ({setPage,toast}) => {
                   <input type="checkbox" checked={selected.includes(l.id)} onChange={()=>toggleSelect(l.id)}
                     className="lt-bulk-check"
                     style={{width:22,height:22,cursor:"pointer",marginTop:0,flexShrink:0}} onClick={e=>e.stopPropagation()}/>
+                  {(()=>{
+                    const parts = (l.name||"").split(/\s+/).filter(Boolean);
+                    const init = ((parts[0]?.[0]||"?") + (parts[1]?.[0]||"")).toUpperCase();
+                    const palette = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899","#14B8A6","#6366F1"];
+                    const c = palette[((l.name||"").charCodeAt(0)||0) % palette.length];
+                    return <div className="lt-avatar" style={{background:c}} onClick={()=>setSelectedLead(l)}>{init}</div>;
+                  })()}
                   <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setSelectedLead(l)}>
                     <div className="flex-row" style={{marginBottom:6}}>
                       <div style={{fontSize:15,fontWeight:700,color:"#ffffff",fontFamily:"'DM Serif Display',serif"}}>{l.name}</div>
