@@ -3613,12 +3613,25 @@ const LeadTracker = ({setPage,toast}) => {
   // For 5000+ FUB leads this is the difference between freeze and snappy.
   const filtered = useMemo(() => {
     const searchLower = search ? search.toLowerCase() : "";
+    // Normalize phone digits so "248" or "(248) 555" both match the same lead.
+    const searchDigits = search ? search.replace(/\D/g, "") : "";
     return leads.filter(l=>{
       const matchStatus = filterStatus==="all"||l.status===filterStatus;
       const matchType = filterType==="all"||l.type===filterType;
       const matchTag = filterTag==="all"||(l.tags||[]).includes(filterTag);
       const matchFollowUp = search!=="__followup__"||(l.followUp&&l.followUp<=today);
-      const matchSearch = search==="__followup__"||!search||l.name?.toLowerCase().includes(searchLower)||l.email?.toLowerCase().includes(searchLower)||l.area?.toLowerCase().includes(searchLower);
+      let matchSearch = true;
+      if (search && search !== "__followup__") {
+        const fields = [
+          l.name, l.email, l.phone, l.area, l.address, l.budget,
+          l.status, l.type, l.source, l.notes,
+          ...(l.tags || []),
+        ];
+        const phoneDigits = (l.phone || "").replace(/\D/g, "");
+        matchSearch =
+          fields.some(v => v && String(v).toLowerCase().includes(searchLower)) ||
+          (searchDigits.length >= 3 && phoneDigits.includes(searchDigits));
+      }
       return matchStatus&&matchType&&matchTag&&matchFollowUp&&matchSearch;
     });
   }, [leads, filterStatus, filterType, filterTag, search, today]);
