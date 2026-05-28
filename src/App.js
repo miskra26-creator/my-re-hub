@@ -10782,6 +10782,20 @@ export default function App() {
     return () => window.removeEventListener('leads-save-error', onSaveError);
   }, [error]);
 
+  // One-shot: disable FUB auto-sync on first load per browser. The migration
+  // sets this flag locally on its completion screen, but localStorage doesn't
+  // sync across browsers/machines — so a browser that never saw the
+  // completion screen kept auto-syncing and stomping local edits. The init
+  // guard means future re-enables from Settings → FUB Migration stick.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('fub_auto_sync_off_initialized') !== '1') {
+        localStorage.setItem('fub_auto_sync_disabled', '1');
+        localStorage.setItem('fub_auto_sync_off_initialized', '1');
+      }
+    } catch {}
+  }, []);
+
   // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
     const supabaseConfigured = (process.env.REACT_APP_SUPABASE_URL||'').length > 0 &&
