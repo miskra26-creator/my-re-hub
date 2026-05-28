@@ -3562,16 +3562,28 @@ const LeadTracker = ({setPage,toast}) => {
         return;
       }
       const fubLeads = all.map(fubToLead);
-      try {
-        setLeads(prev => {
-          const manualLeads = prev.filter(l => !l.fubId);
-          return [...fubLeads, ...manualLeads];
+      // PRESERVE LOCAL EDITS — for any lead already in our store (by fubId),
+      // user edits win over the incoming FUB copy. FUB only fills in fields
+      // Monica hasn't touched on this side. Without this, every auto-sync
+      // (mount / tab focus / 10-min interval) would stomp her status, notes,
+      // tags, follow-ups, etc. back to whatever FUB had.
+      const mergeWithLocal = (incoming, prev) => {
+        const byFubId = new Map();
+        prev.forEach(l => { if (l.fubId) byFubId.set(l.fubId, l); });
+        const manualLeads = prev.filter(l => !l.fubId);
+        const merged = incoming.map(fl => {
+          const existing = byFubId.get(fl.fubId);
+          return existing ? { ...fl, ...existing } : fl;
         });
+        return [...merged, ...manualLeads];
+      };
+      try {
+        setLeads(prev => mergeWithLocal(fubLeads, prev));
         setLastSync(Date.now());
         if(!silent) toast.success(`Synced ${fubLeads.length} contacts from Follow Up Boss`);
       } catch(storageErr) {
         const trimmed = fubLeads.filter(l => l.status !== "Trash");
-        setLeads(prev => [...trimmed, ...prev.filter(l => !l.fubId)]);
+        setLeads(prev => mergeWithLocal(trimmed, prev));
         setLastSync(Date.now());
         if(!silent) toast.success(`Synced ${trimmed.length} active contacts`);
       }
