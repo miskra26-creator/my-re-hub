@@ -25,7 +25,7 @@ import LeadResearch from './LeadResearch';
 import { sendSms, smsAutoSendEnabled } from './twilioSms';
 import Finances from './Finances';
 import {
-  Sparkles, MessageSquare, Video, Film, Calendar, FolderOpen, Heart,
+  Sparkles, MessageSquare, Video, Film, Calendar, FolderOpen, Heart, Maximize2, Minimize2,
   Share2, CalendarDays, BarChart3, Search, RefreshCw, Layout, FlaskConical,
   Globe, Mail, Settings, HelpCircle, Image, Clock, Users, DollarSign,
   Plus, Trash2, Copy, Edit3, ChevronRight, ChevronLeft, X, Check, Upload,
@@ -11177,6 +11177,7 @@ function LoginScreen({ onLogin }) {
 export default function App() {
   const [page,setPage] = useState("dashboard");
   const [mobileOpen,setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useLS("sidebar_collapsed", false);
   const {toasts,remove,success,error,info} = useToast();
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -11395,12 +11396,15 @@ export default function App() {
   return (
     <>
       <GlobalStyles/>
-      <div className="main-layout">
+      <div className={`main-layout${sidebarCollapsed?" sidebar-collapsed":""}`}>
         {mobileOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:90}} onClick={()=>setMobileOpen(false)}/>}
-        <Sidebar current={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} inboxCount={inboxCount}/>
-        <div className="page-area">
+        {!sidebarCollapsed && <Sidebar current={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} inboxCount={inboxCount}/>}
+        <div className="page-area" style={sidebarCollapsed?{width:"100%",marginLeft:0}:{}}>
           <div className="topbar">
-            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setMobileOpen(!mobileOpen)}><Menu size={16}/></button>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setMobileOpen(!mobileOpen)} title="Menu (mobile)"><Menu size={16}/></button>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setSidebarCollapsed(v=>!v)} title={sidebarCollapsed?"Show sidebar":"Hide sidebar (full screen)"}>
+              {sidebarCollapsed ? <Maximize2 size={14}/> : <Minimize2 size={14}/>}
+            </button>
             <div className="topbar-crumb">
               <span style={{cursor:"pointer",color:"#374151"}} onClick={()=>setPage("dashboard")}>Dashboard</span>
               {page!=="dashboard"&&<><span className="sep">›</span><span className="current">{NAV.find(n=>n.id===page)?.label||page}</span></>}
