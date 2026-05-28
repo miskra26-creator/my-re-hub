@@ -6060,6 +6060,19 @@ const SOIManager = ({setPage, toast}) => {
 // ─── LISTING TRACKER ──────────────────────────────────────────────────────────
 const ListingTracker = ({setPage, toast}) => {
   const [listings, setListings] = useLS("active_listings", []);
+  const [showings] = useLS("showings", []);
+  // Normalize an address to its street portion so "123 Main St" matches
+  // "123 Main St, Livonia MI 48150" across the listings + showings tables.
+  const addrKey = (a) => (a||"").toLowerCase().split(",")[0].replace(/\s+/g," ").trim();
+  const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
+  const upcomingFor = (address) => {
+    const key = addrKey(address);
+    if (!key) return [];
+    return showings
+      .filter(s => addrKey(s.address) === key)
+      .filter(s => s.date && new Date(s.date) >= startOfToday)
+      .sort((a,b) => new Date(a.date) - new Date(b.date));
+  };
   const [form, setForm] = useState({address:"",listPrice:"",listDate:"",status:"Active",beds:"",baths:"",sqft:"",mlsNum:"",notes:"",showingCount:0,priceReductions:0});
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -6088,12 +6101,13 @@ const ListingTracker = ({setPage, toast}) => {
         action={<button className="btn btn-blue" onClick={()=>{setShowForm(true);setEditId(null);}}><Plus size={13}/>Add Listing</button>}
       />
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:24}}>
         {[
           {label:"Active",val:activeCount,color:"#7eb8f7"},
           {label:"Under Contract",val:listings.filter(l=>l.status==="Under Contract").length,color:"#f59e0b"},
           {label:"Sold",val:listings.filter(l=>l.status==="Sold").length,color:"#6ee7b7"},
           {label:"Avg DOM",val:`${Math.round(avgDOM)}d`,color:"#a78bfa"},
+          {label:"Showings",val:showings.length,color:"#93c5fd"},
         ].map(s=>(
           <div key={s.label} className="glass-card" style={{textAlign:"center",padding:16}}>
             <div style={{fontSize:28,fontWeight:900,color:s.color,fontFamily:"'DM Serif Display',serif"}}>{s.val}</div>
@@ -6145,6 +6159,8 @@ const ListingTracker = ({setPage, toast}) => {
           {filtered.map(l=>{
             const days = dom(l.listDate);
             const domAlert = days>60?"#f87171":days>30?"#f59e0b":"#6ee7b7";
+            const upcoming = upcomingFor(l.address);
+            const totalShowings = showings.filter(s => addrKey(s.address) === addrKey(l.address)).length;
             return (
               <div key={l.id} className="glass-card">
                 <div className="flex-between" style={{marginBottom:10}}>
@@ -6161,13 +6177,39 @@ const ListingTracker = ({setPage, toast}) => {
                     <span className={`badge ${l.status==="Active"?"badge-blue":l.status==="Under Contract"?"badge-gold":l.status==="Sold"?"badge-green":"badge-gray"}`}>{l.status}</span>
                   </div>
                 </div>
+
+                {/* Upcoming showings — pulled live from the Showing Calendar */}
+                {upcoming.length > 0 && (
+                  <div style={{marginBottom:10,padding:"10px 12px",background:"rgba(126,184,247,.08)",border:"1px solid rgba(126,184,247,.20)",borderRadius:10}}>
+                    <div style={{fontSize:11,fontWeight:800,color:"#7eb8f7",textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                      📅 Upcoming showings · {upcoming.length}
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      {upcoming.slice(0,4).map(s => {
+                        const d = new Date(s.date);
+                        const datePart = d.toLocaleDateString("en-US", {weekday:"short", month:"short", day:"numeric"});
+                        const hasTime = String(s.date).includes("T") && d.getHours() + d.getMinutes() > 0;
+                        const timePart = hasTime ? d.toLocaleTimeString("en-US", {hour:"numeric", minute:"2-digit"}) : "";
+                        return (
+                          <div key={s.id} style={{fontSize:12.5,color:"#cbd5e1",display:"flex",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:700,color:"#93c5fd"}}>{datePart}{timePart ? " · " + timePart : ""}</span>
+                            {s.clientName && <span>— {s.clientName}</span>}
+                            {s.type && s.type !== "Showing" && <span style={{color:"#94a3b8",fontStyle:"italic"}}>({s.type})</span>}
+                          </div>
+                        );
+                      })}
+                      {upcoming.length > 4 && <div style={{fontSize:11,color:"#64748b",fontStyle:"italic"}}>+ {upcoming.length - 4} more</div>}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                   <div style={{display:"flex",gap:16,flex:1}}>
-                    <span style={{fontSize:13,color:"#94a3b8"}}>🏠 <strong style={{color:"#fff"}}>{l.showingCount||0}</strong> showings</span>
+                    <span style={{fontSize:13,color:"#94a3b8"}}>🏠 <strong style={{color:"#fff"}}>{totalShowings || l.showingCount || 0}</strong> showings</span>
                     <span style={{fontSize:13,color:"#94a3b8"}}>📉 <strong style={{color:Number(l.priceReductions)>0?"#f87171":"#fff"}}>{l.priceReductions||0}</strong> price reductions</span>
                   </div>
                   <div style={{display:"flex",gap:6}}>
-                    <button className="btn btn-ghost btn-xs" onClick={()=>logShowing(l.id)}>+ Showing</button>
+                    <button className="btn btn-ghost btn-xs" onClick={()=>setPage("showing-calendar")} title="Schedule a showing in the calendar">+ Showing</button>
                     <button className="btn btn-ghost btn-xs" onClick={()=>logPriceReduction(l.id)}>+ Price Cut</button>
                     <button className="btn btn-ghost btn-icon btn-xs" onClick={()=>{setEditId(l.id);setForm(l);setShowForm(true);}}><Edit3 size={12}/></button>
                     <button className="btn btn-danger btn-icon btn-xs" onClick={()=>setListings(p=>p.filter(x=>x.id!==l.id))}><Trash2 size={12}/></button>

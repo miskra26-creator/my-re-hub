@@ -89,6 +89,12 @@ way (all turned out to be things she already has or doesn't need).
 3. Older roadmap still open: **Phase 1 AI ISA + DB activation** (biggest ROI),
    battle-test existing AI features (her "nothing really works yet"), Twilio SMS,
    presentation builder.
+4. **⚠ MONICA EXPLICITLY ASKED TO REMEMBER: she still needs to sync her IDX
+   feed** (Realcomp). She emailed IDXSupport@realcomp.com back on 2026-05-21 and
+   is waiting on credentials. Once they arrive, integrate properly to replace the
+   broken Realtor.com scrape. Many features (behavioral triggers, listing alerts,
+   IDX home-search website) are gated on this. KEEP CHECKING IN if she has heard
+   back.
 
 ### Binding Monica rules (still in effect)
 
