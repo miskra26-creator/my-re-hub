@@ -144,7 +144,14 @@ function rowToLead(row) {
   };
   if (row.fub_id) lead.fubId = row.fub_id;
   if (row.meta && typeof row.meta === 'object') {
-    Object.assign(lead, row.meta);
+    // Strip any column/reserved keys from meta before merging — earlier code
+    // accidentally wrote `status` (and other column fields) into the JSONB
+    // meta blob. Without this, stale meta.status overrode the real column on
+    // every read, so a user's status edit would visually revert. Columns win.
+    const cleanMeta = { ...row.meta };
+    COLUMN_FIELDS.forEach((k) => delete cleanMeta[k]);
+    ['fubId', 'tags', 'followUp', 'follow_up', 'createdAt', 'created_at', 'updated_at', 'user_id'].forEach((k) => delete cleanMeta[k]);
+    Object.assign(lead, cleanMeta);
   }
   return lead;
 }
