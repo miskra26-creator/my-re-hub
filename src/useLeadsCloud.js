@@ -180,19 +180,23 @@ async function cloudFetchAll(userId) {
 async function cloudUpsertBatch(leads, userId) {
   if (!leads.length) return { ok: 0, fail: 0 };
   const rows = leads.map((l) => leadToRow(l, userId));
-  let ok = 0, fail = 0;
+  let ok = 0, fail = 0, lastError = null;
   for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
     const chunk = rows.slice(i, i + CHUNK_SIZE);
     try {
       const { error } = await supabase
         .from('leads')
         .upsert(chunk, { onConflict: 'id' });
-      if (error) { console.warn('[cloudUpsertBatch]', error.message); fail += chunk.length; }
+      if (error) { console.warn('[cloudUpsertBatch]', error.message); fail += chunk.length; lastError = error.message; }
       else ok += chunk.length;
     } catch (e) {
       console.warn('[cloudUpsertBatch exception]', e.message);
       fail += chunk.length;
+      lastError = e.message;
     }
+  }
+  if (fail > 0 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('leads-save-error', { detail: { ok, fail, total: rows.length, error: lastError, kind: 'upsert' } }));
   }
   return { ok, fail };
 }
@@ -201,9 +205,17 @@ async function cloudDeleteBatch(ids) {
   if (!ids.length) return;
   try {
     const { error } = await supabase.from('leads').delete().in('id', ids);
-    if (error) console.warn('[cloudDeleteBatch]', error.message);
+    if (error) {
+      console.warn('[cloudDeleteBatch]', error.message);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('leads-save-error', { detail: { ok: 0, fail: ids.length, total: ids.length, error: error.message, kind: 'delete' } }));
+      }
+    }
   } catch (e) {
     console.warn('[cloudDeleteBatch exception]', e.message);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('leads-save-error', { detail: { ok: 0, fail: ids.length, total: ids.length, error: e.message, kind: 'delete' } }));
+    }
   }
 }
 

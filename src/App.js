@@ -10759,6 +10759,17 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Surface silent lead-save failures so Monica sees when changes don't actually
+  // hit Supabase (RLS denial, network blip, etc.) instead of just reverting.
+  useEffect(() => {
+    const onSaveError = (e) => {
+      const d = e.detail || {};
+      error(`⚠ Couldn't save ${d.fail||"some"} lead change${d.fail===1?"":"s"} — ${d.error || "Supabase rejected the write"}. Your edit may revert on refresh.`);
+    };
+    window.addEventListener('leads-save-error', onSaveError);
+    return () => window.removeEventListener('leads-save-error', onSaveError);
+  }, [error]);
+
   // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
     const supabaseConfigured = (process.env.REACT_APP_SUPABASE_URL||'').length > 0 &&
