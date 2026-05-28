@@ -3501,6 +3501,18 @@ const LeadTracker = ({setPage,toast}) => {
   // Limit rendered leads to keep the page snappy with large FUB sync (5k+ leads).
   // Reset when filter/search changes.
   const [renderLimit, setRenderLimit] = useState(100);
+  // Pipeline vs List view (persists per browser).
+  const [view, setView] = useLS("lt_view", "pipeline");
+  // Kanban columns — Monica's existing statuses, grouped into ~7 stages.
+  const PIPELINE_COLUMNS = [
+    { key: "hot",     status: "Hot Prospect", color: "#EF4444", label: "Hot Prospects" },
+    { key: "contact", status: "Contact",      color: "#3B82F6", label: "Contact" },
+    { key: "buyer",   status: "Buyer",        color: "#6366F1", label: "Buyers" },
+    { key: "seller",  status: "Seller",       color: "#F59E0B", label: "Sellers" },
+    { key: "nurture", statuses: ["Nurture 3-6 Months","Nurture 1+ Year","Buy/Sell Nurture","Casually Browsing"], color: "#A78BFA", label: "Nurture" },
+    { key: "pending", status: "Pending",      color: "#8B5CF6", label: "Pending" },
+    { key: "past",    status: "Past Client",  color: "#10B981", label: "Past Clients" },
+  ];
 
   const allTags = useMemo(() => [...new Set(leads.flatMap(l=>l.tags||[]))].sort(), [leads]);
 
@@ -4020,7 +4032,160 @@ const LeadTracker = ({setPage,toast}) => {
           font-family: 'Inter', sans-serif !important;
           letter-spacing: -.01em !important;
         }
-      `}</style>
+      
+
+        /* ─── Pipeline / List view toggle ──────────────────────────── */
+        .lead-tracker-v2 .lt-view-toggle {
+          display: inline-flex;
+          background: #F1F5F9;
+          border: 1px solid #E5E7EB;
+          border-radius: 10px;
+          padding: 3px;
+        }
+        .lead-tracker-v2 .lt-view-toggle button {
+          padding: 6px 14px;
+          background: transparent;
+          border: none;
+          font-size: 12.5px; font-weight: 700;
+          color: #64748B; border-radius: 7px; cursor: pointer;
+          display: inline-flex; align-items: center; gap: 5px;
+        }
+        .lead-tracker-v2 .lt-view-toggle button.active {
+          background: #FFFFFF; color: #0F172A;
+          box-shadow: 0 1px 2px rgba(15,23,42,.08);
+        }
+
+        /* ─── Kanban pipeline ──────────────────────────────────────── */
+        .lead-tracker-v2 .lt-pipeline {
+          display: flex; gap: 12px;
+          overflow-x: auto;
+          padding-bottom: 14px;
+          margin-bottom: 22px;
+          scrollbar-width: thin;
+        }
+        .lead-tracker-v2 .lt-pipe-col {
+          flex: 0 0 290px;
+          background: #FFFFFF;
+          border: 1px solid #EEF0F2;
+          border-radius: 12px;
+          padding: 14px;
+          display: flex; flex-direction: column;
+          max-height: 680px;
+        }
+        .lead-tracker-v2 .lt-pipe-head {
+          padding-bottom: 10px;
+          border-bottom: 3px solid #E5E7EB;
+          margin-bottom: 12px;
+          display: flex; align-items: center; justify-content: space-between;
+        }
+        .lead-tracker-v2 .lt-pipe-title { font-size: 13px; font-weight: 800; color: #0F172A; }
+        .lead-tracker-v2 .lt-pipe-count {
+          font-size: 11px; font-weight: 700;
+          color: #64748B; background: #F1F5F9;
+          padding: 2px 9px; border-radius: 99px;
+        }
+        .lead-tracker-v2 .lt-pipe-body {
+          flex: 1; overflow-y: auto;
+          display: flex; flex-direction: column; gap: 8px;
+        }
+        .lead-tracker-v2 .lt-pipe-card {
+          background: #FFFFFF;
+          border: 1px solid #EEF0F2;
+          border-radius: 10px;
+          padding: 11px 12px;
+          cursor: pointer;
+          transition: all .12s ease;
+        }
+        .lead-tracker-v2 .lt-pipe-card:hover {
+          border-color: #1A5AA0;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(15,23,42,.08);
+        }
+        .lead-tracker-v2 .lt-pipe-card-head {
+          display: flex; gap: 9px; align-items: flex-start;
+        }
+        .lead-tracker-v2 .lt-pipe-card-name { flex: 1; min-width: 0; }
+        .lead-tracker-v2 .lt-pipe-card-title {
+          font-size: 13px; font-weight: 700;
+          color: #0F172A; line-height: 1.2;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .lead-tracker-v2 .lt-pipe-card-meta {
+          font-size: 11px; color: #64748B; margin-top: 2px;
+        }
+        .lead-tracker-v2 .lt-pipe-card-actions {
+          display: flex; gap: 4px; margin-top: 10px;
+          padding-top: 9px; border-top: 1px solid #F1F5F9;
+        }
+        .lead-tracker-v2 .lt-pipe-card-actions button {
+          flex: 1; background: #F8FAFC;
+          border: 1px solid #F1F5F9; border-radius: 6px;
+          padding: 5px; font-size: 11.5px;
+          color: #475569; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center;
+        }
+        .lead-tracker-v2 .lt-pipe-card-actions button:hover {
+          background: #E2E8F0; border-color: #CBD5E1; color: #1A5AA0;
+        }
+        .lead-tracker-v2 .lt-pipe-empty {
+          text-align: center; padding: 22px 10px;
+          font-size: 11.5px; color: #94A3B8; font-style: italic;
+        }
+
+        /* ─── Bottom analytics row ─────────────────────────────────── */
+        .lead-tracker-v2 .lt-analytics {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr;
+          gap: 14px;
+          margin-top: 18px;
+        }
+        @media (max-width: 980px) { .lead-tracker-v2 .lt-analytics { grid-template-columns: 1fr; } }
+        .lead-tracker-v2 .lt-analytics-card {
+          background: #FFFFFF;
+          border: 1px solid #EEF0F2;
+          border-radius: 12px;
+          padding: 16px 18px;
+        }
+        .lead-tracker-v2 .lt-analytics-head {
+          display: flex; justify-content: space-between; align-items: center;
+          margin-bottom: 12px;
+        }
+        .lead-tracker-v2 .lt-analytics-title { font-size: 14px; font-weight: 800; color: #0F172A; }
+        .lead-tracker-v2 .lt-analytics-link {
+          font-size: 12px; font-weight: 700;
+          color: #1A5AA0; background: none; border: none;
+          cursor: pointer;
+        }
+        .lead-tracker-v2 .lt-followup-list {
+          display: flex; flex-direction: column; gap: 2px;
+        }
+        .lead-tracker-v2 .lt-followup-row {
+          display: flex; align-items: center; gap: 10px;
+          padding: 9px 10px; border-radius: 8px;
+          cursor: pointer; transition: background .12s;
+        }
+        .lead-tracker-v2 .lt-followup-row:hover { background: #F8FAFC; }
+        .lead-tracker-v2 .lt-followup-icon { font-size: 14px; flex-shrink: 0; }
+        .lead-tracker-v2 .lt-followup-name {
+          flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600;
+          color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .lead-tracker-v2 .lt-followup-date { font-size: 11px; color: #64748B; flex-shrink: 0; }
+        .lead-tracker-v2 .lt-followup-pill {
+          font-size: 10px; font-weight: 800;
+          padding: 3px 9px; border-radius: 99px;
+          letter-spacing: .3px; flex-shrink: 0;
+        }
+        .lead-tracker-v2 .lt-source-row {
+          display: flex; align-items: center; gap: 8px;
+          padding: 5px 0; font-size: 12.5px;
+        }
+        .lead-tracker-v2 .lt-source-dot {
+          width: 9px; height: 9px; border-radius: 99px; flex-shrink: 0;
+        }
+        .lead-tracker-v2 .lt-source-name { flex: 1; color: #0F172A; font-weight: 600; }
+        .lead-tracker-v2 .lt-source-count { color: #64748B; font-weight: 700; }
+`}</style>
       <PageHeader title="Lead Tracker" sub={`${leads.length} total leads`} setPage={setPage} parent="dashboard"
         action={<div style={{display:"flex",gap:8}}>
           <button className="btn btn-ghost btn-sm" onClick={()=>syncFUB(false)} disabled={syncing}><RefreshCw size={12} style={syncing?{animation:"spin 1s linear infinite"}:{}}/>{syncing?"Syncing…":"Sync FUB"}</button>
@@ -4117,6 +4282,10 @@ const LeadTracker = ({setPage,toast}) => {
       </div>
 
       <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <div className="lt-view-toggle">
+          <button className={view==='pipeline'?'active':''} onClick={()=>setView('pipeline')}><Layout size={13}/>Pipeline</button>
+          <button className={view==='list'?'active':''}     onClick={()=>setView('list')}><List size={13}/>List</button>
+        </div>
         <div className="lt-search-wrap">
           <Search size={15} className="lt-search-icon"/>
           <input placeholder="Search leads by name, phone, email, status, or notes…" value={search==="__followup__"?"":search} onChange={e=>setSearch(e.target.value)}/>
@@ -4207,7 +4376,54 @@ const LeadTracker = ({setPage,toast}) => {
           ? <div className="glass-card" style={{padding:"40px 20px",textAlign:"center",color:"#475569"}}><Spinner s={22}/><div style={{marginTop:10,fontSize:13}}>Syncing from Follow Up Boss…</div></div>
         : filtered.length===0
         ? <div className="glass-card"><EmptyState icon={UserCheck} title="No leads found" desc="Add leads or adjust your filters"/></div>
-        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        : view === 'pipeline' ? (
+          <div className="lt-pipeline">
+            {PIPELINE_COLUMNS.map(col => {
+              const colLeads = filtered.filter(l => col.statuses ? col.statuses.includes(l.status) : l.status === col.status);
+              return (
+                <div key={col.key} className="lt-pipe-col">
+                  <div className="lt-pipe-head" style={{borderBottomColor: col.color}}>
+                    <div className="lt-pipe-title">{col.label}</div>
+                    <div className="lt-pipe-count">{colLeads.length}</div>
+                  </div>
+                  <div className="lt-pipe-body">
+                    {colLeads.slice(0, 60).map(l => {
+                      const parts = (l.name||"").split(/\s+/).filter(Boolean);
+                      const init = ((parts[0]?.[0]||"?") + (parts[1]?.[0]||"")).toUpperCase();
+                      const palette = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899","#14B8A6","#6366F1"];
+                      const c = palette[((l.name||"").charCodeAt(0)||0) % palette.length];
+                      const overdue = l.followUp && l.followUp < today;
+                      return (
+                        <div key={l.id} className="lt-pipe-card" onClick={()=>setSelectedLead(l)}>
+                          <div className="lt-pipe-card-head">
+                            <div className="lt-avatar" style={{background:c, width:32, height:32, fontSize:11}}>{init}</div>
+                            <div className="lt-pipe-card-name">
+                              <div className="lt-pipe-card-title">{l.name||"(no name)"}</div>
+                              <div className="lt-pipe-card-meta">{l.type||"Buyer"}{l.area ? " • " + l.area : ""}</div>
+                            </div>
+                          </div>
+                          {l.followUp && (
+                            <div className="lt-pipe-card-meta" style={{marginTop:6,color: overdue ? "#DC2626" : "#64748B", fontWeight: overdue ? 700 : 600}}>
+                              {overdue ? "⚠ Overdue " : "📅 Due "}{l.followUp}
+                            </div>
+                          )}
+                          <div className="lt-pipe-card-actions" onClick={e=>e.stopPropagation()}>
+                            {l.phone && <button title="Call" onClick={()=>{window.location.href=`tel:${l.phone}`}}><Phone size={12}/></button>}
+                            {l.phone && <button title="Text" onClick={()=>{window.location.href=`sms:${l.phone.replace(/\D/g,'')}`}}><MessageSquare size={12}/></button>}
+                            {l.email && <button title="Email" onClick={()=>{window.location.href=`mailto:${l.email}`}}><Mail size={12}/></button>}
+                            <button title="Log call" onClick={()=>setCallLogLead(l)}><Clock size={12}/></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {colLeads.length === 0 && <div className="lt-pipe-empty">No leads here</div>}
+                    {colLeads.length > 60 && <div className="lt-pipe-empty">+ {colLeads.length - 60} more (use List view)</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {filtered.length > renderLimit && (
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 8px",fontSize:12}}>
               <span style={{color:"#8B7A5F"}}>Showing first {renderLimit} of {filtered.length} leads</span>
@@ -4258,6 +4474,78 @@ const LeadTracker = ({setPage,toast}) => {
           ))}
         </div>
       }
+
+      {/* ── Bottom analytics ──────────────────────────────────────────── */}
+      {leadsLoaded && leads.length > 0 && (() => {
+        const sources = {};
+        leads.forEach(l => { const k = (l.source || "Other").trim() || "Other"; sources[k] = (sources[k]||0)+1; });
+        const sourceData = Object.entries(sources).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value).slice(0,6);
+        const SRC_COLORS = ["#3B82F6","#EF4444","#10B981","#F59E0B","#8B5CF6","#94A3B8"];
+        const followUps = leads.filter(l => l.followUp).sort((a,b)=>String(a.followUp).localeCompare(String(b.followUp))).slice(0,6);
+        return (
+          <div className="lt-analytics">
+            {/* Follow-ups due */}
+            <div className="lt-analytics-card">
+              <div className="lt-analytics-head">
+                <div className="lt-analytics-title">Follow Ups Due</div>
+                <button className="lt-analytics-link" onClick={()=>setPage('tasks')}>View All Tasks →</button>
+              </div>
+              <div className="lt-followup-list">
+                {followUps.length === 0 && <div className="lt-pipe-empty">No follow-ups scheduled</div>}
+                {followUps.map(l => {
+                  const overdue = l.followUp < today;
+                  const dueSoon = !overdue && l.followUp <= new Date(Date.now() + 2*86400000).toISOString().slice(0,10);
+                  const label = overdue ? "Overdue" : (l.followUp === today ? "Today" : (dueSoon ? "Due Soon" : "Upcoming"));
+                  const color = overdue ? "#DC2626" : (label === "Today" || dueSoon ? "#D97706" : "#1D4ED8");
+                  const bg    = overdue ? "#FEE2E2" : (label === "Today" || dueSoon ? "#FEF3C7" : "#DBEAFE");
+                  return (
+                    <div key={l.id} className="lt-followup-row" onClick={()=>setSelectedLead(l)}>
+                      <div className="lt-followup-icon">📞</div>
+                      <div className="lt-followup-name">Follow up: {l.name || "(no name)"}</div>
+                      <div className="lt-followup-date">Due: {l.followUp}</div>
+                      <span className="lt-followup-pill" style={{background: bg, color}}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Lead source donut */}
+            <div className="lt-analytics-card">
+              <div className="lt-analytics-head">
+                <div className="lt-analytics-title">Lead Source Breakdown</div>
+              </div>
+              {sourceData.length === 0 ? (
+                <div className="lt-pipe-empty">No source data yet</div>
+              ) : (
+                <div style={{display:"flex",gap:16,alignItems:"center"}}>
+                  <div style={{position:"relative", width:170, height:160, flexShrink:0}}>
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie data={sourceData} cx="50%" cy="50%" innerRadius={52} outerRadius={75} dataKey="value" stroke="none">
+                          {sourceData.map((_,i) => <Cell key={i} fill={SRC_COLORS[i%SRC_COLORS.length]}/>)}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                      <div style={{fontSize:22,fontWeight:800,color:"#0F172A"}}>{leads.length}</div>
+                      <div style={{fontSize:10.5,color:"#64748B"}}>Total Leads</div>
+                    </div>
+                  </div>
+                  <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:2}}>
+                    {sourceData.map((d,i) => (
+                      <div key={d.name} className="lt-source-row">
+                        <span className="lt-source-dot" style={{background: SRC_COLORS[i%SRC_COLORS.length]}}/>
+                        <span className="lt-source-name">{d.name}</span>
+                        <span className="lt-source-count">{d.value} ({leads.length ? Math.round(d.value*100/leads.length) : 0}%)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {selectedLead&&(
         <ContactDetail
