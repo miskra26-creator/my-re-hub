@@ -3961,12 +3961,38 @@ const LeadTracker = ({setPage,toast}) => {
 
         /* ─── Bulk action bar (when leads are checkbox-selected) ──── */
         .lead-tracker-v2 .lt-bulk-bar {
-          background: linear-gradient(135deg, #FFFFFF 0%, #FFF9EC 100%) !important;
-          border: 1px solid rgba(201,154,44,.35) !important;
-          box-shadow: 0 4px 16px rgba(201,154,44,.12), 0 1px 3px rgba(0,0,0,.04) !important;
+          background: linear-gradient(135deg, #1A5AA0 0%, #2E7CD6 100%) !important;
+          border: 1.5px solid rgba(26,90,160,.55) !important;
+          box-shadow: 0 8px 22px rgba(26,90,160,.30), 0 2px 5px rgba(0,0,0,.08) !important;
         }
-        .lead-tracker-v2 .lt-bulk-bar span { color: #2C2418 !important; }
-        .lead-tracker-v2 .lt-bulk-bar button { color: #2C2418 !important; }
+        .lead-tracker-v2 .lt-bulk-bar span,
+        .lead-tracker-v2 .lt-bulk-bar button { color: #FFFFFF !important; }
+        .lead-tracker-v2 .lt-bulk-bar .lt-bulk-tag {
+          font-size: 10.5px !important; font-weight: 900 !important;
+          padding: 3px 9px !important; border-radius: 6px !important;
+          background: rgba(255,255,255,.18) !important; letter-spacing: .6px !important;
+        }
+        .lead-tracker-v2 .lt-bulk-bar .btn { background: rgba(255,255,255,.15) !important; border: 1px solid rgba(255,255,255,.35) !important; }
+        .lead-tracker-v2 .lt-bulk-bar .btn:hover { background: rgba(255,255,255,.28) !important; }
+        .lead-tracker-v2 .lt-bulk-bar .btn-blue { background: #FFFFFF !important; color: #1A5AA0 !important; border: none !important; font-weight: 800 !important; }
+
+        /* ─── Make the bulk-select checkboxes obvious on cream cards ─── */
+        .lead-tracker-v2 .lt-bulk-check {
+          appearance: none; -webkit-appearance: none;
+          border: 2px solid rgba(26,90,160,.5);
+          border-radius: 5px;
+          background: #FFFFFF;
+          position: relative;
+          transition: all .15s ease;
+        }
+        .lead-tracker-v2 .lt-bulk-check:hover { border-color: #1A5AA0; box-shadow: 0 0 0 3px rgba(26,90,160,.12); }
+        .lead-tracker-v2 .lt-bulk-check:checked { background: #1A5AA0; border-color: #1A5AA0; }
+        .lead-tracker-v2 .lt-bulk-check:checked::after {
+          content: ""; position: absolute; left: 5px; top: 1px;
+          width: 6px; height: 11px;
+          border: solid #FFFFFF; border-width: 0 2.5px 2.5px 0;
+          transform: rotate(45deg);
+        }
 
         /* ─── Add Lead / Edit Lead form text overrides ────────────── */
         .lead-tracker-v2 .glass-card div[style*="color:\\"#f1f5f9\\""] {
@@ -4109,8 +4135,9 @@ const LeadTracker = ({setPage,toast}) => {
 
       {/* Bulk select bar */}
       {selected.length>0&&(
-        <div className="lt-bulk-bar" style={{position:"sticky",top:8,zIndex:50,borderRadius:13,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{fontSize:13,fontWeight:800}}>{selected.length} lead{selected.length>1?"s":""} selected</span>
+        <div className="lt-bulk-bar" style={{position:"sticky",top:8,zIndex:50,borderRadius:13,padding:"14px 18px",marginBottom:12,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+          <span className="lt-bulk-tag">BULK ACTIONS</span>
+          <span style={{fontSize:14,fontWeight:800}}>{selected.length} lead{selected.length>1?"s":""} selected</span>
           <div style={{display:"flex",gap:6,flex:1,flexWrap:"wrap"}}>
             {bulkPanel==="status"?(
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
@@ -4138,7 +4165,7 @@ const LeadTracker = ({setPage,toast}) => {
               </div>
             ):(
               <>
-                <button className="btn btn-ghost btn-xs" onClick={()=>{setBulkPanel("status");setBulkValue("");}}>Change Status</button>
+                <button className="btn btn-blue btn-xs" onClick={()=>{setBulkPanel("status");setBulkValue("");}}>Change Status</button>
                 <button className="btn btn-ghost btn-xs" onClick={()=>{setBulkPanel("tag");setBulkValue("");}}>Add Tag</button>
                 <button className="btn btn-ghost btn-xs" onClick={()=>{setBulkPanel("plan");setBulkValue("");}}>Apply Action Plan</button>
                 <button className="btn btn-ghost btn-xs" onClick={bulkExport}>Export CSV</button>
@@ -4150,15 +4177,22 @@ const LeadTracker = ({setPage,toast}) => {
         </div>
       )}
 
-      {/* Select all row */}
+      {/* Bulk-select hint + select-all row */}
       {filtered.length>0&&(
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,paddingLeft:4}}>
-          <input type="checkbox" checked={selected.length===filtered.length&&filtered.length>0}
-            onChange={e=>e.target.checked?selectAll():clearSel()} style={{width:15,height:15,cursor:"pointer"}}/>
-          <span style={{fontSize:12,fontWeight:700,color:"#475569"}}>
-            {selected.length>0?`${selected.length} selected`:`Select all ${filtered.length}`}
-          </span>
-        </div>
+        <>
+          {selected.length===0 && (
+            <div className="lt-bulk-hint" style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",marginBottom:10,borderRadius:10,background:"rgba(26,90,160,.08)",border:"1px dashed rgba(26,90,160,.35)",fontSize:12.5,fontWeight:600,color:"#1A5AA0"}}>
+              💡 <span>Tip — check the box on any lead (or use "Select all") to <strong>change status, add tags, apply a plan, or delete in bulk</strong>.</span>
+            </div>
+          )}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,paddingLeft:4}}>
+            <input type="checkbox" className="lt-bulk-check" checked={selected.length===filtered.length&&filtered.length>0}
+              onChange={e=>e.target.checked?selectAll():clearSel()} style={{width:20,height:20,cursor:"pointer"}}/>
+            <span style={{fontSize:12.5,fontWeight:700,color:"#475569"}}>
+              {selected.length>0?`${selected.length} selected`:`Select all ${filtered.length}`}
+            </span>
+          </div>
+        </>
       )}
 
       {!leadsLoaded
@@ -4179,7 +4213,8 @@ const LeadTracker = ({setPage,toast}) => {
               <div className="flex-between">
                 <div style={{display:"flex",gap:10,alignItems:"flex-start",flex:1,minWidth:0}}>
                   <input type="checkbox" checked={selected.includes(l.id)} onChange={()=>toggleSelect(l.id)}
-                    style={{width:15,height:15,cursor:"pointer",marginTop:3,flexShrink:0}} onClick={e=>e.stopPropagation()}/>
+                    className="lt-bulk-check"
+                    style={{width:22,height:22,cursor:"pointer",marginTop:0,flexShrink:0}} onClick={e=>e.stopPropagation()}/>
                   <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setSelectedLead(l)}>
                     <div className="flex-row" style={{marginBottom:6}}>
                       <div style={{fontSize:15,fontWeight:700,color:"#ffffff",fontFamily:"'DM Serif Display',serif"}}>{l.name}</div>
