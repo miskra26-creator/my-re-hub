@@ -95,6 +95,13 @@ way (all turned out to be things she already has or doesn't need).
    broken Realtor.com scrape. Many features (behavioral triggers, listing alerts,
    IDX home-search website) are gated on this. KEEP CHECKING IN if she has heard
    back.
+5. **⚠ Supabase free-tier auto-pause gotcha** — Monica's project paused after a
+   week of inactivity (happened 2026-05-27), surfacing as "failed to fetch" on
+   login from every browser. Subdomain went NXDOMAIN. Fix: she logs into
+   supabase.com/dashboard and clicks "Restore project". Takes ~60s. This WILL
+   recur. Long-term options for her: weekly calendar ping, or upgrade to Pro
+   ($25/mo, no pause + daily backups — worth pitching given the hub holds
+   6,000+ real leads now).
 
 ### Binding Monica rules (still in effect)
 
