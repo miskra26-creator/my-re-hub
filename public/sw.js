@@ -1,5 +1,5 @@
 /* Real Estate Hub — Service Worker */
-const CACHE = 're-hub-v5';
+const CACHE = 're-hub-v6';
 const PRECACHE = ['/', '/manifest.json', '/favicon.ico'];
 
 self.addEventListener('install', e => {
@@ -23,6 +23,11 @@ self.addEventListener('fetch', e => {
   if (url.includes('localhost:3001')) return;
   if (url.includes('api.followupboss.com')) return;
   if (url.includes('api.anthropic.com')) return;
+  // CRITICAL — never touch Supabase. Auth tokens, realtime, and per-user data
+  // must always be a fresh network call; caching them broke Monica's login.
+  if (url.includes('supabase.co') || url.includes('supabase.in')) return;
+  // Skip our own API routes too — they're proxies / lead webhooks / auth-gated.
+  if (url.includes('/api/')) return;
   if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
     // Cache fonts with network-first
     e.respondWith(
