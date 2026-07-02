@@ -3,11 +3,12 @@
 const $ = (id) => document.getElementById(id);
 let strategies = [];
 let autoEnabled = false;
+let botAvailable = true;
 
 async function init() {
   await loadStrategies();
   await loadStatus();
-  await loadAccount();
+  if (botAvailable) await loadAccount();
   $('run').addEventListener('click', runOnce);
   $('refresh').addEventListener('click', loadAccount);
   $('autoToggle').addEventListener('click', toggleAuto);
@@ -53,7 +54,29 @@ function collectConfig() {
 }
 
 async function loadStatus() {
-  const s = await (await fetch('/api/bot/status')).json();
+  let s;
+  try {
+    s = await (await fetch('/api/bot/status')).json();
+  } catch {
+    s = { notAvailable: true };
+  }
+  if (s.notAvailable) {
+    botAvailable = false;
+    $('setup').classList.remove('hidden');
+    $('setup').innerHTML =
+      '<h2>Bot only runs locally</h2>' +
+      '<p>The paper-trading bot needs your Alpaca API keys and a running server, so it is not available on this public URL.</p>' +
+      '<p>To use it, run the app on your own computer:</p>' +
+      '<ol><li>Download the code from GitHub.</li>' +
+      '<li>Add your Alpaca keys to <code>trading-platform/.env</code>.</li>' +
+      '<li>Run <code>npm start</code>, then open <code>http://localhost:4000/bot.html</code>.</li></ol>' +
+      '<p>The <a href="/">Backtester</a> works right here in your browser.</p>';
+    $('run').disabled = true;
+    $('autoToggle').disabled = true;
+    $('refresh').disabled = true;
+    $('acctMeta').textContent = 'not available on public URL';
+    return;
+  }
   $('setup').classList.toggle('hidden', s.hasKeys);
   autoEnabled = s.auto && s.auto.enabled;
   updateAutoUi(s.auto);
@@ -69,6 +92,7 @@ function updateAutoUi(auto) {
 }
 
 async function loadAccount() {
+  if (!botAvailable) return;
   const meta = $('acctMeta');
   meta.textContent = 'loading…';
   try {

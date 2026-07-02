@@ -62,6 +62,26 @@ Uses Node's built-in test runner — no extra tooling.
 - **Overfitting risk.** Tuning parameters until the backtest looks great almost
   always produces a strategy that fails on new data.
 
+## Deploy the backtester to a live URL (Vercel)
+
+The backtester runs great on Vercel as a static site + serverless functions
+(the `api/` folder). The paper-trading bot is intentionally **not** exposed on
+the public URL — it needs your API keys and shouldn't live behind an
+unauthenticated public endpoint. Follow these clicks once and every future
+`git push` auto-deploys:
+
+1. Log into [vercel.com](https://vercel.com) with your GitHub account.
+2. Click **Add New → Project**.
+3. Import the `miskra26-creator/my-re-hub` repository.
+4. **Important:** click **Edit** next to Root Directory and set it to
+   `trading-platform`. Otherwise Vercel will try to build the real-estate CRM.
+5. Framework preset: **Other**. Leave Build/Output settings as-is.
+6. Click **Deploy**. In ~1 minute you'll get a live URL like
+   `https://my-re-hub-trading.vercel.app`.
+
+That URL will show the Backtester ready to use from any device. The "Live Bot"
+tab will render a friendly notice that the bot only runs locally.
+
 ## Live paper-trading bot
 
 Open **http://localhost:4000/bot.html** (or click "Live Bot" in the nav). The
