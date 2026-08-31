@@ -40,17 +40,33 @@ visible on login.
   state (task + 2 scored leads): ranking, badges, scripts, dismiss-persists all
   confirmed via browser. Test localStorage keys cleared afterward.
 
-### NOT yet done
-- **Not pushed / not deployed.** Changes are local on the desktop only. Monica
-  needs to approve `npm run save` (pushes → Vercel auto-deploys live).
-- Supabase free tier auto-paused today from inactivity — she resumed it.
-  Upgrading to Pro ($25/mo, no auto-pause + backups) is still the top
-  reliability rec. Not done.
+### Shipped + deployed
+- Daily Brief pushed live (commit ac9eb8b), confirmed in prod bundle
+  (main.bf9846a3.js).
+- **Monica declined Supabase Pro ($25/mo) — do NOT keep suggesting it.** Instead
+  solved the auto-pause outage the FREE way:
+  **`.github/workflows/keepalive.yml`** (new) pings the Supabase auth + REST
+  endpoints daily (cron 17 9 * * *) so the 7-day inactivity pause never triggers.
+  Uses the public publishable/anon key (safe, RLS-protected, already in the
+  browser bundle). Also has workflow_dispatch for manual runs from the Actions
+  tab. Verified the underlying ping reaches Postgres (401 = permission error
+  FROM the DB = counts as activity). Not yet manually triggered (no gh CLI on
+  this machine); first scheduled run will confirm.
+
+### Still open / next
+- Monica to run **Database Intelligence → Run Analysis** once (signed in, ~20-40
+  min, free Gemini) to populate `db_intel_results` → upgrades the Daily Brief
+  from fallback ranking to real AI 90-day scoring. Re-run weekly.
+- Free automated backups (e.g. a GH Action pg_dump to repo/artifact) not built
+  yet — would need the DB connection string / service_role key as a GH secret.
+- Two-way SMS (Twilio) still queued. Note `src/twilioSms.js` now exists
+  (sendSms, smsAutoSendEnabled) — partially wired since 5/20.
 
 ### Files touched
 ```
-src/dailyBrief.js   (new)
-src/App.js          (import + DailyBrief component + Dashboard render + briefBtn helper)
+src/dailyBrief.js                  (new)
+src/App.js                         (import + DailyBrief component + Dashboard render + briefBtn helper)
+.github/workflows/keepalive.yml    (new — free Supabase keep-alive)
 ```
 
 ---
