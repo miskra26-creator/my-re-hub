@@ -7295,19 +7295,38 @@ const DatabaseIntel = ({setPage, toast}) => {
 
   const run = async () => {
     if (!leads.length) return toast.error("No leads to analyze yet");
-    if (!window.confirm(`Analyze ${leads.length} leads via AI? Takes a few minutes. Free on Gemini.`)) return;
+    const resume = Array.isArray(scored) && scored.length > 0;
+    const already = new Set(resume ? scored.map((s) => s.id) : []);
+    const confirmMsg = resume
+      ? `Resume analysis? ${already.size.toLocaleString()} leads already scored — this continues with the rest. Free on Gemini; paced to respect the free limit, so it can take ~10-20 min. Keep this tab open.`
+      : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first, and progress saves as it goes (safe to close the tab and resume later). Keep this tab open while it runs.`;
+    if (!window.confirm(confirmMsg)) return;
     setRunning(true);
+    const acc = resume ? [...scored] : [];
+    let sinceSave = 0;
     setProgress({ done: 0, total: leads.length });
     try {
-      const results = await scoreAllLeads(leads, {
+      await scoreAllLeads(leads, {
         batchSize: 25,
+        alreadyScoredIds: already,
         onProgress: (done, total) => setProgress({ done, total }),
+        onPartial: (batchScored) => {
+          acc.push(...batchScored);
+          // Persist every ~10 batches to keep localStorage/cloud writes light,
+          // while still updating the buckets live as results stream in.
+          if (++sinceSave >= 10) {
+            setScored([...acc]);
+            setLastRun(new Date().toISOString());
+            sinceSave = 0;
+          }
+        },
       });
-      setScored(results);
+      setScored([...acc]);
       setLastRun(new Date().toISOString());
-      toast.success(`Analyzed ${results.length} leads — see the buckets below`);
+      toast.success(`Scored ${acc.length.toLocaleString()} leads — see the buckets below`);
     } catch (e) {
-      toast.error("Analysis failed: " + e.message);
+      setScored([...acc]); // keep whatever we got
+      toast.error("Analysis stopped: " + e.message + (acc.length ? ` (kept ${acc.length} scored so far — click Re-Analyze to resume)` : ""));
     }
     setRunning(false);
   };

@@ -112,13 +112,74 @@ Return format:
   return parsed;
 }
 
+// ── Rate limiting for the FREE Gemini tier ─────────────────────────────────
+// The free tier caps generate_content at ~20 requests/minute. The old code
+// fired a batch every 250ms (~240/min) and instantly hit HTTP 429 "quota
+// exceeded", so nearly every batch failed and the whole scan returned ~0
+// results in a few seconds. We now throttle to stay safely under the limit and
+// retry (honoring Gemini's "retry in Xs" hint) instead of silently dropping.
+const RL = { max: 14, windowMs: 65000, hits: [] };
+async function rateLimitSlot() {
+  while (true) {
+    const t = Date.now();
+    RL.hits = RL.hits.filter((h) => t - h < RL.windowMs);
+    if (RL.hits.length < RL.max) { RL.hits.push(t); return; }
+    const waitMs = RL.windowMs - (t - RL.hits[0]) + 100;
+    await new Promise((r) => setTimeout(r, Math.max(300, waitMs)));
+  }
+}
+
+function parseRetrySeconds(msg) {
+  const m = /retry in ([\d.]+)\s*s/i.exec(msg || "");
+  return m ? Math.ceil(parseFloat(m[1])) : null;
+}
+
+async function scoreBatchWithRetry(batch, { maxRetries = 4 } = {}) {
+  let attempt = 0;
+  while (true) {
+    await rateLimitSlot();
+    try {
+      return await scoreLeadBatch(batch);
+    } catch (e) {
+      const msg = e?.message || String(e);
+      const isQuota = /429|quota|exceeded|rate limit/i.test(msg);
+      if (++attempt > maxRetries) throw e;
+      const retryS = parseRetrySeconds(msg);
+      const backoff = retryS != null ? retryS * 1000 : Math.min(60000, 1500 * 2 ** attempt);
+      if (isQuota) RL.hits = []; // reset our window so we pace fresh after a throttle
+      await new Promise((r) => setTimeout(r, backoff + 300));
+    }
+  }
+}
+
+// Score the most valuable leads FIRST, so a partial or interrupted run still
+// surfaces the money (higher weight = scored sooner).
+const STATUS_W = {
+  "Past Client": 100, "Hot Prospect": 90, Pending: 85, "Buyer & Seller": 76,
+  Seller: 72, Buyer: 70, Contact: 55, "Nurture 3-6 Months": 55,
+  "Nurture 1+ Year": 45, "Casually Browsing": 30,
+};
+function leadPriority(l) {
+  let s = STATUS_W[l.status] ?? 50;
+  if ((l.notes || "").trim().length > 20) s += 25; // real notes = more signal
+  if (l.phone) s += 8;
+  if (l.email) s += 4;
+  return s;
+}
+
 /**
- * Score ALL leads by batching. Calls onProgress(done, total) along the way.
- * Returns the same scored objects merged with original lead data for easy display.
+ * Score ALL leads by batching, PACED to respect the free Gemini rate limit.
+ * Calls onProgress(done, total) after each batch, and onPartial(batchScored)
+ * with each batch's freshly-scored leads so the caller can persist + display
+ * incrementally (so a quota cap or a closed tab never loses prior work).
+ * Pass alreadyScoredIds (Set/array) to skip leads already scored — enables resume.
+ * Returns the newly-scored objects merged with original lead data.
  */
-export async function scoreAllLeads(leads, { batchSize = 25, onProgress } = {}) {
-  // Only score leads that have at least a name and some signal
-  const eligible = leads.filter((l) => l.name && !["Trash", "Closed"].includes(l.status));
+export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onPartial, alreadyScoredIds } = {}) {
+  const skip = alreadyScoredIds instanceof Set ? alreadyScoredIds : new Set(alreadyScoredIds || []);
+  const eligible = leads
+    .filter((l) => l.name && !["Trash", "Closed"].includes(l.status) && !skip.has(l.id))
+    .sort((a, b) => leadPriority(b) - leadPriority(a));
   const total = eligible.length;
   const byId = new Map(eligible.map((l) => [l.id, l]));
   const scored = [];
@@ -126,19 +187,21 @@ export async function scoreAllLeads(leads, { batchSize = 25, onProgress } = {}) 
   for (let i = 0; i < eligible.length; i += batchSize) {
     const batch = eligible.slice(i, i + batchSize);
     try {
-      const results = await scoreLeadBatch(batch);
+      const results = await scoreBatchWithRetry(batch);
+      const batchScored = [];
       results.forEach((r) => {
         const lead = byId.get(r.id);
         if (!lead) return;
-        scored.push({ ...lead, intel: r });
+        const s = { ...lead, intel: r };
+        scored.push(s);
+        batchScored.push(s);
       });
+      if (batchScored.length) onPartial?.(batchScored);
     } catch (e) {
-      console.warn(`[DatabaseIntel] batch ${i}-${i+batch.length} failed:`, e.message);
-      // Continue with next batch instead of aborting
+      console.warn(`[DatabaseIntel] batch ${i}-${i + batch.length} failed after retries:`, e.message);
+      // Keep going — one bad batch shouldn't sink the whole scan.
     }
     onProgress?.(Math.min(i + batchSize, total), total);
-    // Yield briefly so the UI stays responsive + rate-limit friendly
-    await new Promise((r) => setTimeout(r, 250));
   }
   return scored;
 }
