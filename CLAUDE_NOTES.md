@@ -6,7 +6,56 @@
 
 ---
 
-## Last session: 2026-05-27 (web session via Claude Code on the web — Content Engine Top-15 rewrite + new Lead Research feature)
+## Last session: 2026-08-31 (desktop — "Today's Game Plan" morning brief)
+
+### Headline
+Built a **Daily Brief on the Dashboard** — the first thing Monica sees each
+morning: WHO to reach today, WHY, and the exact script, with one-tap Text/Call.
+It surfaces the AI intelligence already built (Database Intelligence +
+DailyOutreach were powerful but buried in the nav and, per prior notes, never
+tested). No new full-screen tool — a card that makes the existing investment
+visible on login.
+
+### What got built
+- **`src/dailyBrief.js`** (new) — pure ranking module, ZERO AI cost at runtime.
+  `buildDailyBrief({leads, tasks, scored, outreachLog, doneIds, limit})` merges
+  3 tiers, dedupes by leadId, drops anyone contacted/dismissed today:
+  1. Tasks (Call/Text/Email) due today or overdue — commitments first.
+  2. `db_intel_results` AI scores — hot_revival → buyer_signal → seller_window
+     → touch_due, by bucket rank then score, with the AI's reason + script.
+  3. Fallback: status-priority × staleness (mirrors DailyOutreach's ranking) so
+     the brief is never empty before an AI scan has been run.
+- **`DailyBrief` component in `App.js`** (defined just above `Dashboard`,
+  rendered at the top of the Dashboard between the greeting and the KPI row).
+  - One-tap **Text** (sms: + copies script), **Call** (tel:), **Email**
+    (mailto:), and **Dismiss for today** (✓).
+  - Text/Call/Email log to `outreach_log` (same log DailyOutreach uses) and
+    mark the source task completed. Dismiss writes to `brief_done`
+    ({date, ids}) so it only hides for the day.
+  - Collapsible (`brief_collapsed`). Shows "Run an AI scan →" nudge (→ db-intel)
+    when no `db_intel_results` yet; "Full outreach list →" → daily-outreach.
+
+### Verified
+- Compiles clean, no console errors. Tested empty state (0 leads) AND seeded
+  state (task + 2 scored leads): ranking, badges, scripts, dismiss-persists all
+  confirmed via browser. Test localStorage keys cleared afterward.
+
+### NOT yet done
+- **Not pushed / not deployed.** Changes are local on the desktop only. Monica
+  needs to approve `npm run save` (pushes → Vercel auto-deploys live).
+- Supabase free tier auto-paused today from inactivity — she resumed it.
+  Upgrading to Pro ($25/mo, no auto-pause + backups) is still the top
+  reliability rec. Not done.
+
+### Files touched
+```
+src/dailyBrief.js   (new)
+src/App.js          (import + DailyBrief component + Dashboard render + briefBtn helper)
+```
+
+---
+
+## Session: 2026-05-27 (web session via Claude Code on the web — Content Engine Top-15 rewrite + new Lead Research feature)
 
 ### Headline
 
