@@ -8,6 +8,25 @@
 
 ## Last session: 2026-08-31 (desktop — brokerage rename + Daily Brief + free keep-alive)
 
+### FIXED: Database Intelligence returned 0 (Gemini free-tier rate limit)
+Monica ran Database Intelligence; it finished in seconds showing 0 despite 6,042
+leads loaded (confirmed in Lead Tracker). Root cause found by hitting
+`/api/claude/messages` directly → **HTTP 429, Gemini free tier limit ~20 req/min
+(model gemini-3.7-flash)**. `scoreAllLeads` fired a batch every 250ms (~240/min)
+with NO retry — so ~all batches 429'd and were silently skipped → ~0 results,
+fast. Fix in `src/aiDatabaseIntel.js` + `App.js` DatabaseIntel.run():
+- Token-bucket rate limiter (14 req / 65s) via `rateLimitSlot()`.
+- `scoreBatchWithRetry` retries on 429/quota, honoring Gemini's "retry in Xs".
+- Leads scored by `leadPriority` (status + has-notes + contact) → best first.
+- Incremental persist (setScored every ~10 batches) + resume via
+  `alreadyScoredIds` → closing the tab / hitting a cap no longer loses work;
+  Re-Analyze continues where it left off.
+- Full 6k scan now genuinely takes ~10-20 min (paced). Compiles clean, pushed
+  (commit 2dda80c). NOTE: today's failed attempts may have eaten some of the
+  daily free quota — if it stalls, partial results are kept; resume later.
+- ANTHROPIC_API_KEY still unset (Monica declined paid) so Gemini is the only
+  backend — this rate limit is a hard free-tier reality, not a bug we can remove.
+
 ### Brokerage rename: RE/MAX Classic → Prime + Property Real Estate
 Monica confirmed she is now at **Prime + Property Real Estate** (was showing
 inconsistently online — Prime+Property on Homes.com/FB, Keller Williams on Yelp,
