@@ -645,9 +645,9 @@ const BUILT_IN_CAMPAIGNS = [
   // ── 1. Internet / IDX Website Lead (BoldTrail-generated) ────────────
   { id:"camp_internet_idx", name:"Internet / IDX Website Lead", description:"14-day intensive for high-intent leads from your BoldTrail site. Text-first, drops to long-term nurture if no engagement.",
     steps:[
-      {day:0, type:"text", body:"Hi [name], this is Monica Iskra with RE/MAX Classic — I just saw you looked at [address]. That one's in a strong [area] pocket. Are you actively touring, or earlier in your search? (Reply STOP to opt out.)",
+      {day:0, type:"text", body:"Hi [name], this is Monica Iskra with Prime + Property Real Estate — I just saw you looked at [address]. That one's in a strong [area] pocket. Are you actively touring, or earlier in your search? (Reply STOP to opt out.)",
         why:"Speed-to-lead. Names property to prove human. Open-ended timeline question = response trigger."},
-      {day:0, type:"email", subject:"[address] — a few things I noticed", body:"Hi [name],\n\nQuick notes on [address] before you decide whether to tour:\n\n• I pulled a comp from the last 60 days — similar bed/bath count in [area] sold for ~5% over list, 14 DOM\n• Inventory in your price range is at 1.17 months (deep seller's market — be ready to move fast on the right one)\n• 3-4 active listings I'd put on your short list with this one (let me know and I'll send the addresses)\n\nWant a 10-min call this week to walk through your search? I have Tuesday or Thursday between 4-7pm open.\n\nMonica Iskra\nRE/MAX Classic\n(248) 000-0000",
+      {day:0, type:"email", subject:"[address] — a few things I noticed", body:"Hi [name],\n\nQuick notes on [address] before you decide whether to tour:\n\n• I pulled a comp from the last 60 days — similar bed/bath count in [area] sold for ~5% over list, 14 DOM\n• Inventory in your price range is at 1.17 months (deep seller's market — be ready to move fast on the right one)\n• 3-4 active listings I'd put on your short list with this one (let me know and I'll send the addresses)\n\nWant a 10-min call this week to walk through your search? I have Tuesday or Thursday between 4-7pm open.\n\nMonica Iskra\nPrime + Property Real Estate\n(248) 000-0000",
         why:"Demonstrates local expertise in 30 sec. Beats the generic 'Welcome!' autoresponder every other agent sends."},
       {day:1, type:"call", objective:"Day-1 connection call", body:"Goal: 15-min discovery call this week. Use ALM script:\n• Appointment: \"Can we set up 15 min Thursday or Saturday?\"\n• Location: \"Just [area], or also Plymouth/Northville/Novi?\"\n• Motivation: \"What's driving the move — schools, space, downsizing?\"\n\nIf no answer: VM under 20 sec referencing the specific property. \"Hey [name], Monica with RE/MAX — just wanted to flag something on [address] for you. Call me at (248) 000-0000.\"",
         why:"Day-1 call before lead goes cold; 78% of buyers hire first agent who connects."},
@@ -667,11 +667,11 @@ const BUILT_IN_CAMPAIGNS = [
   // ── 2. Realtor.com Lead ──────────────────────────────────────────────
   { id:"camp_realtor_com", name:"Realtor.com Lead", description:"21-day intensive for Realtor.com / ReadyConnect leads. Beats the 2-3 other agents competing for the same lead via speed + differentiation.",
     steps:[
-      {day:0, type:"text", body:"Hi [name], Monica here — RE/MAX Classic, [area]. Realtor.com just connected us. Quick question: are you still looking at [area], or has your search shifted? (Reply STOP to opt out.)",
+      {day:0, type:"text", body:"Hi [name], Monica here — Prime + Property Real Estate, [area]. Realtor.com just connected us. Quick question: are you still looking at [area], or has your search shifted? (Reply STOP to opt out.)",
         why:"Beat the other 2-3 agents competing for this lead. Source acknowledgement = trust."},
-      {day:0, type:"call", objective:"Live transfer attempt", body:"Realtor.com leads expect a call. If no answer, ~15 sec VM:\n\"Hey [name], Monica from RE/MAX Classic — got your inquiry through Realtor.com and just wanted to make sure I'm useful to you. Call or text me at (248) 000-0000.\"\nDon't pitch — just confirm you got the inquiry.",
+      {day:0, type:"call", objective:"Live transfer attempt", body:"Realtor.com leads expect a call. If no answer, ~15 sec VM:\n\"Hey [name], Monica from Prime + Property Real Estate — got your inquiry through Realtor.com and just wanted to make sure I'm useful to you. Call or text me at (248) 000-0000.\"\nDon't pitch — just confirm you got the inquiry.",
         why:"Realtor.com leads expect a call; not calling = abdicating the lead."},
-      {day:0, type:"email", subject:"Following up on your Realtor.com search", body:"Hi [name],\n\nThanks for reaching out via Realtor.com. I'm Monica Iskra with RE/MAX Classic — born and raised on the I-275 corridor.\n\nBased on what you were searching, here are 5 active listings that match (sending separately if you want addresses).\n\nWant to grab 15 min on the phone? I have:\n• Tuesday 5pm\n• Saturday 11am\n\nReply with whichever works and I'll lock it in.\n\nMonica",
+      {day:0, type:"email", subject:"Following up on your Realtor.com search", body:"Hi [name],\n\nThanks for reaching out via Realtor.com. I'm Monica Iskra with Prime + Property Real Estate — born and raised on the I-275 corridor.\n\nBased on what you were searching, here are 5 active listings that match (sending separately if you want addresses).\n\nWant to grab 15 min on the phone? I have:\n• Tuesday 5pm\n• Saturday 11am\n\nReply with whichever works and I'll lock it in.\n\nMonica",
         why:"Two-time-slot ask converts 2x better than 'let me know when works.'"},
       {day:2, type:"text", body:"[name] — were any of the homes I sent worth a closer look, or should I tighten the criteria?",
         why:"Forces a yes/no/refine response."},
@@ -713,9 +713,9 @@ const BUILT_IN_CAMPAIGNS = [
   // ── 4. Facebook / Instagram Lead Ad ──────────────────────────────────
   { id:"camp_fb_lead", name:"Facebook / Instagram Lead Ad", description:"60-day low-pressure nurture for Meta ad leads. Most are 6-18 months out — don't pitch hard or they'll mark spam (which downranks your ads).",
     steps:[
-      {day:0, type:"text", body:"Hi [name], Monica with RE/MAX Classic in [area]. You just grabbed the I-275 Corridor Home Value Guide — want me to text you the PDF link directly? (Reply STOP to opt out.)",
+      {day:0, type:"text", body:"Hi [name], Monica with Prime + Property Real Estate in [area]. You just grabbed the I-275 Corridor Home Value Guide — want me to text you the PDF link directly? (Reply STOP to opt out.)",
         why:"Re-confirm consent + deliver the lead magnet. Don't pitch."},
-      {day:0, type:"email", subject:"Your I-275 Corridor guide is here", body:"Hi [name],\n\nHere's the guide you requested — attached as PDF (or use this link).\n\nIf you want me to run a free CMA on your specific home, just reply with the address. Takes me about 24 hours to do it properly with real comps.\n\nNo follow-up pressure — that's not how I work. But I'm here if you need me.\n\nMonica\nRE/MAX Classic",
+      {day:0, type:"email", subject:"Your I-275 Corridor guide is here", body:"Hi [name],\n\nHere's the guide you requested — attached as PDF (or use this link).\n\nIf you want me to run a free CMA on your specific home, just reply with the address. Takes me about 24 hours to do it properly with real comps.\n\nNo follow-up pressure — that's not how I work. But I'm here if you need me.\n\nMonica\nPrime + Property Real Estate",
         why:"Promised value, delivered. Soft second ask, no pressure."},
       {day:2, type:"text", body:"[name] — quick one: are you actually thinking about moving in the next 12 months, or just curious about the market? Either's a totally fine answer.",
         why:"Honest qualifier separates the 10% who are real from the 90% who aren't. People appreciate not being pitched."},
@@ -821,7 +821,7 @@ const BUILT_IN_CAMPAIGNS = [
   // ── 8. Seller Prospect (Home Valuation Request) ─────────────────────
   { id:"camp_seller", name:"Seller Prospect Nurture", description:"35-day cadence for home-valuation requests and listing-alert signups. Triages curious vs considering vs ready-to-list, then pushes the right ones to a listing appointment.",
     steps:[
-      {day:0, type:"text", body:"Hi [name], Monica Iskra here — RE/MAX Classic. I see you requested a home value for [address]. The instant estimate's a starting point, but I can pull real comps from the last 60 days if you want a sharper number. Want me to send those? (Reply STOP to opt out.)",
+      {day:0, type:"text", body:"Hi [name], Monica Iskra here — Prime + Property Real Estate. I see you requested a home value for [address]. The instant estimate's a starting point, but I can pull real comps from the last 60 days if you want a sharper number. Want me to send those? (Reply STOP to opt out.)",
         why:"Acknowledges the (often inaccurate) AVM, offers something better. Triage question gets a response."},
       {day:0, type:"email", subject:"Your [address] home value — the real number", body:"Hi [name],\n\nQuick CMA on [address] — based on 3 recent comp sales within a half mile:\n\n• Comp A: [address] — $X, sold in [N] days\n• Comp B: [address] — $X, sold in [N] days\n• Comp C: [address] — $X, sold in [N] days\n\nMy honest range estimate for your home: $X-Y.\n\nWant a sharper number? Let me walk through in person for 20 min — I'll give you a real CMA.\n\nMonica",
         why:"Range + comps = credibility. Single auto-number = robot."},
@@ -869,11 +869,11 @@ const BUILT_IN_CAMPAIGNS = [
   // ── Legacy generic campaigns (kept for backward compat) ──────────────
   { id:"camp_new_lead", name:"(Legacy) New Lead Welcome", description:"5 emails over 14 days. Great for any fresh lead.",
     steps:[
-      {day:0,  subject:"Great to connect, [name]!",             body:"Hi [name],\n\nI just wanted to reach out and say how excited I am to help you with your real estate goals! Whether you're buying, selling, or just exploring your options, I'm here to make the process as smooth as possible.\n\nA little about me — I'm Monica Iskra with RE/MAX Classic, and I specialize in the Livonia and surrounding areas. I know these neighborhoods inside and out.\n\nFeel free to reach out anytime with questions. I'm always just a call or text away.\n\nTalk soon,\nMonica\n(248) 000-0000"},
-      {day:2,  subject:"How I can help you — Monica Iskra RE/MAX", body:"Hi [name],\n\nI wanted to follow up and share a little more about how I work.\n\nI provide:\n✅ Free home valuations for sellers\n✅ Custom home searches for buyers\n✅ Zero pressure — just expert guidance\n✅ Average days on market: 12 days\n\nWhatever your timeline, I'll work around YOUR schedule.\n\nAny questions? Just hit reply.\n\nBest,\nMonica"},
+      {day:0,  subject:"Great to connect, [name]!",             body:"Hi [name],\n\nI just wanted to reach out and say how excited I am to help you with your real estate goals! Whether you're buying, selling, or just exploring your options, I'm here to make the process as smooth as possible.\n\nA little about me — I'm Monica Iskra with Prime + Property Real Estate, and I specialize in the Livonia and surrounding areas. I know these neighborhoods inside and out.\n\nFeel free to reach out anytime with questions. I'm always just a call or text away.\n\nTalk soon,\nMonica\n(248) 000-0000"},
+      {day:2,  subject:"How I can help you — Monica Iskra · Prime + Property Real Estate", body:"Hi [name],\n\nI wanted to follow up and share a little more about how I work.\n\nI provide:\n✅ Free home valuations for sellers\n✅ Custom home searches for buyers\n✅ Zero pressure — just expert guidance\n✅ Average days on market: 12 days\n\nWhatever your timeline, I'll work around YOUR schedule.\n\nAny questions? Just hit reply.\n\nBest,\nMonica"},
       {day:5,  subject:"What's happening in the market right now",  body:"Hi [name],\n\nHere's a quick snapshot of what's happening in our local real estate market:\n\n📈 Inventory is [low/balanced] right now\n💰 Median sale price is up\n⏱ Homes are selling in an average of 2-3 weeks\n\nThis means [buyers: you need to be ready to move fast / sellers: it's a great time to list].\n\nI'd love to put together a personalized report for your specific situation. Just reply and I'll get it to you!\n\nMonica"},
       {day:9,  subject:"3 homes I think you'll love",              body:"Hi [name],\n\nBased on what you're looking for, I hand-picked a few listings I think are worth a look:\n\n[Listing 1 - address, price, key features]\n[Listing 2 - address, price, key features]\n[Listing 3 - address, price, key features]\n\nWant to schedule a showing? I can usually get you in within 24 hours.\n\nJust reply or call me at (248) 000-0000.\n\nMonica"},
-      {day:14, subject:"Still here to help — Monica",             body:"Hi [name],\n\nI know life gets busy! Just wanted to check in and make sure you have everything you need.\n\nWhenever you're ready to take the next step — whether that's a showing, a home valuation, or just a conversation — I'm here.\n\nNo pressure, no rush. Just good old-fashioned personal service.\n\nLooking forward to working with you,\nMonica Iskra\nRE/MAX Classic\n(248) 000-0000"},
+      {day:14, subject:"Still here to help — Monica",             body:"Hi [name],\n\nI know life gets busy! Just wanted to check in and make sure you have everything you need.\n\nWhenever you're ready to take the next step — whether that's a showing, a home valuation, or just a conversation — I'm here.\n\nNo pressure, no rush. Just good old-fashioned personal service.\n\nLooking forward to working with you,\nMonica Iskra\nPrime + Property Real Estate\n(248) 000-0000"},
     ]
   },
   { id:"camp_buyer", name:"(Legacy) New Buyer Drip (30 Day)", description:"8 emails guiding buyers from search to offer-ready.",
@@ -892,7 +892,7 @@ const BUILT_IN_CAMPAIGNS = [
       {day:3,  subject:"What makes homes sell for top dollar",        body:"Hi [name],\n\nEvery seller wants top dollar. Here's what the data shows about what actually moves the needle:\n\n🏠 First impressions — curb appeal and staging\n📸 Professional photos (I include this with every listing)\n💻 Maximum online exposure — Zillow, Realtor.com, Homes.com, MLS\n💬 Aggressive follow-up with every showing agent\n\nI include all of this in my listing package at no extra cost to you.\n\nWould you like to see my full marketing plan? I'll send it over!\n\nMonica"},
       {day:7,  subject:"Recent sales in your neighborhood",           body:"Hi [name],\n\nHere's a quick look at what's been selling near you recently:\n\n[Recent sale 1 — address, beds/baths, sold price, days on market]\n[Recent sale 2 — address, beds/baths, sold price, days on market]\n[Recent sale 3 — address, beds/baths, sold price, days on market]\n\nYour home could be next! Would you like me to schedule a quick 20-minute walkthrough? No commitment — I just want to see your home and give you an accurate number.\n\nMonica"},
       {day:14, subject:"Is now the right time to sell?",              body:"Hi [name],\n\nI get this question a lot: \"Should I wait for the market to be better?\"\n\nHere's my honest answer: the best time to sell is when it works for YOUR life — not when the market is \"perfect\" (it never is).\n\nThat said, right now we have:\n✅ Strong buyer demand\n✅ Limited inventory (your competition)\n✅ Motivated buyers with pre-approvals in hand\n\nI'm happy to walk you through what YOU could net on a sale right now. No obligation.\n\nMonica"},
-      {day:21, subject:"Monica Iskra — still here to help",           body:"Hi [name],\n\nJust checking in! I know the decision to sell is a big one and there's never any rush.\n\nWhenever you're ready — whether that's next month or next year — I want to be your agent.\n\nIn the meantime, I'm always happy to answer questions about the market, your home's value, or the selling process.\n\nTalk soon,\nMonica Iskra\nRE/MAX Classic\n(248) 000-0000"},
+      {day:21, subject:"Monica Iskra — still here to help",           body:"Hi [name],\n\nJust checking in! I know the decision to sell is a big one and there's never any rush.\n\nWhenever you're ready — whether that's next month or next year — I want to be your agent.\n\nIn the meantime, I'm always happy to answer questions about the market, your home's value, or the selling process.\n\nTalk soon,\nMonica Iskra\nPrime + Property Real Estate\n(248) 000-0000"},
     ]
   },
   { id:"camp_past_client", name:"(Legacy) Past Client Touch", description:"Quarterly emails to stay top of mind and generate referrals.",
@@ -900,7 +900,7 @@ const BUILT_IN_CAMPAIGNS = [
       {day:0,   subject:"Checking in — how's the home, [name]?",     body:"Hi [name],\n\nI hope you and your family are doing great! I was thinking about you and wanted to reach out.\n\nIt's been a while since we closed on your home and I'd love to hear how it's going. Have you settled in well? Made any improvements?\n\nAlso — your home's value has likely changed. Would you like me to pull a quick market update for your address? It's always good to know what your biggest asset is worth!\n\nTake care,\nMonica"},
       {day:30,  subject:"Your home value update — [name]",            body:"Hi [name],\n\nI put together a quick market update for homes in your area and wanted to share it with you.\n\nHere's what's happening:\n📊 Median sale price in your area: [price]\n📈 Change from last year: [+/-%]\n⏱ Average days on market: [X days]\n\nIf you're curious about your specific home's value, just reply and I'll run a full CMA for free.\n\nAnd if you know anyone thinking about buying or selling — I'm always grateful for referrals! 🙏\n\nMonica"},
       {day:60,  subject:"Market update for your neighborhood",        body:"Hi [name],\n\nQuick market update from your favorite Realtor! 😊\n\nHere's what's been happening in real estate lately:\n\n[2-3 sentences about current market conditions]\n\nAnd a reminder — if you ever need anything: a home valuation, a contractor referral, or just real estate advice, I'm always just a text away.\n\nHope you're doing well!\nMonica"},
-      {day:90,  subject:"One more thing, [name]...",                  body:"Hi [name],\n\nI know I reach out periodically, and I hope it's always been helpful rather than annoying! 😊\n\nI just wanted you to know: my business runs almost entirely on referrals from amazing past clients like you. If you know anyone who's thinking about buying or selling — even just exploring — please send them my way.\n\nNo pressure, of course. Just know that a referral from you means the world to me.\n\nThank you for being such a wonderful client!\n\nWith gratitude,\nMonica Iskra\nRE/MAX Classic"},
+      {day:90,  subject:"One more thing, [name]...",                  body:"Hi [name],\n\nI know I reach out periodically, and I hope it's always been helpful rather than annoying! 😊\n\nI just wanted you to know: my business runs almost entirely on referrals from amazing past clients like you. If you know anyone who's thinking about buying or selling — even just exploring — please send them my way.\n\nNo pressure, of course. Just know that a referral from you means the world to me.\n\nThank you for being such a wonderful client!\n\nWith gratitude,\nMonica Iskra\nPrime + Property Real Estate"},
     ]
   },
 ];
@@ -6758,7 +6758,7 @@ const CommissionTracker = ({setPage, toast}) => {
 // cap, quiet hours, and a today/this-week activity log.
 const AILeadConcierge = ({setPage, toast}) => {
   const [settings, setSettings] = useLS("concierge_settings", DEFAULT_CONCIERGE_SETTINGS);
-  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "Prime + Property Real Estate" });
   const [agentVoice] = useLS("agent_voice", "");
   const [previewLead, setPreviewLead] = useState({
     name: "Sarah Johnson", email: "sarah@example.com", phone: "248-555-0199",
@@ -7013,7 +7013,7 @@ const SocialAgent = ({setPage, toast}) => {
   const [settings, setSettings] = useLS("social_settings", DEFAULT_SOCIAL_SETTINGS);
   const [integrations] = useLS("integrations", {});
   const [tab, setTab] = useState("activity");
-  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "Prime + Property Real Estate" });
   const [agentVoice] = useLS("agent_voice", "");
   const [activity, setActivity] = useState(() => {
     try { return JSON.parse(localStorage.getItem("social_activity") || "[]"); } catch { return []; }
@@ -7487,7 +7487,7 @@ const ClosingMultiplier = ({setPage, toast}) => {
   });
   const [generated, setGenerated] = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "Prime + Property Real Estate" });
   const [agentVoice] = useLS("agent_voice", "");
   const [library, setLibrary] = useLS("closing_assets_library", []);
 
@@ -8916,7 +8916,7 @@ const GmailSyncWorker = ({notify, toast}) => {
 // Marks the lead_inbox row's meta with concierge_fired_at so we never re-fire.
 const AILeadConciergeWorker = ({ notify, toast }) => {
   const [settings] = useLS("concierge_settings", DEFAULT_CONCIERGE_SETTINGS);
-  const [profile]  = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic", phone: "" });
+  const [profile]  = useLS("re_profile", { name: "Monica Iskra", brokerage: "Prime + Property Real Estate", phone: "" });
   const [agentVoice] = useLS("agent_voice", "");
   const [, setQueue] = useLS("email_queue", []);
   const [, setTasks] = useLS("tasks", []);
@@ -9101,7 +9101,7 @@ const AILeadConciergeWorker = ({ notify, toast }) => {
 const SocialEngagementWorker = ({ notify, toast }) => {
   const [settings] = useLS("social_settings", DEFAULT_SOCIAL_SETTINGS);
   const [integrations] = useLS("integrations", {});
-  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "RE/MAX Classic" });
+  const [profile] = useLS("re_profile", { name: "Monica Iskra", brokerage: "Prime + Property Real Estate" });
   const [agentVoice] = useLS("agent_voice", "");
   const settingsRef = useRef(settings);
   const integrationsRef = useRef(integrations);

@@ -1331,7 +1331,7 @@ const MicRecorder = ({ onComplete, onCancel, toast, maxSeconds = 30 }) => {
       {/* Tips */}
       {!recording && stream && (
         <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14, lineHeight: 1.5 }}>
-          💡 <strong style={{ color: '#cbd5e1' }}>For best clone quality:</strong> speak naturally for 15-30 sec. Read a few sentences (e.g. "Hi, this is Monica with RE/MAX Classic. I help families find home in Livonia and Metro Detroit.") Avoid background noise.
+          💡 <strong style={{ color: '#cbd5e1' }}>For best clone quality:</strong> speak naturally for 15-30 sec. Read a few sentences (e.g. "Hi, this is Monica with Prime + Property Real Estate. I help families find home in Livonia and Metro Detroit.") Avoid background noise.
         </div>
       )}
 
@@ -1707,7 +1707,7 @@ const VoiceCloneTool = ({ toast }) => {
             <textarea
               className="textarea"
               style={{ minHeight: 120 }}
-              placeholder='Type out the words from your reference audio, e.g.: "Hi, this is Monica with RE/MAX Classic, helping families find home in Livonia."'
+              placeholder='Type out the words from your reference audio, e.g.: "Hi, this is Monica with Prime + Property Real Estate, helping families find home in Livonia."'
               value={refText}
               onChange={e => setRefText(e.target.value)}
             />

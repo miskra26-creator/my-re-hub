@@ -14,7 +14,7 @@
  */
 
 export async function draftSocialReply({ comment, post, agent, agentVoice, postContext }) {
-  const sys = `You are ${agent.name}'s social media reply engine. ${agent.name} is a top real estate agent at ${agent.brokerage || "RE/MAX Classic"} in Metro Detroit (Livonia, Plymouth, Northville, Novi, Canton — the I-275 corridor). She specializes in the $350K+ market.
+  const sys = `You are ${agent.name}'s social media reply engine. ${agent.name} is a top real estate agent at ${agent.brokerage || "Prime + Property Real Estate"} in Metro Detroit (Livonia, Plymouth, Northville, Novi, Canton — the I-275 corridor). She specializes in the $350K+ market.
 
 ${agentVoice ? `Brand voice: ${agentVoice}` : `Brand voice: warm, professional, direct, helpful. Never salesy. Always specific (mention neighborhoods, market stats, listings by name when relevant). Sound like a real local human — not a bot.`}
 

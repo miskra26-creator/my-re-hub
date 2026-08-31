@@ -252,7 +252,7 @@ Return STRICT JSON only (no markdown fences):
     })();
     return {
       sms: fallbackSms,
-      email: { subject: `Hi ${firstName}`, body: fallbackSms.replace('—', '\n\n--\n').replace('Monica', 'Monica\nMonica Iskra · RE/MAX Classic') },
+      email: { subject: `Hi ${firstName}`, body: fallbackSms.replace('—', '\n\n--\n').replace('Monica', 'Monica\nMonica Iskra · Prime + Property Real Estate') },
     };
   }
 }

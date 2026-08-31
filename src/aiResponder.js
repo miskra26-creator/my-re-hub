@@ -13,7 +13,7 @@ export async function draftLeadResponse({ lead, profile, agentVoice }) {
   const firstName = (lead.name || "").split(" ")[0] || "there";
   const agentName = profile?.name?.split(" ")[0] || "Monica";
   const agentFull = profile?.name || "Monica Iskra";
-  const brokerage = profile?.brokerage || "RE/MAX Classic";
+  const brokerage = profile?.brokerage || "Prime + Property Real Estate";
   const phone     = profile?.phone || "";
 
   const sys = `You are a senior real estate agent's executive assistant writing the first response to a NEW LEAD on the agent's behalf. The agent is ${agentFull} at ${brokerage}. ${agentVoice ? `Brand voice: ${agentVoice}.` : "Warm, direct, helpful, professional. Never pushy or salesy."}

@@ -2007,7 +2007,7 @@ function VoiceSetupModal({ onClose, onSaved, onCleared, toast }) {
 
         <div style={{fontSize:13, color:'#cbd5e1', marginBottom:18, lineHeight:1.5}}>
           Record 15-30 seconds of yourself talking naturally. Read a few sentences out loud —
-          e.g. "Hi, I'm Monica with RE/MAX Classic. I help families find home in Livonia and Metro Detroit."
+          e.g. "Hi, I'm Monica with Prime + Property Real Estate. I help families find home in Livonia and Metro Detroit."
           F5-TTS will clone your voice from this once and reuse it for every AutoReel narration.
         </div>
 
@@ -2069,7 +2069,7 @@ function VoiceSetupModal({ onClose, onSaved, onCleared, toast }) {
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}
               rows={3}
-              placeholder="Hi, I'm Monica with RE/MAX Classic…"
+              placeholder="Hi, I'm Monica with Prime + Property Real Estate…"
               style={{...S.input, width:'100%', marginTop:5, resize:'vertical', fontFamily:'inherit'}}
             />
           </div>

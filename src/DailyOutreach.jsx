@@ -96,7 +96,7 @@ function fallbackTemplate(lead) {
     return `Hi ${first}, Monica here. Wanted to check in — where are you at on your home search${area ? ` in ${area}` : ''}? Market's been interesting lately. Want to grab 10 min to catch up?`;
   }
   if (status.includes('Nurture') || status === 'Casually Browsing') {
-    return `Hey ${first}, Monica from RE/MAX Classic. It's been a minute — are you still casually looking${area ? ` in ${area}` : ''}? I've seen some interesting movement in the market and thought of you. No pressure, just keeping you in the loop.`;
+    return `Hey ${first}, Monica from Prime + Property Real Estate. It's been a minute — are you still casually looking${area ? ` in ${area}` : ''}? I've seen some interesting movement in the market and thought of you. No pressure, just keeping you in the loop.`;
   }
   return `Hi ${first}, Monica here. Was thinking about you — wanted to see how things are going and if there's anything real-estate-wise I can help with. Always here.`;
 }
@@ -213,7 +213,7 @@ export default function DailyOutreach({ toast, setPage }) {
 ${recentActivity || 'none'}`;
 
       const prompt = hasUserEdits
-        ? `You are sharpening a check-in text written by Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent). She wrote a draft — refine it to sound BETTER while preserving her voice and intent.
+        ? `You are sharpening a check-in text written by Monica Iskra (Prime + Property Real Estate, Metro Detroit luxury agent). She wrote a draft — refine it to sound BETTER while preserving her voice and intent.
 
 ${contactContext}
 
@@ -233,7 +233,7 @@ REFINE RULES:
 - 2-4 sentences
 
 Return ONLY the refined message. No preamble, no quotes, no explanation. Just the polished text.`
-        : `You are writing a friendly, warm check-in text from Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent) to one of her contacts. The goal: re-open conversation, not sell.
+        : `You are writing a friendly, warm check-in text from Monica Iskra (Prime + Property Real Estate, Metro Detroit luxury agent) to one of her contacts. The goal: re-open conversation, not sell.
 
 ${contactContext}
 

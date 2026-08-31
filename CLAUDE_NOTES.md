@@ -6,7 +6,25 @@
 
 ---
 
-## Last session: 2026-08-31 (desktop — "Today's Game Plan" morning brief)
+## Last session: 2026-08-31 (desktop — brokerage rename + Daily Brief + free keep-alive)
+
+### Brokerage rename: RE/MAX Classic → Prime + Property Real Estate
+Monica confirmed she is now at **Prime + Property Real Estate** (was showing
+inconsistently online — Prime+Property on Homes.com/FB, Keller Williams on Yelp,
+RE/MAX Classic in the Hub). Replaced ALL 30+ hardcoded "RE/MAX Classic" strings
+(+ one "Monica Iskra RE/MAX" subject) across src → "Prime + Property Real
+Estate". Files: App.js (drip campaigns, re_profile defaults, email drafter),
+aiResponder.js, aiSocialAgent.js, aiPastClientAgent.js, aiLeadResearch.js,
+AIStudio.jsx, AutoReel.jsx, DailyOutreach.jsx, InfluencerWatch.jsx. Compiles
+clean, no console errors. LEFT ALONE: generic input placeholders ("Keller
+Williams, RE/MAX...") and the CMA "competing agent" field — those are examples,
+not Monica's brokerage.
+**CAVEAT for next Claude / Monica:** the SAVED `re_profile.brokerage` value in
+her Supabase account overrides these code defaults anywhere that reads
+`profile.brokerage`. Monica should confirm Settings → Profile → Brokerage says
+"Prime + Property Real Estate" (couldn't set it from here — not signed in).
+GBP integration: told her to SKIP it (Google API approval slog); use the free
+Google Business Profile app directly. Do not keep pushing the Hub GBP connect.
 
 ### Headline
 Built a **Daily Brief on the Dashboard** — the first thing Monica sees each

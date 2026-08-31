@@ -255,7 +255,7 @@ const CONTENT_ENGINE_SEED = [
 // Used by the "Refresh with AI" button on the Content Engine tab.
 const CONTENT_ENGINE_PROMPT = `You are an expert real estate content researcher tracking the highest-engagement US real estate creators on Instagram, TikTok, and YouTube in 2026.
 
-Your client is Monica Iskra (RE/MAX Classic, Metro Detroit luxury agent). She wants to study the BEST US RE creators and adapt their winning formulas to her market.
+Your client is Monica Iskra (Prime + Property Real Estate, Metro Detroit luxury agent). She wants to study the BEST US RE creators and adapt their winning formulas to her market.
 
 Return the 15 top US real estate creators currently going viral, ranked by their PEAK viral view counts (biggest single-post reach first). PRIORITIZE creators with proven high engagement (50K+ views per post regularly). Skip coaching influencers if possible — focus on PRACTICING agents who post about real estate.
 
@@ -684,7 +684,7 @@ const InfluencerWatch = ({ setPage, toast }) => {
   const optimizeCreator = async (creator) => {
     setOptimizing(creator.creator);
     try {
-      const prompt = `You are a viral real estate content writer. Study this top US creator's winning formula, then write 3 ready-to-post captions adapting their style for Monica Iskra (RE/MAX Classic luxury agent, Metro Detroit — Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield).
+      const prompt = `You are a viral real estate content writer. Study this top US creator's winning formula, then write 3 ready-to-post captions adapting their style for Monica Iskra (Prime + Property Real Estate luxury agent, Metro Detroit — Birmingham, Bloomfield Hills, Novi, Northville, West Bloomfield).
 
 CREATOR: ${creator.creator} (${creator.handle})
 SIGNATURE HOOK: "${creator.hook}"
