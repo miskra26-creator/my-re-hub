@@ -1,0 +1,43 @@
+name: Supabase keep-alive
+
+# Supabase pauses FREE-tier projects after 7 days of no activity. That's what
+# knocked the Hub offline (login "network error") until we manually resumed it.
+# This job pings the project daily so the inactivity timer never reaches 7 days.
+# Cost: $0 — GitHub Actions minutes are free for this, and the ping is tiny.
+#
+# The key below is the PUBLIC "publishable" (anon) key — the same one already
+# shipped in the browser bundle and protected by Row Level Security. It is safe
+# to keep here; it grants no access beyond what the public web app already has.
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # every day at 09:17 UTC (~5am ET). Odd minute avoids GH's busy top-of-hour queue.
+  workflow_dispatch: {}     # lets you run it manually from the Actions tab anytime
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (auth + database) to reset the inactivity timer
+        run: |
+          BASE="https://hastxrejqacppfgdldrm.supabase.co"
+          KEY="sb_publishable_RhgIUN6Joh41LunhdDCtgg_hWWPk06b"
+
+          echo "Pinging auth service..."
+          AUTH=$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/auth/v1/health" -H "apikey: $KEY")
+          echo "  auth/v1/health -> HTTP $AUTH"
+
+          echo "Pinging database (PostgREST)..."
+          REST=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "$BASE/rest/v1/user_data?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+          echo "  rest/v1/user_data -> HTTP $REST"
+
+          # Any HTTP response (even 401) means the request reached the project,
+          # which is what resets the pause timer. Only a total network failure
+          # (curl couldn't connect at all -> empty string) is a real problem.
+          if [ -z "$AUTH" ] && [ -z "$REST" ]; then
+            echo "::error::Could not reach Supabase at all — project may be down."
+            exit 1
+          fi
+          echo "Keep-alive ping complete. Project activity registered."
