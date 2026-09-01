@@ -25,7 +25,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useLS } from './cloudHooks';
-import { idbGet, idbSet, idbCountByPrefix } from './cloudHooks';
+import { idbGet, idbSet, idbCountByPrefix, idbExportByPrefix, idbImportBackup } from './cloudHooks';
 
 const PROGRESS_KEY = 'fub_import_progress';
 const ENDPOINTS = ['notes', 'events', 'textMessages', 'calls', 'emails'];
@@ -189,6 +189,73 @@ export default function FubMigration({ toast }) {
       toast.error('Verification failed: ' + e.message);
     }
     setVerifying(false);
+  };
+
+  // ── Backup to a real file on her computer ─────────────────────────────────
+  // IndexedDB is the ONLY place the imported FUB history lives (idbSet never
+  // touches Supabase). In May 2026 the import completed, was verified, and the
+  // browser silently deleted it anyway. Everything below exists so that never
+  // costs her the data again.
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupNote, setBackupNote] = useState('');
+  const restoreInputRef = useRef(null);
+
+  const downloadBackup = async () => {
+    setBackupBusy(true);
+    setBackupNote('Reading local database…');
+    try {
+      const { blob, count, skipped, bytes } = await idbExportByPrefix(
+        'fub_data_',
+        (n) => setBackupNote(`Packaging ${n.toLocaleString()} leads…`)
+      );
+      if (!count) {
+        toast.error('Nothing to back up yet — no imported FUB data found.');
+        setBackupNote('');
+        setBackupBusy(false);
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my-re-hub-fub-backup-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke late — Firefox cancels an in-flight download if the object URL
+      // is released too early on a file this large.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      const mb = (bytes / 1048576).toFixed(1);
+      setBackupNote(`Saved ${count.toLocaleString()} leads (${mb} MB) to your Downloads folder${skipped ? ` · ${skipped} record(s) skipped` : ''}.`);
+      toast.success(`💾 Backed up ${count.toLocaleString()} leads (${mb} MB)`);
+    } catch (e) {
+      setBackupNote('');
+      toast.error('Backup failed: ' + e.message);
+    }
+    setBackupBusy(false);
+  };
+
+  const restoreBackup = async (file) => {
+    if (!file) return;
+    setBackupBusy(true);
+    setBackupNote('Reading backup file…');
+    try {
+      const text = await file.text();
+      setBackupNote('Restoring into local database…');
+      const { written, exportedAt } = await idbImportBackup(
+        text,
+        (n, total) => setBackupNote(`Restoring ${n.toLocaleString()} of ${total.toLocaleString()}…`)
+      );
+      const when = exportedAt ? new Date(exportedAt).toLocaleDateString() : 'unknown date';
+      setBackupNote(`Restored ${written.toLocaleString()} leads from the ${when} backup.`);
+      toast.success(`✅ Restored ${written.toLocaleString()} leads`);
+      idbCountByPrefix('fub_data_').then(setIdbCount);
+    } catch (e) {
+      setBackupNote('');
+      toast.error('Restore failed: ' + e.message);
+    }
+    setBackupBusy(false);
   };
 
   const saveProgress = (p) => {
@@ -397,6 +464,52 @@ export default function FubMigration({ toast }) {
             {showDebug ? 'Hide' : 'Show'} debug log ({debugLog.length} leads)
           </button>
         )}
+      </div>
+
+      {/* ── Backup panel ────────────────────────────────────────────────────
+          Deliberately always visible, not gated on idbCount, so the Restore
+          path is reachable on a browser where the data has already been wiped
+          — that is exactly the moment she needs it most. */}
+      <div className="glass-card" style={{
+        padding: '14px 16px',
+        background: 'rgba(59,130,246,.06)',
+        border: '1px solid rgba(59,130,246,.22)',
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>
+          💾 Backup — a copy you own
+        </div>
+        <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.55, marginBottom: 10 }}>
+          Imported FUB history lives only in this browser. Browsers can delete it without warning —
+          that already happened once. Download a backup file and keep it somewhere safe
+          (Downloads is fine; a USB stick or Google Drive is better). If the data ever
+          disappears again, Restore brings it back in seconds.
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="btn" style={{
+            background: 'rgba(59,130,246,.15)', color: '#93c5fd',
+            border: '1px solid rgba(59,130,246,.35)', width: 'fit-content',
+          }} onClick={downloadBackup} disabled={backupBusy}>
+            {backupBusy ? '⏳ Working…' : '⬇ Download Backup'}
+          </button>
+          <button className="btn btn-ghost btn-sm" style={{ width: 'fit-content' }}
+            onClick={() => restoreInputRef.current?.click()} disabled={backupBusy}>
+            ⬆ Restore from Backup
+          </button>
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';       // allow re-picking the same file later
+              restoreBackup(f);
+            }}
+          />
+          {backupNote && (
+            <span style={{ fontSize: 11, color: '#cbd5e1' }}>{backupNote}</span>
+          )}
+        </div>
       </div>
 
       {/* Verification results — shown after Verify Local Data button click */}

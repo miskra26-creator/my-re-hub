@@ -177,6 +177,96 @@ export async function idbCountByPrefix(prefix) {
   }
 }
 
+// ── Backup / restore ─────────────────────────────────────────────────────────
+// The FUB import writes every note, call, text and email to IndexedDB and
+// NOWHERE else — idbSet() does not sync to Supabase. In May the import finished
+// 100%, was verified on screen, and by September the browser had silently
+// evicted all of it. navigator.storage.persist() (see src/index.js) makes that
+// much less likely, but "less likely" is not a backup. This is the backup:
+// a plain JSON file on Monica's own disk that no browser can throw away.
+//
+// Written with a cursor rather than getAll() because the full export is ~300MB
+// across 6,000 leads — materialising that as one JavaScript object, then one
+// giant string, would risk an out-of-memory crash mid-backup. Instead each
+// record is serialised individually and pushed onto an array of string parts;
+// Blob() stitches them together and (in Firefox and Chrome) spills to disk
+// rather than holding the whole thing in the JS heap.
+//
+// One malformed record must not cost her the other 5,999, so serialisation
+// failures are skipped and reported instead of thrown.
+export async function idbExportByPrefix(prefix, onProgress) {
+  const db = await openDB();
+  const parts = ['{"format":"my-re-hub-backup","version":1,"prefix":' +
+    JSON.stringify(prefix) + ',"exportedAt":' + JSON.stringify(new Date().toISOString()) +
+    ',"records":{'];
+  let count = 0;
+  let skipped = 0;
+
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { resolve(); return; }
+      const key = cursor.key;
+      if (typeof key === 'string' && key.startsWith(prefix)) {
+        try {
+          parts.push((count ? ',' : '') + JSON.stringify(key) + ':' + JSON.stringify(cursor.value));
+          count++;
+          if (onProgress && count % 250 === 0) onProgress(count);
+        } catch {
+          skipped++;
+        }
+      }
+      // Must continue synchronously — awaiting anything here would let the
+      // IDB transaction auto-close and truncate the backup partway through.
+      cursor.continue();
+    };
+    req.onerror = (e) => reject(e.target.error);
+  });
+
+  parts.push('}}');
+  const blob = new Blob(parts, { type: 'application/json' });
+  return { blob, count, skipped, bytes: blob.size };
+}
+
+// Restore a file produced by idbExportByPrefix. Writes in batches so a huge
+// restore doesn't hold one transaction open for minutes, and so the UI can
+// show progress. Existing keys are overwritten — a restore is "make local
+// match this file", not a merge.
+export async function idbImportBackup(text, onProgress) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('That file is not valid JSON — it may be truncated or not a backup file.');
+  }
+  if (!parsed || parsed.format !== 'my-re-hub-backup' || !parsed.records) {
+    throw new Error('That file is not a my-re-hub backup.');
+  }
+
+  const entries = Object.entries(parsed.records);
+  const db = await openDB();
+  const BATCH = 200;
+  let written = 0;
+
+  for (let i = 0; i < entries.length; i += BATCH) {
+    const slice = entries.slice(i, i + BATCH);
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      for (const [k, v] of slice) store.put(v, k);
+      tx.oncomplete = resolve;
+      tx.onerror = (e) => reject(e.target.error);
+    });
+    written += slice.length;
+    if (onProgress) onProgress(written, entries.length);
+  }
+
+  return { written, exportedAt: parsed.exportedAt || null };
+}
+
 // ── useLS — localStorage + Supabase sync ────────────────────────────────────
 export function useLS(key, defaultValue) {
   const [value, setValue] = useState(() => {
