@@ -8765,7 +8765,27 @@ const GmailSyncWorker = ({notify, toast}) => {
       if (localStorage.getItem('gmail_autosend') !== 'on') return 0;
       const queue = JSON.parse(localStorage.getItem('email_queue')||'[]');
       const todayStr = new Date().toISOString().slice(0,10);
-      const due = queue.filter(e => !e.sent && e.dueDate <= todayStr && e.leadEmail);
+      // SAFETY: without these guards, switching autosend on with a backlog of
+      // past-due drip steps would blast every one of them at once, in a tight
+      // loop, to real clients — and get the account flagged by Gmail.
+      // 1) Never send anything more than STALE_DAYS overdue. Those are almost
+      //    certainly a backlog that accumulated while autosend was off, not
+      //    mail Monica actually wants going out today.
+      // 2) Cap each run so a mistake is small and recoverable.
+      const STALE_DAYS = 3, MAX_PER_RUN = 20;
+      const staleBefore = new Date(Date.now() - STALE_DAYS*24*3600*1000).toISOString().slice(0,10);
+      const allDue = queue.filter(e => !e.sent && e.dueDate <= todayStr && e.leadEmail);
+      const stale = allDue.filter(e => e.dueDate < staleBefore);
+      if (stale.length) {
+        const staleIds = new Set(stale.map(e => e.id));
+        const marked = queue.map(e => staleIds.has(e.id)
+          ? {...e, staleSkipped:true, staleSkippedAt:new Date().toISOString()}
+          : e);
+        localStorage.setItem('email_queue', JSON.stringify(marked));
+        window.dispatchEvent(new CustomEvent('email-queue-updated'));
+        toast.info(`⏸️ Skipped ${stale.length} drip email${stale.length>1?'s':''} more than ${STALE_DAYS} days overdue — review them in Email Campaigns.`);
+      }
+      const due = allDue.filter(e => e.dueDate >= staleBefore).slice(0, MAX_PER_RUN);
       if (!due.length) return 0;
       const profile = JSON.parse(localStorage.getItem('re_profile')||'{}');
       const fromName = profile.name ? `${profile.name} <me>` : '';
