@@ -25,6 +25,12 @@ import InfluencerWatch from './InfluencerWatch';
 import LeadResearch from './LeadResearch';
 import { sendSms, smsAutoSendEnabled } from './twilioSms';
 import Finances from './Finances';
+// Action-plan definitions + the task-building logic that used to be copy-pasted
+// in three places in this file. See src/actionPlans.js for why.
+import {
+  TASK_TYPES, TASK_ICONS, TASK_COLORS, BUILT_IN_PLANS,
+  planTasksForLead, isOnPlan, previewBulkApply, buildBulkTasks,
+} from './actionPlans';
 import {
   Sparkles, MessageSquare, Video, Film, Calendar, FolderOpen, Heart, Maximize2, Minimize2,
   Share2, CalendarDays, BarChart3, Search, RefreshCw, Layout, FlaskConical,
@@ -550,74 +556,8 @@ const PROPERTY_TYPES = ["Single Family","Condo","Townhouse","Multi-Family","Land
 
 const LEAD_STATUSES = ["Hot Prospect","Contact","Buyer","Seller","Casually Browsing","Nurture 3-6 Months","Nurture 1+ Year","Buy/Sell Nurture","Pending","Past Client","Closed","Trash"];
 
-const TASK_TYPES = ["Call","Text","Email","Follow-up","Meeting","To-Do"];
-const TASK_ICONS = {Call:"📞",Text:"💬",Email:"📧","Follow-up":"🔔",Meeting:"📅","To-Do":"✅"};
-const TASK_COLORS = {Call:"#ef4444",Text:"#8b5cf6",Email:"#3b82f6","Follow-up":"#f59e0b",Meeting:"#10b981","To-Do":"#64748b"};
-
-const BUILT_IN_PLANS = [
-  { id:"plan_new_lead", name:"New Lead — 7 Day Blitz", isBuiltIn:true,
-    description:"Aggressive first-week follow-up. Best for hot prospects and fresh inquiries.",
-    steps:[
-      {day:0, type:"Call",      title:"Welcome call — introduce yourself, find out their timeline"},
-      {day:0, type:"Text",      title:"Text: 'Hi [name]! This is Monica Iskra. Just tried to reach you — happy to help you find your perfect home!'"},
-      {day:1, type:"Email",     title:"Send intro email with neighborhood market snapshot"},
-      {day:2, type:"Call",      title:"Follow-up call attempt #2"},
-      {day:3, type:"Text",      title:"Text: 'Still here to help whenever you're ready. Any questions?'"},
-      {day:5, type:"Email",     title:"Send 3 active listings that match their criteria"},
-      {day:7, type:"Call",      title:"7-day check-in call — where are they in their search?"},
-    ]
-  },
-  { id:"plan_buyer", name:"New Buyer Nurture (30 Day)", isBuiltIn:true,
-    description:"For serious buyers — walks them from inquiry to showing appointments.",
-    steps:[
-      {day:0, type:"Call",      title:"Initial buyer consultation — budget, timeline, must-haves"},
-      {day:1, type:"Email",     title:"Send buyer guide + pre-approval referral info"},
-      {day:3, type:"Call",      title:"Check on pre-approval status, answer questions"},
-      {day:7, type:"Email",     title:"Send curated home search with 5 top matches"},
-      {day:10, type:"Call",     title:"Schedule first showings"},
-      {day:14, type:"Text",     title:"Text: 'New listing just hit that fits your search — want to see it?'"},
-      {day:21, type:"Call",     title:"3-week check-in — adjust search criteria?"},
-      {day:30, type:"Email",    title:"30-day market update for their target area"},
-    ]
-  },
-  { id:"plan_seller", name:"New Seller Prospect", isBuiltIn:true,
-    description:"Convert a seller inquiry into a listing appointment.",
-    steps:[
-      {day:0, type:"Call",      title:"Initial call — understand their motivation and timeline"},
-      {day:1, type:"Email",     title:"Send personalized CMA and neighborhood market report"},
-      {day:2, type:"Call",      title:"CMA follow-up — answer pricing questions"},
-      {day:5, type:"Email",     title:"Send your listing presentation and marketing plan"},
-      {day:7, type:"Call",      title:"Schedule listing appointment"},
-      {day:14, type:"Follow-up",title:"Check in — any hesitation? Address objections"},
-      {day:21, type:"Email",    title:"Send comparable active listings to show market activity"},
-      {day:30, type:"Call",     title:"Final push — are they ready to list?"},
-    ]
-  },
-  { id:"plan_nurture_6mo", name:"Nurture — 6 Month", isBuiltIn:true,
-    description:"For leads who are 3–6 months out. Stay top of mind without being pushy.",
-    steps:[
-      {day:0,   type:"Email",   title:"Welcome email — set expectations, offer help whenever they're ready"},
-      {day:14,  type:"Call",    title:"Friendly check-in — any questions about the market?"},
-      {day:30,  type:"Email",   title:"Month 1 market update for their target area"},
-      {day:60,  type:"Call",    title:"2-month check-in — timeline update?"},
-      {day:90,  type:"Email",   title:"Quarter market report — prices, inventory, trends"},
-      {day:120, type:"Call",    title:"4-month check-in — are they getting closer?"},
-      {day:150, type:"Email",   title:"5-month — send relevant new listings"},
-      {day:180, type:"Call",    title:"6-month full check-in — ready to move forward?"},
-    ]
-  },
-  { id:"plan_past_client", name:"Past Client Annual Check-In", isBuiltIn:true,
-    description:"Stay top of mind with clients who already closed. Referral gold.",
-    steps:[
-      {day:0,   type:"Call",    title:"Annual check-in call — how's the home treating them?"},
-      {day:1,   type:"Email",   title:"Send personalized home value update for their address"},
-      {day:90,  type:"Email",   title:"Spring/Fall market update for their neighborhood"},
-      {day:180, type:"Call",    title:"Mid-year check-in — any friends or family looking?"},
-      {day:270, type:"Email",   title:"Holiday message + year-end market report"},
-      {day:365, type:"Call",    title:"1-year anniversary call — how can I help?"},
-    ]
-  },
-];
+// TASK_TYPES / TASK_ICONS / TASK_COLORS / BUILT_IN_PLANS now live in
+// src/actionPlans.js so Smart Lists can bulk-apply the same plans.
 
 const CALL_OUTCOMES = [
   {id:"answered",       label:"Answered",          color:"#10b981", followUpDays:3},
@@ -2458,11 +2398,13 @@ export const ContactDetail = ({lead, onClose, onUpdate, toast}) => {
     const plans = [...BUILT_IN_PLANS,...allPlans];
     const plan = plans.find(p=>p.id===applyPlanId);
     if(!plan) return;
-    const start = new Date(applyPlanStart);
-    const newTasks = plan.steps.map(step=>{
-      const due = new Date(start); due.setDate(due.getDate()+step.day);
-      return {id:uid(),title:step.title.replace("[name]",lead.name.split(" ")[0]),type:step.type,leadId:lead.id,leadName:lead.name,dueDate:due.toISOString().slice(0,10),notes:"",actionPlanId:plan.id,actionPlanName:plan.name,completed:false,createdAt:now()};
-    });
+    // Already mid-plan? Applying again just doubles her call list.
+    if(isOnPlan(tasks, lead.id, plan.id)){
+      toast.error(`${lead.name||"This lead"} is already on "${plan.name}" — finish or clear those tasks first.`);
+      setShowApplyPlan(false);
+      return;
+    }
+    const newTasks = planTasksForLead(plan, lead, applyPlanStart, uid);
     setTasks(p=>[...p,...newTasks]);
     setShowApplyPlan(false);
     toast.success(`${newTasks.length} tasks created from "${plan.name}"`);
@@ -3842,18 +3784,31 @@ const LeadTracker = ({setPage,toast}) => {
     const allPlans = [...BUILT_IN_PLANS,...customPlans];
     const plan = allPlans.find(p=>p.id===bulkValue);
     if(!plan) return;
-    const start = new Date();
-    const newTasks = [];
-    selected.forEach(lid=>{
-      const lead = leads.find(l=>l.id===lid);
-      if(!lead) return;
-      plan.steps.forEach(step=>{
-        const due = new Date(start); due.setDate(due.getDate()+step.day);
-        newTasks.push({id:uid(),title:step.title.replace("[name]",lead.name.split(" ")[0]),type:step.type,leadId:lead.id,leadName:lead.name,dueDate:due.toISOString().slice(0,10),actionPlanId:plan.id,actionPlanName:plan.name,completed:false,createdAt:now()});
-      });
-    });
+
+    const start = new Date().toISOString().slice(0,10);
+    const chosen = selected.map(lid=>leads.find(l=>l.id===lid)).filter(Boolean);
+    const pv = previewBulkApply(plan, chosen, tasks, start);
+
+    // Refuse rather than quietly blow up localStorage. 6,042 leads on a 7-step
+    // plan is 42,000 tasks — past the ~5MB cap, where a failed write can take
+    // the entire task list with it.
+    if(pv.overCap){
+      toast.error(`That's ${pv.taskCount.toLocaleString()} tasks — too many to store. Apply "${plan.name}" to ${pv.maxLeads} leads or fewer at a time.`);
+      return;
+    }
+    if(!pv.eligible.length){
+      toast.info(pv.skipped.length
+        ? `All ${pv.skipped.length} selected leads are already on "${plan.name}".`
+        : "No valid leads selected.");
+      return;
+    }
+
+    const skipNote = pv.skipped.length ? `\n${pv.skipped.length} already on this plan — they'll be skipped.` : "";
+    if(!window.confirm(`Apply "${plan.name}" to ${pv.eligible.length} lead${pv.eligible.length>1?"s":""}?\n\nThis creates ${pv.taskCount.toLocaleString()} tasks on your calendar. Nothing is sent to anyone.${skipNote}`)) return;
+
+    const newTasks = buildBulkTasks(plan, pv.eligible, start, uid);
     setTasks(p=>[...p,...newTasks]);
-    toast.success(`${newTasks.length} tasks created for ${selected.length} leads`); clearSel();
+    toast.success(`${newTasks.length.toLocaleString()} tasks created for ${pv.eligible.length} leads${pv.skipped.length?` · ${pv.skipped.length} skipped`:""}`); clearSel();
   };
   const bulkDelete = () => {
     if(!window.confirm(`Delete ${selected.length} leads? This cannot be undone.`)) return;
@@ -10513,11 +10468,11 @@ const ActionPlans = ({setPage,toast}) => {
   const applyPlan = () => {
     const lead = leads.find(l=>l.id===applyLeadId);
     if(!lead||!applyModal) return;
-    const start = new Date(applyStart);
-    const newTasks = applyModal.steps.map(step=>{
-      const due = new Date(start); due.setDate(due.getDate()+step.day);
-      return {id:uid(),title:step.title.replace("[name]",lead.name.split(" ")[0]),type:step.type,leadId:lead.id,leadName:lead.name,dueDate:due.toISOString().slice(0,10),notes:"",actionPlanId:applyModal.id,actionPlanName:applyModal.name,completed:false,createdAt:now()};
-    });
+    if(isOnPlan(tasks, lead.id, applyModal.id)){
+      toast.error(`${lead.name} is already on "${applyModal.name}" — finish or clear those tasks first.`);
+      setApplyModal(null); return;
+    }
+    const newTasks = planTasksForLead(applyModal, lead, applyStart, uid);
     setTasks(p=>[...p,...newTasks]);
     toast.success(`${newTasks.length} tasks created for ${lead.name} from "${applyModal.name}"`);
     setApplyModal(null); setApplyLeadId(""); setApplyLeadSearch("");
@@ -11132,13 +11087,12 @@ const LeadInbox = ({setPage,toast,setInboxCount}) => {
         const allPlans = [...BUILT_IN_PLANS, ...JSON.parse(localStorage.getItem('action_plans')||'[]')];
         const plan = allPlans.find(p=>p.id===autoPlanId);
         if(plan) {
-          const start = new Date();
+          // Was wrapped in try/catch, so a single lead with no name silently
+          // enrolled NOBODY — the whole batch vanished with no error shown.
+          const start = new Date().toISOString().slice(0,10);
           const autoTasks = [];
           newLeads.forEach(lead=>{
-            plan.steps.forEach(step=>{
-              const due = new Date(start); due.setDate(due.getDate()+step.day);
-              autoTasks.push({id:uid(),title:step.title.replace("[name]",lead.name.split(" ")[0]),type:step.type,leadId:lead.id,leadName:lead.name,dueDate:due.toISOString().slice(0,10),actionPlanId:plan.id,actionPlanName:plan.name,completed:false,createdAt:now()});
-            });
+            autoTasks.push(...planTasksForLead(plan, lead, start, uid));
           });
           const existing = JSON.parse(localStorage.getItem('tasks')||'[]');
           localStorage.setItem('tasks', JSON.stringify([...existing,...autoTasks]));

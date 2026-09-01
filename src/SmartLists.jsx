@@ -25,6 +25,7 @@
  *   - 📧 Bulk Email (AI-personalized per recipient via Gemini, drafts via Gmail)
  *   - 💬 Bulk SMS Draft (creates a Task per lead for one-tap-Send)
  *   - ⚡ Enroll in Drip Campaign
+ *   - 📋 Apply Action Plan (creates dated tasks — nothing is sent)
  *   - 📥 Export to CSV
  *   - 🗑 Delete (with confirmation)
  */
@@ -32,10 +33,15 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Filter, Plus, Save, Trash2, Mail, MessageSquare, Tag as TagIcon, Download,
   CheckCircle, Zap, X, ChevronRight, Users, ArrowLeft, Search, Loader, Edit2,
+  ClipboardList,
 } from 'lucide-react';
 import { useLS } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
 import { ContactDetail } from './App';
+import { BUILT_IN_PLANS, previewBulkApply, buildBulkTasks } from './actionPlans';
+
+// Same id shape as App.js — tasks created here land in the same 'tasks' list.
+const uid = () => `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 // ─── Style tokens ────────────────────────────────────────────────────────────
 const S = {
@@ -442,6 +448,9 @@ export default function SmartLists({ setPage, toast }) {
           <button onClick={() => setBulkModal('campaign')} style={S.ghostBtn}>
             <Zap size={13} /> Enroll
           </button>
+          <button onClick={() => setBulkModal('plan')} style={S.ghostBtn}>
+            <ClipboardList size={13} /> Action Plan
+          </button>
           <button onClick={() => setBulkModal('export')} style={S.ghostBtn}>
             <Download size={13} /> Export
           </button>
@@ -590,6 +599,12 @@ function BulkActionModal({ action, selectedLeads, leads, setLeads, onClose, onCo
   const [smsBody, setSmsBody] = useState('');
   const [campaigns] = useLS('email_campaigns', []);
   const [campaignId, setCampaignId] = useState('');
+  // Action plans: built-ins plus anything she created on the Action Plans page.
+  const [customPlans] = useLS('action_plans', []);
+  const [tasks, setTasks] = useLS('tasks', []);
+  const allPlans = [...BUILT_IN_PLANS, ...customPlans];
+  const [planId, setPlanId] = useState('');
+  const [planStart, setPlanStart] = useState(new Date().toISOString().slice(0, 10));
   const [aiPersonalize, setAiPersonalize] = useLS('smartlist_ai_personalize', true);
 
   // ─── Tag ──────────────────────────────────────────────────────────────────
@@ -819,6 +834,86 @@ function BulkActionModal({ action, selectedLeads, leads, setLeads, onClose, onCo
           <button onClick={onClose} style={S.ghostBtn}>Cancel</button>
           <button onClick={apply} disabled={!campaignId} style={{ ...S.primaryBtn, opacity: campaignId ? 1 : 0.5 }}>
             Enroll
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
+  // ─── Apply an Action Plan ──────────────────────────────────────────────────
+  // The bridge between "the AI told me who to call" and actually calling them.
+  // Database Intelligence scores 6,000 leads into buckets; without this, that
+  // insight dies on a screen. This turns a filtered list into dated tasks.
+  //
+  // Nothing is sent to anyone — tasks are her own call list. That's what makes
+  // it safe to run across hundreds of leads at once.
+  if (action === 'plan') {
+    const plan = allPlans.find(p => p.id === planId);
+    const pv = plan ? previewBulkApply(plan, selectedLeads, tasks, planStart) : null;
+
+    const apply = () => {
+      if (!pv || pv.overCap || !pv.eligible.length || !pv.validStart) return;
+      const newTasks = buildBulkTasks(plan, pv.eligible, planStart, uid);
+      setTasks(prev => [...prev, ...newTasks]);
+      toast?.success(`${newTasks.length.toLocaleString()} tasks created for ${pv.eligible.length} leads`);
+      onComplete?.();
+    };
+
+    return (
+      <Modal onClose={onClose} title={`📋 Apply an action plan to ${selectedLeads.length} leads`}>
+        <select value={planId} onChange={e => setPlanId(e.target.value)} style={{ ...S.input, width: '100%', marginBottom: 10 }}>
+          <option value="">— Pick a plan —</option>
+          {allPlans.map(p => (
+            <option key={p.id} value={p.id}>{p.name} ({p.steps.length} steps)</option>
+          ))}
+        </select>
+
+        <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 4 }}>Start date</div>
+        <input type="date" value={planStart} onChange={e => setPlanStart(e.target.value)}
+          style={{ ...S.input, width: '100%', marginBottom: 14 }} />
+
+        {plan && (
+          <div style={{
+            padding: '12px 14px', borderRadius: 10, marginBottom: 14,
+            background: pv.overCap ? 'rgba(239,68,68,.08)' : 'rgba(16,185,129,.07)',
+            border: `1px solid ${pv.overCap ? 'rgba(239,68,68,.3)' : 'rgba(16,185,129,.25)'}`,
+          }}>
+            <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.7 }}>
+              {plan.description}
+            </div>
+            <div style={{ fontSize: 12.5, color: '#fff', fontWeight: 700, marginTop: 8 }}>
+              {pv.eligible.length.toLocaleString()} lead{pv.eligible.length === 1 ? '' : 's'} × {pv.stepCount} steps
+              {' = '}
+              <span style={{ color: pv.overCap ? '#fca5a5' : '#6ee7b7' }}>
+                {pv.taskCount.toLocaleString()} tasks
+              </span>
+            </div>
+            {pv.skipped.length > 0 && (
+              <div style={{ fontSize: 11.5, color: '#fbbf24', marginTop: 6 }}>
+                {pv.skipped.length.toLocaleString()} already on this plan — they'll be skipped so your
+                call list doesn't get duplicates.
+              </div>
+            )}
+            {pv.overCap && (
+              <div style={{ fontSize: 11.5, color: '#fca5a5', marginTop: 6 }}>
+                That's too many tasks to store safely. Select {pv.maxLeads.toLocaleString()} leads or
+                fewer for this plan — and honestly, a list you can actually work beats a list you can't.
+              </div>
+            )}
+            {!pv.overCap && pv.eligible.length > 0 && (
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
+                Creates tasks on your calendar only. Nothing is emailed or texted to anyone.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={S.ghostBtn}>Cancel</button>
+          <button onClick={apply}
+            disabled={!plan || pv.overCap || !pv.eligible.length || !pv.validStart}
+            style={{ ...S.primaryBtn, opacity: (plan && !pv.overCap && pv.eligible.length && pv.validStart) ? 1 : 0.5 }}>
+            Create {plan && !pv.overCap ? pv.taskCount.toLocaleString() : ''} Tasks
           </button>
         </div>
       </Modal>
