@@ -7301,11 +7301,17 @@ const DatabaseIntel = ({setPage, toast}) => {
   const [emailQueue, setEmailQueue] = useLS("email_queue", []);
   const [tasks, setTasks] = useLS("tasks", []);
 
-  const run = async () => {
+  // fresh=true re-scores everything from scratch. Needed after a scoring
+  // change (e.g. the model now reads full notes instead of 250 chars) —
+  // a normal resume skips every already-scored lead and would apply nothing.
+  const run = async (fresh = false) => {
     if (!leads.length) return toast.error("No leads to analyze yet");
-    const resume = Array.isArray(scored) && scored.length > 0;
+    const hasPrior = Array.isArray(scored) && scored.length > 0;
+    const resume = !fresh && hasPrior;
     const already = new Set(resume ? scored.map((s) => s.id) : []);
-    const confirmMsg = resume
+    const confirmMsg = fresh
+      ? `Re-score ALL ${leads.length.toLocaleString()} leads from scratch?\n\nThis ignores the ${hasPrior ? scored.length.toLocaleString() : 0} existing scores and re-reads every lead — use it after a scoring change.\n\nHeads up: the results list is overwritten as the new scan runs, so it will drop to a handful and refill as it goes.\n\n~20-30 min on free Gemini. Progress saves after every batch, so you can stop and resume. Keep this tab open and in front.`
+      : resume
       ? `Resume analysis? ${already.size.toLocaleString()} leads already scored — this continues with the rest and skips what's done.\n\nFree on Gemini, paced to respect the free limit, so it can take ~10-20 min. Progress saves after every batch (up to 25 leads), so stopping early never loses more than that.`
       : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first.\n\nProgress saves after every batch (up to 25 leads), so you can close the tab any time and click Re-Analyze later to pick up where you left off. Keep this tab open and in front while it runs.`;
     if (!window.confirm(confirmMsg)) return;
@@ -7402,9 +7408,16 @@ const DatabaseIntel = ({setPage, toast}) => {
         action={
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {lastRun && !running && <span style={{fontSize:11,color:"#64748b"}}>Last run: {new Date(lastRun).toLocaleString()}</span>}
-            <button className="btn btn-blue" onClick={run} disabled={running}>
+            <button className="btn btn-blue" onClick={()=>run(false)} disabled={running}>
               {running ? <><Spinner s={13}/>Analyzing {progress.done}/{progress.total}…</> : <><Wand2 size={13}/>{scored ? "Re-Analyze" : "Run Analysis"}</>}
             </button>
+            {/* Resume skips already-scored leads, so it can't pick up a change
+                to HOW leads are scored. This forces a full re-read. */}
+            {scored && !running && (
+              <button className="btn btn-ghost btn-sm" onClick={()=>run(true)} title="Ignore existing scores and re-read every lead from scratch">
+                <RefreshCw size={12}/>Fresh scan
+              </button>
+            )}
           </div>
         }
       />
