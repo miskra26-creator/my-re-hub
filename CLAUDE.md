@@ -69,6 +69,33 @@ between them frequently. You need to coordinate via the shared session log.
 - **Vercel env vars**: same as `.env.local` minus the dev-only ones. Set via
   `vercel env ls production` to verify. Vercel deploys from GitHub `main` branch.
 
+## How to work with Monica (read this — it is not optional)
+
+This section exists because Claude's own memory is **per-machine**. Anything
+worth remembering about Monica has to live HERE, in the repo, or the other
+machine's Claude will not know it. If you learn something durable about how she
+wants to work, add it to this section and push.
+
+- **Say "this can't be done for free" in the FIRST message.** Binding rule. On
+  2026-05-21 Claude burned 5+ hours iterating AutoReel trying to match
+  AutoReel.app quality with free open-source video models. It was never
+  achievable. She lost an entire evening and asked for this promise explicitly.
+  Lead with the constraint, then give honest options with real prices. Same
+  applies to being wrong: correct it immediately and plainly.
+- **She has declined these. Do not re-pitch them:** Supabase Pro ($25/mo),
+  a paid `ANTHROPIC_API_KEY`, Pika ($8/mo). Solve it the free way or say it
+  can't be solved. Free Gemini is the only AI backend — its rate limits are a
+  hard reality, not a bug to engineer around.
+- **The business priority is the lead engine**, not video polish. The concrete
+  target is replicating Reminder Media's ~$500/mo Facebook-ad service herself
+  (Metro Detroit, I-275 corridor, $350K+). Ad Composer shipped; Meta Ads API
+  is the next real step.
+- **Show her ONE thing at a time and make her confirm it works** before moving
+  on. A long list of shipped features reads as noise to her — she has said the
+  platform "doesn't work" mainly because most of it was never walked through
+  with her. Validate, then advance.
+- **Don't leave her with homework.** If it can be done from the terminal, do it.
+
 ## Working principles for this project
 
 - **Monica is NOT a developer.** Don't ask her to run terminal commands unless
