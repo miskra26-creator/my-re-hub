@@ -7306,8 +7306,8 @@ const DatabaseIntel = ({setPage, toast}) => {
     const resume = Array.isArray(scored) && scored.length > 0;
     const already = new Set(resume ? scored.map((s) => s.id) : []);
     const confirmMsg = resume
-      ? `Resume analysis? ${already.size.toLocaleString()} leads already scored — this continues with the rest and skips what's done.\n\nFree on Gemini, paced to respect the free limit, so it can take ~10-20 min. Progress saves every 25 leads, so stopping early never loses more than that.`
-      : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first.\n\nProgress saves every 25 leads, so you can close the tab any time and click Re-Analyze later to pick up where you left off. Keep this tab open and in front while it runs.`;
+      ? `Resume analysis? ${already.size.toLocaleString()} leads already scored — this continues with the rest and skips what's done.\n\nFree on Gemini, paced to respect the free limit, so it can take ~10-20 min. Progress saves after every batch (up to 25 leads), so stopping early never loses more than that.`
+      : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first.\n\nProgress saves after every batch (up to 25 leads), so you can close the tab any time and click Re-Analyze later to pick up where you left off. Keep this tab open and in front while it runs.`;
     if (!window.confirm(confirmMsg)) return;
     setRunning(true);
     // Slim any records left over from the old fat format so a resume shrinks
