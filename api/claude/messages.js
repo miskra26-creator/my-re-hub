@@ -118,9 +118,13 @@ export default async function handler(req, res) {
       // Ordered by preference. gemini-2.5-flash is retired ("no longer
       // available to new users") and 2.0-flash reports quota=0 on this account,
       // so the current-gen 3.x Flash models are the real fallbacks.
+      // gemini-3.6-flash leads: a 13-request probe on 2026-09-01 came back
+      // 13/13 from 3.6 because gemini-flash-latest 503'd ("high demand") every
+      // single time, so keeping it first spent a wasted upstream call per
+      // request and doubled the quota burn of a full 242-batch scan.
       const models = process.env.GEMINI_MODEL
         ? [process.env.GEMINI_MODEL]
-        : ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-flash-lite-latest'];
+        : ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
 
       let upstream, data, model;
       for (const candidate of models) {
