@@ -4,7 +4,7 @@ import { useLS, useIDB } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
 import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
 import { draftSocialReply, looksLikeSpam, isLowSignalComment, DEFAULT_SOCIAL_SETTINGS } from './aiSocialAgent';
-import { scoreAllLeads, groupByBucket, hydrateScored, BUCKET_META } from './aiDatabaseIntel';
+import { scoreAllLeads, groupByBucket, BUCKET_META } from './aiDatabaseIntel';
 import { multiplyClosing } from './aiClosingMultiplier';
 import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
@@ -7302,7 +7302,9 @@ const DatabaseIntel = ({setPage, toast}) => {
       : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first, and progress saves as it goes (safe to close the tab and resume later). Keep this tab open while it runs.`;
     if (!window.confirm(confirmMsg)) return;
     setRunning(true);
-    const acc = resume ? [...scored] : [];
+    // Slim any records left over from the old fat format so a resume shrinks
+    // the blob instead of carrying the bloat forward.
+    const acc = resume ? scored.map((s) => ({ id: s.id, intel: s.intel })) : [];
     let sinceSave = 0;
     setProgress({ done: 0, total: leads.length });
     try {

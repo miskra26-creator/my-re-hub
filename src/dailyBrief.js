@@ -120,8 +120,14 @@ export function buildDailyBrief({ leads = [], tasks = [], scored = null, outreac
   // ── Tier 2: Database Intelligence AI scores (if a scan has been run).
   if (Array.isArray(scored) && scored.length) {
     scored
-      .filter((l) => l.intel && (l.intel.bucket || "cold") !== "cold")
-      .map((l) => ({ l, br: BUCKET_RANK[l.intel.bucket] || 0, sc: Number(l.intel.score) || 0 }))
+      .filter((s) => s.intel && (s.intel.bucket || "cold") !== "cold")
+      // Records are stored as { id, intel } — re-attach the lead for name/phone/
+      // email. Older fat records already carry those and simply override.
+      .map((s) => ({
+        l: { ...(leadById.get(s.id) || {}), ...s },
+        br: BUCKET_RANK[s.intel.bucket] || 0,
+        sc: Number(s.intel.score) || 0,
+      }))
       .sort((a, b) => b.br - a.br || b.sc - a.sc)
       .forEach(({ l }) => {
         if (skip(l.id)) return;

@@ -173,7 +173,8 @@ function leadPriority(l) {
  * with each batch's freshly-scored leads so the caller can persist + display
  * incrementally (so a quota cap or a closed tab never loses prior work).
  * Pass alreadyScoredIds (Set/array) to skip leads already scored — enables resume.
- * Returns the newly-scored objects merged with original lead data.
+ * Returns slim { id, intel } records — pass them through hydrateScored/
+ * groupByBucket with the lead list to get displayable objects back.
  */
 export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onPartial, alreadyScoredIds } = {}) {
   const skip = alreadyScoredIds instanceof Set ? alreadyScoredIds : new Set(alreadyScoredIds || []);
