@@ -3607,7 +3607,15 @@ const LeadTracker = ({setPage,toast}) => {
   const [form,setForm] = useState({name:"",email:"",phone:"",type:"Buyer",status:"warm",budget:"",area:"",notes:""});
   const [editId,setEditId] = useState(null);
   const [showForm,setShowForm] = useState(false);
-  const [search,setSearch] = useState("");
+  // Pick up a lead handed over from another page (e.g. Database Intelligence's
+  // "Open lead"). One-shot: consumed on mount so a later manual visit is clean.
+  const [search,setSearch] = useState(()=>{
+    try {
+      const f = sessionStorage.getItem("lead_focus");
+      if (f) { sessionStorage.removeItem("lead_focus"); return f; }
+    } catch {}
+    return "";
+  });
   const [syncing,setSyncing] = useState(false);
   const [lastSync,setLastSync] = useLS("fub_last_sync", null);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -7492,7 +7500,14 @@ const DatabaseIntel = ({setPage, toast}) => {
                     {lead.phone && <button className="btn btn-ghost btn-sm" onClick={()=>quickText(lead)}>📱 Text Now (script copied)</button>}
                     {lead.email && <button className="btn btn-ghost btn-sm" onClick={()=>enrollDrip(lead, "camp_long_term")}>📧 Enroll: Long-Term Nurture</button>}
                     {lead.status === "Past Client" && lead.email && <button className="btn btn-ghost btn-sm" onClick={()=>enrollDrip(lead, "camp_soi")}>💎 Enroll: Sphere 33-Touch</button>}
-                    <button className="btn btn-ghost btn-sm" onClick={()=>setPage("leads")}>👤 Open lead</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>{
+                      // "leads" is not a registered page id — this navigated to
+                      // a 404 for every lead. The page is "lead-tracker".
+                      // Hand off the name so she lands ON this person instead
+                      // of the top of a 6,000-row list.
+                      try { sessionStorage.setItem("lead_focus", lead.name || ""); } catch {}
+                      setPage("lead-tracker");
+                    }}>👤 Open lead</button>
                   </div>
                 </div>
               ))}
@@ -8063,7 +8078,7 @@ const Integrations = ({setPage,toast}) => {
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   {p.key==="meta"&&<button className="btn btn-ghost btn-sm" onClick={importFBLeads} disabled={fbSyncing}><RefreshCw size={12}/>{fbSyncing?"Importing…":"Import Leads"}</button>}
-                  {p.key==="fub"&&<button className="btn btn-ghost btn-sm" onClick={()=>setPage("leads")}><UserCheck size={12}/>Go to Lead Tracker</button>}
+                  {p.key==="fub"&&<button className="btn btn-ghost btn-sm" onClick={()=>setPage("lead-tracker")}><UserCheck size={12}/>Go to Lead Tracker</button>}
                   <button className="btn btn-blue btn-sm" onClick={()=>{upd(p.key,"_saved",true);toast.success("Settings saved!");}}><Save size={12}/>Save</button>
                 </div>
               </div>
