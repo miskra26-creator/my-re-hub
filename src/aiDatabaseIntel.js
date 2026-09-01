@@ -87,7 +87,9 @@ Return format:
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
+      // 25 leads ≈ 2.5k tokens of JSON, but Gemini 3.x also bills hidden
+      // reasoning against this budget — 4000 truncated mid-array every time.
+      max_tokens: 8000,
       system: sys,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -96,20 +98,53 @@ Return format:
   if (d.error) throw new Error(d.error.message || "AI proxy error");
   const text = (d.content?.[0]?.text || "").trim();
   const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-  let parsed;
+  const parsed = parseScoreArray(jsonText);
+  if (!parsed.length) throw new Error("AI returned no usable rows");
+  return parsed;
+}
+
+/**
+ * Parse the model's array, tolerating truncation.
+ *
+ * Gemini 3.x spends part of maxOutputTokens on hidden reasoning, so a batch
+ * regularly stops at MAX_TOKENS partway through the final object. The old
+ * code did JSON.parse, then fell back to a /\[[\s\S]*\]/ match — but a
+ * truncated array has no closing bracket, so both failed and the ENTIRE batch
+ * was discarded. That silently threw away every lead of every batch.
+ * Scan the text and keep whatever complete objects came back.
+ */
+export function parseScoreArray(jsonText) {
   try {
-    parsed = JSON.parse(jsonText);
-  } catch (e) {
-    // Sometimes the model wraps in {"results":[...]} or returns truncated JSON
-    const arrMatch = jsonText.match(/\[[\s\S]*\]/);
-    if (arrMatch) {
-      try { parsed = JSON.parse(arrMatch[0]); } catch { throw new Error("AI returned malformed JSON"); }
-    } else {
-      throw new Error("AI returned non-array response");
+    const whole = JSON.parse(jsonText);
+    if (Array.isArray(whole)) return whole;
+    if (Array.isArray(whole?.results)) return whole.results;
+  } catch { /* fall through to salvage */ }
+
+  const out = [];
+  let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < jsonText.length; i++) {
+    const c = jsonText[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === "{") { if (depth === 0) start = i; depth++; }
+    else if (c === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try {
+          const o = JSON.parse(jsonText.slice(start, i + 1));
+          if (o && o.id) out.push(o);
+        } catch { /* skip unparseable object */ }
+        start = -1;
+      }
+      if (depth < 0) depth = 0;
     }
   }
-  if (!Array.isArray(parsed)) throw new Error("AI returned non-array response");
-  return parsed;
+  return out;
 }
 
 // ── Rate limiting for the FREE Gemini tier ─────────────────────────────────
