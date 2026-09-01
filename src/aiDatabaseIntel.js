@@ -22,6 +22,29 @@
  *   "touch_due"       — sphere/SOI contacts due for a check-in
  *   "cold"            — truly cold, suggest archive or quarterly nurture
  */
+// How much of each lead's notes the model gets to read. Was a flat 250-char
+// head-slice, which silently hid the most important line in any lead with a
+// real history — e.g. a reply two months ago asking about a specific listing.
+export const NOTES_LIMIT = 1200;
+
+/**
+ * Trim notes to NOTES_LIMIT while preserving BOTH ends.
+ *
+ * Note ordering isn't consistent: FUB exports, manual entries and drip logs
+ * append in different directions, so neither "keep the start" nor "keep the
+ * end" is safe on its own. Keeping both ends means we retain the original
+ * context AND the most recent activity regardless of which way the log runs,
+ * and we mark the gap so the model knows something was removed rather than
+ * reading two unrelated fragments as one continuous note.
+ */
+export function clipNotes(raw) {
+  const s = (raw || "").trim();
+  if (s.length <= NOTES_LIMIT) return s;
+  const head = Math.floor(NOTES_LIMIT * 0.45);
+  const tail = NOTES_LIMIT - head;
+  return `${s.slice(0, head)}\n…[middle of notes trimmed]…\n${s.slice(-tail)}`;
+}
+
 export async function scoreLeadBatch(leads) {
   if (!leads.length) return [];
 
@@ -35,7 +58,7 @@ export async function scoreLeadBatch(leads) {
     area: l.area || "",
     budget: l.budget || "",
     tags: (l.tags || []).slice(0, 6),
-    notes: (l.notes || "").slice(0, 250),
+    notes: clipNotes(l.notes),
     createdAt: l.createdAt || "",
     followUp: l.followUp || "",
   }));
@@ -211,7 +234,7 @@ function leadPriority(l) {
  * Returns slim { id, intel } records — pass them through hydrateScored/
  * groupByBucket with the lead list to get displayable objects back.
  */
-export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onPartial, alreadyScoredIds } = {}) {
+export async function scoreAllLeads(leads, { batchSize = 25, maxCharsPerBatch = 22000, onProgress, onPartial, alreadyScoredIds } = {}) {
   const skip = alreadyScoredIds instanceof Set ? alreadyScoredIds : new Set(alreadyScoredIds || []);
   const eligible = leads
     .filter((l) => l.name && !["Trash", "Closed"].includes(l.status) && !skip.has(l.id))
@@ -220,8 +243,27 @@ export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onParti
   const byId = new Map(eligible.map((l) => [l.id, l]));
   const scored = [];
 
-  for (let i = 0; i < eligible.length; i += batchSize) {
-    const batch = eligible.slice(i, i + batchSize);
+  // Pack batches by CHARACTER VOLUME, not a fixed lead count. Now that the
+  // model reads up to NOTES_LIMIT chars of notes, a fixed 25 could be ~1.5k
+  // chars (sparse leads) or ~30k (leads with years of call history) — the
+  // latter bloats the request and risks truncating the response again. So:
+  // fill up to maxCharsPerBatch, never exceed batchSize leads. Sparse
+  // databases still get full 25-lead batches and behave exactly as before.
+  const batches = [];
+  let cur = [], curChars = 0;
+  for (const l of eligible) {
+    // ~200 chars covers the non-notes fields (name/source/status/tags/dates).
+    const cost = Math.min((l.notes || "").length, NOTES_LIMIT) + 200;
+    if (cur.length && (cur.length >= batchSize || curChars + cost > maxCharsPerBatch)) {
+      batches.push(cur); cur = []; curChars = 0;
+    }
+    cur.push(l);
+    curChars += cost;
+  }
+  if (cur.length) batches.push(cur);
+
+  let done = 0;
+  for (const batch of batches) {
     try {
       const results = await scoreBatchWithRetry(batch);
       const batchScored = [];
@@ -238,10 +280,11 @@ export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onParti
       });
       if (batchScored.length) onPartial?.(batchScored);
     } catch (e) {
-      console.warn(`[DatabaseIntel] batch ${i}-${i + batch.length} failed after retries:`, e.message);
+      console.warn(`[DatabaseIntel] batch of ${batch.length} failed after retries:`, e.message);
       // Keep going — one bad batch shouldn't sink the whole scan.
     }
-    onProgress?.(Math.min(i + batchSize, total), total);
+    done += batch.length;
+    onProgress?.(done, total);
   }
   return scored;
 }
