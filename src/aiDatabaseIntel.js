@@ -45,6 +45,82 @@ export function clipNotes(raw) {
   return `${s.slice(0, head)}\n…[middle of notes trimmed]…\n${s.slice(-tail)}`;
 }
 
+const DAY = 86400000;
+const daysAgo = (ts) => (!ts ? null : Math.max(0, Math.round((Date.now() - ts) / DAY)));
+
+/**
+ * Build a compact engagement summary for one lead.
+ *
+ * WHY THIS EXISTS: the scoring prompt asks the model to find leads that
+ * "clearly haven't been worked recently" and treats "recent communication" as
+ * a positive signal — but until now it was handed no contact history at all
+ * and had to infer recency from createdAt alone. Meanwhile FUB's own
+ * lastActivity/lastCommunication and the full imported timeline (notes, calls,
+ * texts, emails, each with a direction) were sitting unused.
+ *
+ * The single strongest signal in a stale database is "this person ever
+ * replied to you" — an inbound message. That is surfaced explicitly.
+ *
+ * `blob` is the `fub_data_<leadId>` IndexedDB record from the FUB Migration
+ * tool, or null/undefined if that lead was never imported. Everything degrades
+ * gracefully: with no blob we fall back to the FUB summary fields on the lead,
+ * and with neither we return an empty object so the field is simply absent
+ * from the prompt rather than present-and-misleading.
+ *
+ * Kept deliberately small — every character here competes with notes for
+ * space in the batch budget.
+ */
+export function summarizeEngagement(lead, blob) {
+  const meta = lead?.meta || {};
+  const out = {};
+
+  const items = blob
+    ? [...(blob.textMessages || []), ...(blob.calls || []), ...(blob.emails || []), ...(blob.notes || [])]
+    : [];
+
+  // FUB records don't share one timestamp field, so try the usual suspects.
+  const tsOf = (r) => {
+    const raw = r?.created || r?.sent || r?.occurredAt || r?.updated;
+    const t = raw ? Date.parse(raw) : NaN;
+    return Number.isNaN(t) ? null : t;
+  };
+  const isInbound = (r) => r?.isIncoming === true || r?.direction === "inbound";
+
+  if (items.length) {
+    let lastTs = null, lastInTs = null, lastInBody = "", inCount = 0, outCount = 0;
+    for (const r of items) {
+      const t = tsOf(r);
+      if (t && (!lastTs || t > lastTs)) lastTs = t;
+      if (isInbound(r)) {
+        inCount++;
+        if (t && (!lastInTs || t > lastInTs)) {
+          lastInTs = t;
+          lastInBody = String(r.message || r.body || r.snippet || r.subject || r.note || "").trim();
+        }
+      } else outCount++;
+    }
+    if (lastTs)   out.daysSinceAnyContact = daysAgo(lastTs);
+    if (inCount)  out.timesTheyReplied = inCount;
+    if (outCount) out.timesYouReachedOut = outCount;
+    if (lastInTs) {
+      out.daysSinceTheyReplied = daysAgo(lastInTs);
+      // Their own words are worth more than any metadata we could compute.
+      if (lastInBody) out.theirLastMessage = lastInBody.replace(/\s+/g, " ").slice(0, 300);
+    }
+    // Absence of a reply is itself a signal, but only meaningful once we know
+    // outreach actually happened.
+    if (!inCount && outCount) out.neverReplied = true;
+  } else {
+    // No imported timeline — fall back to FUB's summary timestamps.
+    const act = meta.fubLastActivity ? Date.parse(meta.fubLastActivity) : NaN;
+    const com = meta.fubLastCommunication ? Date.parse(meta.fubLastCommunication) : NaN;
+    if (!Number.isNaN(act)) out.daysSinceAnyContact = daysAgo(act);
+    if (!Number.isNaN(com)) out.daysSinceCommunication = daysAgo(com);
+  }
+
+  return out;
+}
+
 export async function scoreLeadBatch(leads) {
   if (!leads.length) return [];
 
@@ -61,6 +137,9 @@ export async function scoreLeadBatch(leads) {
     notes: clipNotes(l.notes),
     createdAt: l.createdAt || "",
     followUp: l.followUp || "",
+    // Populated by the caller via summarizeEngagement(). Omitted entirely when
+    // empty so the model can tell "no history on file" apart from "no contact".
+    ...(l.engagement && Object.keys(l.engagement).length ? { engagement: l.engagement } : {}),
   }));
 
   const sys = `You are a real estate database analyst. The agent is Monica Iskra in Metro Detroit ($350K+ market on the I-275 corridor). Her database has 6000+ leads; most are cold or stale. Your job: identify which ones are HIDDEN OPPORTUNITIES worth re-engaging.
@@ -72,6 +151,18 @@ Score each lead from 1-10 on likelihood-to-transact-in-the-next-90-days. Use sig
 - Type (Buyer in this market = active; Seller = highest value)
 - Tags (any indicators of urgency, specific neighborhood, financing status)
 - Timestamps (createdAt > 1 year ago = probably stale unless other strong signals)
+- ENGAGEMENT (when present, this outranks everything above — it is real behaviour, not a guess):
+  * "theirLastMessage" is the lead's OWN words from their most recent reply. A lead who
+    ever replied is worth far more than one who never did. Quote it in your reason.
+  * "daysSinceTheyReplied" — a reply within ~180 days is a strong buy/sell signal even if
+    the status says cold. A reply years ago with silence since is weak.
+  * "timesTheyReplied" / "timesYouReachedOut" — many touches with zero replies means
+    genuinely unresponsive; score it DOWN, don't reward the activity.
+  * "neverReplied": true means she has contacted them and they have never once responded.
+  * "daysSinceAnyContact" — use THIS for "hasn't been worked recently", not createdAt.
+  * If "engagement" is ABSENT, you have no contact history for that lead. Say so in the
+    reason ("no contact history on file") and do NOT invent recency. Score on the other
+    fields alone and stay conservative.
 
 Group each lead into ONE bucket:
 - "hot_revival"   — score ≥ 7, but clearly hasn't been worked recently. The "I forgot about this one!" leads.
@@ -81,7 +172,12 @@ Group each lead into ONE bucket:
 - "cold"          — score ≤ 3, no signals. Suggest archive or quarterly nurture.
 
 For each, provide:
-- A 1-sentence "reason" explaining the score (cite the specific signal)
+- A 1-sentence "reason" explaining the score. EVIDENCE RULE: quote or name the actual
+  field you used (their words, the tag, the source, days since reply). If the lead has
+  nothing but a name and a source, the correct reason is literally "no signal — only
+  <source>, no notes or contact history" and the correct score is low. Never write a
+  confident-sounding reason that isn't grounded in a field you were given; a wrong
+  "reason" is worse than no score, because she will act on it.
 - A "suggestedAction": one of ["text", "call", "email", "drip", "archive"]
 - A "suggestedScript": 1-2 sentences of what to text/say (NOT generic — reference what's in their notes/area)
 
@@ -253,7 +349,11 @@ export async function scoreAllLeads(leads, { batchSize = 25, maxCharsPerBatch = 
   let cur = [], curChars = 0;
   for (const l of eligible) {
     // ~200 chars covers the non-notes fields (name/source/status/tags/dates).
-    const cost = Math.min((l.notes || "").length, NOTES_LIMIT) + 200;
+    // Engagement is measured rather than assumed: theirLastMessage alone can be
+    // 300 chars, and under-counting here overflows the batch budget, which is
+    // what truncated the model's JSON and silently dropped whole batches before.
+    const engChars = l.engagement ? JSON.stringify(l.engagement).length : 0;
+    const cost = Math.min((l.notes || "").length, NOTES_LIMIT) + 200 + engChars;
     if (cur.length && (cur.length >= batchSize || curChars + cost > maxCharsPerBatch)) {
       batches.push(cur); cur = []; curChars = 0;
     }

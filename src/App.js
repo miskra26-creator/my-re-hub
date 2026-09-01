@@ -4,7 +4,7 @@ import { useLS, useIDB } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
 import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
 import { draftSocialReply, looksLikeSpam, isLowSignalComment, DEFAULT_SOCIAL_SETTINGS } from './aiSocialAgent';
-import { scoreAllLeads, groupByBucket, BUCKET_META } from './aiDatabaseIntel';
+import { scoreAllLeads, groupByBucket, BUCKET_META, summarizeEngagement } from './aiDatabaseIntel';
 import { multiplyClosing } from './aiClosingMultiplier';
 import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
@@ -7334,8 +7334,29 @@ const DatabaseIntel = ({setPage, toast}) => {
     await acquireWakeLock();
     document.addEventListener("visibilitychange", reacquireWakeLock);
 
+    // ENRICHMENT PASS — attach real contact history before scoring.
+    // Without this the model is asked to judge "hasn't been worked recently"
+    // with no contact data at all, and infers recency from createdAt. The FUB
+    // Migration tool already stored every note/call/text/email per lead in IDB;
+    // this is just handing it over. Degrades to {} for un-imported leads.
+    setProgress({ done: 0, total: leads.length, phase: "Reading contact history…" });
+    const enriched = [];
+    for (let i = 0; i < leads.length; i++) {
+      const l = leads[i];
+      let blob = null;
+      try { blob = await cloudIdbGet(`fub_data_${l.id}`); } catch {}
+      enriched.push({ ...l, engagement: summarizeEngagement(l, blob) });
+      // Yield to the UI so the tab stays responsive across 6,000 reads.
+      if (i % 250 === 0) {
+        setProgress({ done: i, total: leads.length, phase: "Reading contact history…" });
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }
+    const withHistory = enriched.filter((l) => Object.keys(l.engagement).length).length;
+    console.log(`[DatabaseIntel] contact history found for ${withHistory}/${leads.length} leads`);
+
     try {
-      await scoreAllLeads(leads, {
+      await scoreAllLeads(enriched, {
         batchSize: 25,
         alreadyScoredIds: already,
         onProgress: (done, total) => setProgress({ done, total }),
@@ -7446,7 +7467,13 @@ const DatabaseIntel = ({setPage, toast}) => {
       {/* Progress */}
       {running && (
         <div className="glass-card" style={{marginBottom:22,padding:"20px 24px"}}>
-          <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:12}}>Analyzing {progress.done}/{progress.total} leads…</div>
+          {/* The enrichment pass counts to the same total as scoring, so label it —
+              otherwise the bar appears to run twice for no reason. */}
+          <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:12}}>
+            {progress.phase
+              ? `${progress.phase} ${progress.done}/${progress.total}`
+              : `Analyzing ${progress.done}/${progress.total} leads…`}
+          </div>
           <div style={{background:"rgba(255,255,255,.05)",borderRadius:99,height:8,overflow:"hidden"}}>
             <div style={{background:"linear-gradient(90deg,#10b981,#059669)",height:8,width:`${progress.total ? (progress.done/progress.total*100) : 0}%`,transition:"width .3s"}}/>
           </div>
