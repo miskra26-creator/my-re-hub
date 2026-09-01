@@ -34,7 +34,7 @@ import {
   RotateCcw, Wand2, Camera, ThumbsUp, Activity, Home, Play, Star,
   CheckCircle, AlertCircle, Info, List, Bookmark, TrendingUp, MapPin,
   Phone, Building, Key, FileText, UserCheck, Briefcase, Target, Award,
-  Filter
+  Filter, Eye
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -8766,6 +8766,40 @@ async function gmailSendMessage(token, {to, subject, body, fromName}){
   return (await r.json()).id;
 }
 
+// ─── DRIP SEND SELECTION (shared) ────────────────────────────────────────────
+// SAFETY: without these guards, switching autosend on with a backlog of
+// past-due drip steps would blast every one of them at once, in a tight loop,
+// to real clients — and get the account flagged by Gmail.
+//   1) Never send anything more than STALE_DAYS overdue. Those are almost
+//      certainly a backlog that accumulated while autosend was off, not mail
+//      Monica actually wants going out today.
+//   2) Cap each run so a mistake is small and recoverable.
+const DRIP_STALE_DAYS = 3, DRIP_MAX_PER_RUN = 20;
+
+// This is the SINGLE source of truth for "what would send right now". Both the
+// background auto-sender and the dry-run preview call it, so the preview can
+// never drift from reality — the whole point of a dry run is that it is a
+// promise about what the real send will do. If you change selection rules,
+// change them HERE and both stay honest.
+function selectDripsToSend(queue, nowMs = Date.now()) {
+  const todayStr    = new Date(nowMs).toISOString().slice(0,10);
+  const staleBefore = new Date(nowMs - DRIP_STALE_DAYS*24*3600*1000).toISOString().slice(0,10);
+  const allDue  = queue.filter(e => !e.sent && e.dueDate <= todayStr && e.leadEmail);
+  const stale   = allDue.filter(e => e.dueDate <  staleBefore);
+  const ready   = allDue.filter(e => e.dueDate >= staleBefore);
+  // Due today but the lead has no email address — silently dropped by the
+  // sender's `&& e.leadEmail` filter, so surface it in the preview instead.
+  const noEmail = queue.filter(e => !e.sent && e.dueDate <= todayStr && !e.leadEmail);
+  return {
+    due:      ready.slice(0, DRIP_MAX_PER_RUN),
+    heldBack: ready.slice(DRIP_MAX_PER_RUN),   // over the per-run cap; goes next tick
+    stale,
+    noEmail,
+    todayStr,
+    staleBefore,
+  };
+}
+
 // ─── GMAIL SYNC WORKER (background, renders nothing) ─────────────────────────
 // Two passes each tick:
 //   1. INBOUND sync — log new received/sent Gmail messages to contact timelines
@@ -8777,18 +8811,9 @@ const GmailSyncWorker = ({notify, toast}) => {
     const autoSendDrips=async(token)=>{
       if (localStorage.getItem('gmail_autosend') !== 'on') return 0;
       const queue = JSON.parse(localStorage.getItem('email_queue')||'[]');
-      const todayStr = new Date().toISOString().slice(0,10);
-      // SAFETY: without these guards, switching autosend on with a backlog of
-      // past-due drip steps would blast every one of them at once, in a tight
-      // loop, to real clients — and get the account flagged by Gmail.
-      // 1) Never send anything more than STALE_DAYS overdue. Those are almost
-      //    certainly a backlog that accumulated while autosend was off, not
-      //    mail Monica actually wants going out today.
-      // 2) Cap each run so a mistake is small and recoverable.
-      const STALE_DAYS = 3, MAX_PER_RUN = 20;
-      const staleBefore = new Date(Date.now() - STALE_DAYS*24*3600*1000).toISOString().slice(0,10);
-      const allDue = queue.filter(e => !e.sent && e.dueDate <= todayStr && e.leadEmail);
-      const stale = allDue.filter(e => e.dueDate < staleBefore);
+      // Selection lives in selectDripsToSend() so the dry-run preview shows
+      // exactly this set — see the comment on that function.
+      const { due, stale } = selectDripsToSend(queue);
       if (stale.length) {
         const staleIds = new Set(stale.map(e => e.id));
         const marked = queue.map(e => staleIds.has(e.id)
@@ -8796,9 +8821,8 @@ const GmailSyncWorker = ({notify, toast}) => {
           : e);
         localStorage.setItem('email_queue', JSON.stringify(marked));
         window.dispatchEvent(new CustomEvent('email-queue-updated'));
-        toast.info(`⏸️ Skipped ${stale.length} drip email${stale.length>1?'s':''} more than ${STALE_DAYS} days overdue — review them in Email Campaigns.`);
+        toast.info(`⏸️ Skipped ${stale.length} drip email${stale.length>1?'s':''} more than ${DRIP_STALE_DAYS} days overdue — review them in Email Campaigns.`);
       }
-      const due = allDue.filter(e => e.dueDate >= staleBefore).slice(0, MAX_PER_RUN);
       if (!due.length) return 0;
       const profile = JSON.parse(localStorage.getItem('re_profile')||'{}');
       const fromName = profile.name ? `${profile.name} <me>` : '';
@@ -10620,6 +10644,9 @@ const Campaigns = ({setPage,toast}) => {
   const [previewCamp,setPreviewCamp] = useState(null);
   const [previewStep,setPreviewStep] = useState(0);
   const [sendingBatch,setSendingBatch] = useState(false);
+  // Dry run: what WOULD send if auto-send were on right now. Sends nothing.
+  const [dryRun,setDryRun] = useState(null);
+  const [dryRunOpen,setDryRunOpen] = useState(null); // id of expanded row
 
   // Gmail connection / auto-send status — re-read whenever the worker updates.
   const [gmailReady,setGmailReady] = useState(()=>{
@@ -10652,6 +10679,13 @@ const Campaigns = ({setPage,toast}) => {
       toast.success('Auto-send ON — due drips will fire from your Gmail');
       window.dispatchEvent(new CustomEvent('gmail-sync-now'));
     } else toast.info('Auto-send OFF — drips stay in queue for manual send');
+  };
+
+  // Read-only. Runs the exact selection the auto-sender uses and shows the
+  // result. Nothing is written, nothing is sent, no Gmail token is touched.
+  const runDryRun = () => {
+    setDryRun(selectDripsToSend(queue));
+    setDryRunOpen(null);
   };
 
   const sendAllDueNow = async () => {
@@ -10806,6 +10840,11 @@ const Campaigns = ({setPage,toast}) => {
                 {autoSend && gmailReady && <span style={{fontSize:11,fontWeight:800,color:"#10b981"}}>🟢 ON</span>}
               </label>
             </div>
+            {/* Deliberately NOT gated on gmailReady or on autoSend — the whole
+                point is to inspect what would go out BEFORE turning anything on. */}
+            <button className="btn btn-ghost btn-sm" onClick={runDryRun} title="Show exactly what would be sent. Sends nothing.">
+              <Eye size={12}/>Dry run — preview what would send
+            </button>
             {gmailReady && dueToday.length>0 && (
               <button className="btn btn-blue btn-sm" disabled={sendingBatch} onClick={sendAllDueNow}>
                 {sendingBatch ? <><Spinner s={12}/>Sending…</> : <><Mail size={12}/>Send All Due Now ({dueToday.length})</>}
@@ -10875,6 +10914,85 @@ const Campaigns = ({setPage,toast}) => {
       )}
 
       {/* Enroll Modal */}
+      {/* DRY RUN RESULTS — read-only. Shows the output of selectDripsToSend(),
+          the same function the background auto-sender uses to pick messages. */}
+      {dryRun&&(
+        <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setDryRun(null)}>
+          <div style={{background:"#0d1117",borderRadius:16,padding:"24px 28px",maxWidth:720,width:"92%",maxHeight:"85vh",overflowY:"auto",border:"1px solid rgba(255,255,255,.1)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+              <div style={{fontWeight:800,fontSize:16,color:"#fff"}}>Dry run — nothing was sent</div>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setDryRun(null)}><X size={13}/></button>
+            </div>
+            <div style={{fontSize:12,color:"#64748b",marginBottom:18}}>
+              This is exactly what auto-send would do if you switched it on right now. No email left your account.
+            </div>
+
+            <div style={{padding:"12px 14px",borderRadius:10,marginBottom:16,background:dryRun.due.length?"rgba(16,185,129,.10)":"rgba(255,255,255,.03)",border:`1px solid ${dryRun.due.length?"rgba(16,185,129,.3)":"rgba(255,255,255,.07)"}`}}>
+              <div style={{fontSize:14,fontWeight:800,color:dryRun.due.length?"#10b981":"#94a3b8"}}>
+                {dryRun.due.length===0 ? "Would send: nothing" : `Would send now: ${dryRun.due.length} email${dryRun.due.length>1?"s":""}`}
+              </div>
+              {(dryRun.stale.length>0||dryRun.heldBack.length>0||dryRun.noEmail.length>0)&&(
+                <div style={{fontSize:11,color:"#94a3b8",marginTop:6,lineHeight:1.7}}>
+                  {dryRun.stale.length>0&&<div>⏸️ <b>{dryRun.stale.length}</b> skipped — more than {DRIP_STALE_DAYS} days overdue (old backlog, deliberately not sent)</div>}
+                  {dryRun.heldBack.length>0&&<div>⏭️ <b>{dryRun.heldBack.length}</b> held for the next run — cap is {DRIP_MAX_PER_RUN} per run</div>}
+                  {dryRun.noEmail.length>0&&<div>⚠️ <b>{dryRun.noEmail.length}</b> due but the lead has no email address</div>}
+                </div>
+              )}
+            </div>
+
+            {dryRun.due.length===0?(
+              <div style={{fontSize:13,color:"#64748b",padding:"18px 0",textAlign:"center"}}>
+                Nothing is due to send today. Enroll a lead in a campaign, then run this again.
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Click any row to read the full email</div>
+                {dryRun.due.map(e=>{
+                  const lead = leads.find(l=>l.id===e.leadId);
+                  const open = dryRunOpen===e.id;
+                  return (
+                    <div key={e.id} style={{borderRadius:10,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",overflow:"hidden"}}>
+                      <div onClick={()=>setDryRunOpen(open?null:e.id)} style={{padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{lead?.name||"(lead not found)"} <span style={{color:"#64748b",fontWeight:500}}>· {e.leadEmail}</span></div>
+                          <div style={{fontSize:12,color:"#cbd5e1",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.subject}</div>
+                          <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{e.campaignName} · due {e.dueDate}</div>
+                        </div>
+                        {open?<ChevronUp size={14} color="#64748b"/>:<ChevronDown size={14} color="#64748b"/>}
+                      </div>
+                      {open&&(
+                        <div style={{padding:"0 14px 14px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
+                          <div style={{fontSize:11,color:"#64748b",margin:"10px 0 4px",fontWeight:800}}>SUBJECT</div>
+                          <div style={{fontSize:13,color:"#fff"}}>{e.subject}</div>
+                          <div style={{fontSize:11,color:"#64748b",margin:"12px 0 4px",fontWeight:800}}>BODY</div>
+                          <div style={{fontSize:13,color:"#cbd5e1",whiteSpace:"pre-wrap",lineHeight:1.6}}>{e.body}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {dryRun.stale.length>0&&(
+              <div style={{marginTop:18}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#f59e0b",textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Skipped as too old ({dryRun.stale.length})</div>
+                <div style={{fontSize:12,color:"#64748b",lineHeight:1.7,maxHeight:150,overflowY:"auto"}}>
+                  {dryRun.stale.map(e=>(
+                    <div key={e.id}>{e.leadEmail} — “{e.subject}” (due {e.dueDate})</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{marginTop:20,paddingTop:14,borderTop:"1px solid rgba(255,255,255,.07)",fontSize:11,color:"#475569"}}>
+              Auto-send is currently <b style={{color:autoSend?"#10b981":"#f87171"}}>{autoSend?"ON":"OFF"}</b>.
+              {" "}Running this preview does not change that.
+            </div>
+          </div>
+        </div>
+      )}
+
       {enrollModal&&(
         <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEnrollModal(null)}>
           <div style={{background:"#0d1117",borderRadius:16,padding:"24px 28px",maxWidth:460,width:"90%",border:"1px solid rgba(255,255,255,.1)"}} onClick={e=>e.stopPropagation()}>
