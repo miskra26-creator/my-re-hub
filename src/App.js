@@ -4,7 +4,7 @@ import { useLS, useIDB } from './cloudHooks';
 import { useLeadsCloud } from './useLeadsCloud';
 import { draftLeadResponse, DEFAULT_CONCIERGE_SETTINGS } from './aiResponder';
 import { draftSocialReply, looksLikeSpam, isLowSignalComment, DEFAULT_SOCIAL_SETTINGS } from './aiSocialAgent';
-import { scoreAllLeads, groupByBucket, BUCKET_META } from './aiDatabaseIntel';
+import { scoreAllLeads, groupByBucket, hydrateScored, BUCKET_META } from './aiDatabaseIntel';
 import { multiplyClosing } from './aiClosingMultiplier';
 import { trainVoice } from './aiVoiceTrainer';
 import VideoAuto from './VideoAuto';
@@ -7331,7 +7331,7 @@ const DatabaseIntel = ({setPage, toast}) => {
     setRunning(false);
   };
 
-  const buckets = scored ? groupByBucket(scored) : null;
+  const buckets = scored ? groupByBucket(scored, leads) : null;
 
   const quickText = (lead) => {
     if (!lead.phone) return toast.error(`${lead.name} has no phone`);

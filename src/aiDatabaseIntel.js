@@ -192,7 +192,11 @@ export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onParti
       results.forEach((r) => {
         const lead = byId.get(r.id);
         if (!lead) return;
-        const s = { ...lead, intel: r };
+        // Store ONLY the AI verdict keyed by lead id. Spreading the whole lead
+        // here duplicated the entire 6k-lead database into localStorage, which
+        // silently blew the ~5MB quota (leads live in IndexedDB for that very
+        // reason) and never reached Supabase. Re-join with leads at render.
+        const s = { id: lead.id, intel: r };
         scored.push(s);
         batchScored.push(s);
       });
@@ -207,10 +211,27 @@ export async function scoreAllLeads(leads, { batchSize = 25, onProgress, onParti
 }
 
 /**
- * Group scored leads into the 5 actionable buckets, sorted by score desc
- * within each bucket.
+ * Re-attach full lead data to a stored { id, intel } record. Also accepts the
+ * older fat records (which carried lead fields inline), so a scan saved before
+ * the slim-storage change still renders.
  */
-export function groupByBucket(scoredLeads) {
+export function hydrateScored(scoredLeads, leads = []) {
+  const byId = new Map((leads || []).map((l) => [l.id, l]));
+  return (scoredLeads || [])
+    .map((s) => {
+      const lead = byId.get(s.id);
+      if (!lead && !s.name) return null; // lead deleted since the scan
+      return { ...(lead || {}), ...s, intel: s.intel };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Group scored leads into the 5 actionable buckets, sorted by score desc
+ * within each bucket. Pass `leads` so stored { id, intel } records get their
+ * name/phone/email back for display.
+ */
+export function groupByBucket(scoredLeads, leads = []) {
   const buckets = {
     hot_revival:   [],
     buyer_signal:  [],
@@ -218,7 +239,7 @@ export function groupByBucket(scoredLeads) {
     touch_due:     [],
     cold:          [],
   };
-  scoredLeads.forEach((l) => {
+  hydrateScored(scoredLeads, leads).forEach((l) => {
     const b = l.intel?.bucket || "cold";
     if (buckets[b]) buckets[b].push(l);
   });
