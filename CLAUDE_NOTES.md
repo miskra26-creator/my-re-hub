@@ -6,7 +6,55 @@
 
 ---
 
-## Last session: 2026-09-01 (laptop — fixed db_intel_results blowing the localStorage quota)
+## ✅ 2026-09-01 (laptop, later) — Database Intelligence WORKS. First time ever.
+
+Monica ran a full scan and got real buckets on screen. This feature had never
+once produced results at her database's size. Do not "improve" it casually.
+
+### Decision: KEEP Follow Up Boss for now
+She asked "is it safe to get rid of Follow Up Boss now?" — answer was **no**,
+and she agreed to wait. Do not push her toward cancelling. The honest gap:
+**drip autosend only runs while the app is open in a browser tab.** FUB sends
+from its servers 24/7. Until sending is server-side, FUB stays.
+
+### CORRECTION for the next Claude — read this before repeating my mistake
+I told her "there is no email-sending backend; drips don't send." **That was
+wrong** and I corrected it to her. Automated email sending **is already built**:
+`GmailSyncWorker` (App.js ~8761) → `autoSendDrips()` sends queued drip mail via
+the **Gmail API** (`gmailSendMessage`, App.js ~8731). OAuth already requests
+`gmail.send` (App.js ~8499). It runs on mount + every 5 min inside `doSync`.
+It is gated behind `localStorage.gmail_autosend === 'on'`, which is why nothing
+has ever gone out. I missed it by grepping `api/` for a send endpoint and
+finding only the dead SMTP settings page + `mailto:` links. **Sending is
+client-side via Gmail, not SMTP, not serverless.**
+
+### HAZARD FIXED (commit 3459e46) — read before enabling autosend
+`autoSendDrips` selected *every* unsent past-due entry and sent them in one
+unthrottled loop. Every lead ever enrolled in a drip has been accruing due
+steps the whole time autosend was off, so flipping it on would have blasted
+the entire backlog — potentially hundreds of emails, some >1yr stale — to real
+clients at once, and likely gotten the Gmail account flagged.
+Now: skips anything **>3 days overdue** (marks `staleSkipped` for review) and
+caps each run at **20**. Still fully off unless the flag is 'on'.
+
+### Also fixed: "Open lead" 404 (commit a680f43)
+DatabaseIntel's "Open lead" + Integrations' "Go to Lead Tracker" both called
+`setPage("leads")` — not a registered page id, so every click 404'd. Correct id
+is `lead-tracker`. Also hands the name to Lead Tracker via a one-shot
+`sessionStorage.lead_focus` so the click lands on that person, not the top of a
+6,000-row list. Audited all 90 `setPage()` targets; `leads` was the only broken
+one. (`dashboard` looks broken to a naive grep — its key is unquoted at ~11542.)
+
+### Next up (agreed with her, not yet started)
+Build a **dry-run preview** of the drip queue — how many emails, to whom, how
+stale — so she can see exactly what would go out *before* autosend is enabled.
+She explicitly said "don't send any out yet." Honor that.
+After that, the real FUB-replacement step: move drip sending server-side
+(GitHub Actions cron, free) so follow-up runs with the laptop closed.
+
+---
+
+## Earlier 2026-09-01 (laptop — fixed db_intel_results blowing the localStorage quota)
 
 Monica switched laptop→desktop and asked why yesterday's work didn't "carry
 over." Everything in git DID (auto-sync `MyReHubSync` had already pulled
