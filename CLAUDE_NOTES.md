@@ -38,6 +38,27 @@ completed at scale. Fixing that one would have exposed this one immediately.
   groupByBucket / buildDailyBrief covering slim, old-fat, and orphaned-lead
   (deleted since scan) inputs. All pass.
 
+### THIRD bug, found from Monica's own account of yesterday (FIXED)
+She said: yesterday's scan "was going through, like, a hundred and fifty of
+them, and we left it running" — and nothing was ever saved.
+
+Cause: `onPartial` only persisted when `sinceSave >= 10` at `batchSize: 25`,
+i.e. the **first write happened 250 leads in**. A run that reached ~150 leads
+wrote NOTHING, while the progress counter climbed the whole time. Everything
+sat in the in-memory `acc` and died when the machine slept / the tab was
+suspended after she walked away. The confirm dialog meanwhile promised
+"progress saves as it goes (safe to close the tab)" — which was false.
+
+Fix (commit 4a7108c): persist after **every** batch (25 leads) — cheap now that
+records are slim — plus a **screen wake lock** held for the duration of the scan
+(re-acquired on `visibilitychange`, since browsers drop it when the tab hides)
+so an unattended run doesn't die to sleep. Dialog text corrected.
+
+Sequence for the next Claude: three separate bugs stacked here — 429 pacing
+(fixed 8/31), localStorage quota blowout (fixed 9/1), never-persisted progress
+(fixed 9/1). Each one masked the next. If the scan STILL yields nothing, the
+next suspect is the free Gemini **daily** quota, which no code change fixes.
+
 ### Still open / next
 - Monica still needs to run **Database Intelligence → Run Analysis** signed in
   (~10-20 min, free Gemini). It should now actually persist AND sync to the
