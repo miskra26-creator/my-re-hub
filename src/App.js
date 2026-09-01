@@ -7298,15 +7298,28 @@ const DatabaseIntel = ({setPage, toast}) => {
     const resume = Array.isArray(scored) && scored.length > 0;
     const already = new Set(resume ? scored.map((s) => s.id) : []);
     const confirmMsg = resume
-      ? `Resume analysis? ${already.size.toLocaleString()} leads already scored — this continues with the rest. Free on Gemini; paced to respect the free limit, so it can take ~10-20 min. Keep this tab open.`
-      : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first, and progress saves as it goes (safe to close the tab and resume later). Keep this tab open while it runs.`;
+      ? `Resume analysis? ${already.size.toLocaleString()} leads already scored — this continues with the rest and skips what's done.\n\nFree on Gemini, paced to respect the free limit, so it can take ~10-20 min. Progress saves every 25 leads, so stopping early never loses more than that.`
+      : `Analyze ${leads.length.toLocaleString()} leads via AI?\n\nRuns on FREE Gemini, which caps requests per minute — so this is paced and takes roughly ~10-20 min for a full database. Your best leads are scored first.\n\nProgress saves every 25 leads, so you can close the tab any time and click Re-Analyze later to pick up where you left off. Keep this tab open and in front while it runs.`;
     if (!window.confirm(confirmMsg)) return;
     setRunning(true);
     // Slim any records left over from the old fat format so a resume shrinks
     // the blob instead of carrying the bloat forward.
     const acc = resume ? scored.map((s) => ({ id: s.id, intel: s.intel })) : [];
-    let sinceSave = 0;
     setProgress({ done: 0, total: leads.length });
+
+    // This scan runs 10-20 min and gets left unattended, so hold a screen wake
+    // lock. A machine that sleeps mid-run kills the scan silently. The browser
+    // drops the lock whenever the tab is hidden, hence the re-acquire.
+    let wakeLock = null;
+    const acquireWakeLock = async () => {
+      try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+    };
+    const reacquireWakeLock = () => {
+      if (document.visibilityState === "visible") acquireWakeLock();
+    };
+    await acquireWakeLock();
+    document.addEventListener("visibilitychange", reacquireWakeLock);
+
     try {
       await scoreAllLeads(leads, {
         batchSize: 25,
@@ -7314,13 +7327,11 @@ const DatabaseIntel = ({setPage, toast}) => {
         onProgress: (done, total) => setProgress({ done, total }),
         onPartial: (batchScored) => {
           acc.push(...batchScored);
-          // Persist every ~10 batches to keep localStorage/cloud writes light,
-          // while still updating the buckets live as results stream in.
-          if (++sinceSave >= 10) {
-            setScored([...acc]);
-            setLastRun(new Date().toISOString());
-            sinceSave = 0;
-          }
+          // Persist EVERY batch. This previously saved only every 10th batch —
+          // i.e. nothing was written until 250 leads in, so a run that stopped
+          // at ~150 lost every single result while the UI counted up happily.
+          setScored([...acc]);
+          setLastRun(new Date().toISOString());
         },
       });
       setScored([...acc]);
@@ -7329,6 +7340,9 @@ const DatabaseIntel = ({setPage, toast}) => {
     } catch (e) {
       setScored([...acc]); // keep whatever we got
       toast.error("Analysis stopped: " + e.message + (acc.length ? ` (kept ${acc.length} scored so far — click Re-Analyze to resume)` : ""));
+    } finally {
+      document.removeEventListener("visibilitychange", reacquireWakeLock);
+      try { await wakeLock?.release(); } catch {}
     }
     setRunning(false);
   };
