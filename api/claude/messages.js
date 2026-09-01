@@ -111,14 +111,33 @@ export default async function handler(req, res) {
       // as of Q2 2026. 2.0-flash and 2.0-flash-lite often show quota=0
       // for new accounts depending on region; flash-latest aliases to the
       // current-gen Flash model that always has free-tier traffic enabled.
-      const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      const upstream = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(geminiBody),
-      });
-      const data = await upstream.json();
+      // Google regularly returns 503 "this model is experiencing high demand"
+      // on the primary free model, which is fatal to a 20-minute batch scan.
+      // Quotas and load are per-model, so fall through to siblings instead of
+      // failing the request. GEMINI_MODEL, if set, overrides the whole list.
+      const models = process.env.GEMINI_MODEL
+        ? [process.env.GEMINI_MODEL]
+        : ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'];
+
+      let upstream, data, model;
+      for (const candidate of models) {
+        model = candidate;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        upstream = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(geminiBody),
+        });
+        data = await upstream.json();
+        if (upstream.ok) break;
+        // Only worth trying another model for load/quota problems. A bad key or
+        // malformed request will fail identically on every model.
+        const msg = data?.error?.message || '';
+        const worthRetrying =
+          upstream.status === 503 || upstream.status === 429 ||
+          /high demand|overloaded|unavailable|quota|exhausted/i.test(msg);
+        if (!worthRetrying) break;
+      }
       if (!upstream.ok) {
         return res.status(upstream.status).json({
           error: { message: 'Gemini error: ' + (data?.error?.message || upstream.status) },
