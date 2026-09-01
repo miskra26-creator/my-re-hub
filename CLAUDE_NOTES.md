@@ -6,7 +6,53 @@
 
 ---
 
-## Last session: 2026-08-31 (desktop — brokerage rename + Daily Brief + free keep-alive)
+## Last session: 2026-09-01 (laptop — fixed db_intel_results blowing the localStorage quota)
+
+Monica switched laptop→desktop and asked why yesterday's work didn't "carry
+over." Everything in git DID (auto-sync `MyReHubSync` had already pulled
+yesterday's 6 commits). What does NOT carry: each machine's `~/.claude/` memory
+— `CLAUDE_NOTES.md` is the bridge, which is exactly what it's for.
+
+### The real bug found while checking that (FIXED)
+`db_intel_results` is a `useLS` key, so it DOES sync to Supabase — but
+`scoreAllLeads` was storing `{ ...lead, intel }`, i.e. a **full copy of all
+6,042 leads** (notes + meta included) into **localStorage**. Leads themselves
+live in IndexedDB via `useLeadsCloud` precisely because they're too big for
+localStorage's ~5MB quota. So at full-database scale the write throws
+QuotaExceededError — and `useLS`'s catch only `console.warn`s it
+(`cloudHooks.js:239`), so it fails **silently**: scan finishes, results look
+saved, then vanish on reload and never reach the cloud.
+
+This had not bitten yet only because the 429 rate-limit bug meant scans never
+completed at scale. Fixing that one would have exposed this one immediately.
+
+**Fix:** store slim `{ id, intel }` records; re-join with leads at render.
+- `aiDatabaseIntel.js` — `scoreAllLeads` pushes `{ id, intel }`; new exported
+  `hydrateScored(scored, leads)`; `groupByBucket(scored, leads)` now takes leads.
+- `App.js` — `groupByBucket(scored, leads)`; resume path re-slims any leftover
+  fat records so the blob shrinks instead of carrying bloat forward.
+- `dailyBrief.js` — Tier 2 joins scored ids against `leadById` for name/phone/email.
+- Backward compatible: hydration accepts old fat records too (they still have
+  `.id` + `.intel`), so a partially-saved old scan renders fine.
+- Verified: `craco build` exit 0, plus a 16-case Node test of hydrate /
+  groupByBucket / buildDailyBrief covering slim, old-fat, and orphaned-lead
+  (deleted since scan) inputs. All pass.
+
+### Still open / next
+- Monica still needs to run **Database Intelligence → Run Analysis** signed in
+  (~10-20 min, free Gemini). It should now actually persist AND sync to the
+  other machine. This is the one thing that upgrades the Daily Brief off
+  fallback ranking — worth doing before anything else.
+- Confirm Settings → Profile → Brokerage reads "Prime + Property Real Estate"
+  (saved Supabase value overrides the code defaults from yesterday's rename).
+- `.github/workflows/keepalive.yml` still hasn't had its first scheduled run
+  confirmed.
+- Unrelated pre-existing lint warnings mean `CI=true npm run build` fails
+  ("warnings as errors"). Plain build is clean. Don't panic; don't mass-fix.
+
+---
+
+## Session: 2026-08-31 (desktop — brokerage rename + Daily Brief + free keep-alive)
 
 ### FIXED: Database Intelligence returned 0 (Gemini free-tier rate limit)
 Monica ran Database Intelligence; it finished in seconds showing 0 despite 6,042
