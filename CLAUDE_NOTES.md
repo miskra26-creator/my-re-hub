@@ -54,10 +54,41 @@ records are slim — plus a **screen wake lock** held for the duration of the sc
 (re-acquired on `visibilitychange`, since browsers drop it when the tab hides)
 so an unattended run doesn't die to sleep. Dialog text corrected.
 
-Sequence for the next Claude: three separate bugs stacked here — 429 pacing
-(fixed 8/31), localStorage quota blowout (fixed 9/1), never-persisted progress
-(fixed 9/1). Each one masked the next. If the scan STILL yields nothing, the
-next suspect is the free Gemini **daily** quota, which no code change fixes.
+### FOURTH bug — proxy pinned to a single Gemini model (FIXED, commits f6ca55a/8ff5aaa)
+Hitting the live proxy directly returned HTTP 503 "this model is currently
+experiencing high demand" on `gemini-flash-latest`, repeatedly. `api/claude/
+messages.js` used one hardcoded model with no fallback, so a Google-side blip
+killed the entire 20-minute scan. Quota and load are **per-model**, so it now
+walks a list — `['gemini-flash-latest','gemini-3.6-flash','gemini-flash-lite-latest']`
+— breaking only on 401/403 (credentials fail identically everywhere).
+Note `gemini-2.5-flash` is retired ("no longer available to new users") and
+`gemini-2.0-flash` reports quota=0 on this account; don't put them back.
+`GEMINI_MODEL` env var still overrides the whole list.
+
+### FIFTH bug — the actual killer (FIXED, commit 9ac129a)
+With the proxy answering again, a realistic 25-lead batch STILL produced
+nothing. Cause: **Gemini 3.x bills hidden reasoning against `maxOutputTokens`.**
+At `max_tokens: 4000` the array stopped at MAX_TOKENS partway through lead ~24
+(2420 output tokens + ~1600 of reasoning). A truncated array has no closing
+`]`, so `JSON.parse` failed AND the `/\[[\s\S]*\]/` fallback failed → `throw`
+→ **all 25 leads of every batch discarded.** This is why the counter climbed
+to 150 and zero results appeared.
+
+Fix, both halves:
+1. `max_tokens: 4000 → 8000`. Verified against production: `stop_reason: STOP`,
+   complete array, 25/25 rows parse strictly.
+2. New exported `parseScoreArray(jsonText)` — brace-depth scanner (string- and
+   escape-aware) that salvages every complete object from a truncated array
+   instead of throwing. Verified on the exact captured payload that previously
+   yielded 0: **recovers 23/25**. Regression-tested for clean arrays,
+   `{results:[...]}` wrapping, garbage, empty, and braces inside strings.
+
+Sequence for the next Claude: **five** separate bugs stacked here — 429 pacing
+(8/31), localStorage quota blowout (9/1), never-persisted progress (9/1),
+single-model proxy (9/1), truncated-JSON batch loss (9/1). Each masked the
+next. If a scan STILL yields nothing, the next suspect is the free Gemini
+**daily** quota, which no code change fixes — say so plainly and don't
+re-pitch the paid Anthropic key she has already declined.
 
 ### Still open / next
 - Monica still needs to run **Database Intelligence → Run Analysis** signed in
