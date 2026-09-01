@@ -115,9 +115,12 @@ export default async function handler(req, res) {
       // on the primary free model, which is fatal to a 20-minute batch scan.
       // Quotas and load are per-model, so fall through to siblings instead of
       // failing the request. GEMINI_MODEL, if set, overrides the whole list.
+      // Ordered by preference. gemini-2.5-flash is retired ("no longer
+      // available to new users") and 2.0-flash reports quota=0 on this account,
+      // so the current-gen 3.x Flash models are the real fallbacks.
       const models = process.env.GEMINI_MODEL
         ? [process.env.GEMINI_MODEL]
-        : ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'];
+        : ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-flash-lite-latest'];
 
       let upstream, data, model;
       for (const candidate of models) {
@@ -130,13 +133,10 @@ export default async function handler(req, res) {
         });
         data = await upstream.json();
         if (upstream.ok) break;
-        // Only worth trying another model for load/quota problems. A bad key or
-        // malformed request will fail identically on every model.
-        const msg = data?.error?.message || '';
-        const worthRetrying =
-          upstream.status === 503 || upstream.status === 429 ||
-          /high demand|overloaded|unavailable|quota|exhausted/i.test(msg);
-        if (!worthRetrying) break;
+        // Try the next model for anything except a credentials problem, which
+        // will fail identically everywhere. Overload, quota, and model-retired
+        // errors are all per-model and all worth stepping past.
+        if (upstream.status === 401 || upstream.status === 403) break;
       }
       if (!upstream.ok) {
         return res.status(upstream.status).json({
