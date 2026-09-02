@@ -69,6 +69,43 @@ between them frequently. You need to coordinate via the shared session log.
 - **Vercel env vars**: same as `.env.local` minus the dev-only ones. Set via
   `vercel env ls production` to verify. Vercel deploys from GitHub `main` branch.
 
+## The north star — what she is actually building (stated 2026-09-01)
+
+She asked, explicitly, that this be remembered. Read it before proposing work.
+
+**The goal, in her words: lead generation, lead conversion, scrubbing,
+automation.** Not a CRM that stores things. A machine that finds leads, weeds
+out the junk, talks to the real ones, and moves them toward a closing — while
+she is doing something else.
+
+What "agents" means to her, concretely:
+- Reply to her **Facebook posts and comments** automatically
+- **Generate conversation** with a lead, not just fire a canned drip
+- **Trigger words** — react to what a lead actually says
+- **Scrub** incoming leads so she only spends time on real ones
+
+Her reference product is **Ylopo** — she has used its AI tools and that is the
+bar she is measuring against. When she describes something vaguely, Ylopo's
+feature set is usually the thing to reason from.
+
+**Sequencing, which she set herself and is right about:** foundation first, then
+agents. Her estimate is agents are "a week or two out." Do not jump ahead. On
+2026-09-01 she said, unprompted: *"nothing's actually working in here... I
+haven't clicked on, like, any of the tabs."* Her nav had **50 items** at that
+point, most never validated with her. The agreed next step is a **walkthrough**
+where she says one of four words per tab — **keep / kill / broken / costs
+money** — and broken things get fixed on the spot before moving on. Finish that
+before building anything new.
+
+**Two architecture facts worth keeping straight:**
+- Lead *response speed* does not need cron. Vercel's free plan allows only one
+  scheduled run per day, but the lead webhooks fire instantly on POST. The
+  5-minute rule is achievable free because it is event-driven.
+- Unattended *anything* needs the server-side pattern built on 2026-09-01:
+  `api/_lib/mailer.js` + `api/_lib/serverData.js` + an arming env var + a
+  per-action log so retries can't double-fire. Every future agent is that
+  skeleton with different judgment in the middle. Reuse it.
+
 ## How to work with Monica (read this — it is not optional)
 
 This section exists because Claude's own memory is **per-machine**. Anything
