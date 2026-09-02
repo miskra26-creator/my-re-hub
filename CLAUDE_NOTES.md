@@ -89,6 +89,50 @@ creative the ad engine needs; break-even is ~5-6 listings/yr.
   server-side (the last real blocker to dropping FUB); confirm Settings ->
   Profile -> Brokerage reads "Prime + Property Real Estate".
 
+### ⚠️ VERCEL HOBBY = 12 SERVERLESS FUNCTIONS. We were at 13.
+Adding `api/cron/birthdays.js` broke EVERY production deploy. The failure is
+horrible to diagnose: the build compiles, logs say "Build Completed", then it
+dies at "Deploying outputs" with **no error message at all**. Five deploys
+failed before I found it. `npx vercel ls my-re-hub` shows the Error status;
+`vercel inspect --logs` shows nothing useful. If deploys start failing after
+you add an endpoint, COUNT THE FUNCTIONS FIRST:
+`ls api/*.js api/*/*.js | grep -v "^api/_lib"`
+
+Fixed by consolidating 7 webhook files into `api/webhook/[source].js`. The
+handlers were MOVED to `api/_lib/webhooks/` (files under `_lib` are imports,
+not routes, so they're free) and the dynamic route dispatches on the path
+segment. **URLs are unchanged** — `/api/webhook/zillow` still works, which
+matters because those are configured inside Zillow/Realtor.com/BoldTrail/
+Cloudmailin dashboards we can't see. 14 tests in
+`scripts/test-webhook-routes.js`. Count is now 7, so there's room for ~5 more.
+
+### Server-side sending — the real FUB blocker, now half-solved
+`api/_lib/mailer.js` + `api/_lib/serverData.js` + `api/cron/birthdays.js`.
+- **Gmail cannot do this for free.** `gmail.send` is a Google *restricted*
+  scope: unverified apps get refresh tokens that expire every **7 days**, and
+  permanent credentials require paid third-party security review. Don't try to
+  make the existing browser-side Gmail OAuth work from a cron — it can't.
+- Sending goes through **Resend** free tier (3,000/mo, 100/day, key never
+  expires), from her own domain with reply-to pointed at her Gmail.
+- **Vercel Hobby crons: 100 jobs, each once per day, ±59 min.** Stagger across
+  hours for more coverage. Confirmed in Vercel docs 2026-07-15.
+- `SUPABASE_SERVICE_ROLE_KEY` must NEVER be named `REACT_APP_*` — CRA inlines
+  those into the public bundle.
+
+**Not live and deliberately so.** Monica said "set it up just don't go live
+yet". Two independent locks: (1) no `crons` entry in vercel.json, so nothing is
+scheduled; (2) `BIRTHDAY_AUTOSEND` must equal `on` or the endpoint returns the
+list it *would* have mailed and sends nothing. `?dryRun=1` also previews.
+Currently returns "SUPABASE_SERVICE_ROLE_KEY not configured" — correct.
+
+**Waiting on Monica** (she controls teamiskrasells.com DNS, confirmed): create
+free Resend account, verify the domain, then set in Vercel `RESEND_API_KEY`,
+`MAIL_FROM`, `MAIL_REPLY_TO`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`.
+Deliberately NOT asking her to paste keys into chat. Then
+`node scripts/push-birthdays.js --write` loads the 50 birthdays (54 minus 4
+duplicate records — Pete Butler was getting two a year since 2022), dry run,
+then arm. First real deadline: **Clifford Taylor, Sept 13.**
+
 ### Note on commit a574f9a
 Auto-sync grabbed the scorer fix before I could commit it myself, so it carries
 a generic "Auto-sync" message. Contents are `src/aiDatabaseIntel.js` +
