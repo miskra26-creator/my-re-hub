@@ -6,8 +6,8 @@
  * email (has subject/from/text), we route through the email parser.
  * Otherwise we extract from the structured JSON shape.
  */
-import { parseLeadEmail } from '../_lib/parseLead.js';
-import { pushToInbox } from '../_lib/leadInbox.js';
+import { parseLeadEmail } from '../parseLead.js';
+import { pushToInbox } from '../leadInbox.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

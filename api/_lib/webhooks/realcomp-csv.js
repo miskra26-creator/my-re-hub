@@ -17,7 +17,7 @@
  *   - SUPABASE_URL        — same as REACT_APP_SUPABASE_URL
  *   - SUPABASE_ANON_KEY   — same as REACT_APP_SUPABASE_ANON_KEY
  */
-import { parseRealcompCSV, toDbRow } from '../_lib/parseRealcompCSV.js';
+import { parseRealcompCSV, toDbRow } from '../parseRealcompCSV.js';
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||

@@ -2,7 +2,7 @@
  * Facebook Lead Ads webhook.
  * GET handles verification challenge. POST receives lead.
  */
-import { pushToInbox } from '../_lib/leadInbox.js';
+import { pushToInbox } from '../leadInbox.js';
 
 const VERIFY_TOKEN = 're_hub_fb_verify';
 

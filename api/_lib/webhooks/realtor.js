@@ -1,7 +1,7 @@
 /**
  * Realtor.com webhook.
  */
-import { pushToInbox } from '../_lib/leadInbox.js';
+import { pushToInbox } from '../leadInbox.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

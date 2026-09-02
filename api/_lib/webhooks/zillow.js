@@ -2,7 +2,7 @@
  * Zillow Premier Agent webhook.
  * Payload shape per Zillow's documented format.
  */
-import { pushToInbox } from '../_lib/leadInbox.js';
+import { pushToInbox } from '../leadInbox.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

@@ -5,7 +5,7 @@
  * POST /api/webhook/lead?source=BoldTrail
  * Body: { name, email, phone, message, address, city, budget, ... }
  */
-import { pushToInbox } from '../_lib/leadInbox.js';
+import { pushToInbox } from '../leadInbox.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

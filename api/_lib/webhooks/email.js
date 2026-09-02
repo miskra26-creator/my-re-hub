@@ -6,8 +6,8 @@
  * Expected body shape: { from, subject, text, html } — common across all
  * email parser services. We're tolerant to capitalization variations.
  */
-import { parseLeadEmail } from '../_lib/parseLead.js';
-import { pushToInbox } from '../_lib/leadInbox.js';
+import { parseLeadEmail } from '../parseLead.js';
+import { pushToInbox } from '../leadInbox.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
