@@ -82,6 +82,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'RESEND_API_KEY / MAIL_FROM not configured' });
   }
 
+  // ARMING SWITCH. Having the keys in place must not be the same decision as
+  // "start emailing my past clients". Without BIRTHDAY_AUTOSEND=on this
+  // endpoint degrades to a preview no matter who calls it or how, so the
+  // schedule can be tested end-to-end — real data, real recipients listed,
+  // real timing — with zero chance of a message reaching anyone.
+  const armed = String(process.env.BIRTHDAY_AUTOSEND || '').toLowerCase() === 'on';
+  const previewOnly = dryRun || !armed;
+
   const { year, mm, dd } = todayLocal();
   const today = `${mm}-${dd}`;
 
@@ -111,9 +119,11 @@ export default async function handler(req, res) {
     const batch = unique.slice(0, DAILY_SEND_CAP);
     const deferred = unique.length - batch.length;
 
-    if (dryRun) {
+    if (previewOnly) {
       return res.status(200).json({
-        dryRun: true, date: `${year}-${today}`, timezone: TZ,
+        sent: false,
+        reason: dryRun ? 'dryRun=1' : 'BIRTHDAY_AUTOSEND is not "on" — preview only',
+        date: `${year}-${today}`, timezone: TZ,
         wouldSend: batch.map((p) => ({ name: p.name, email: p.email })),
         deferred, totalOnFile: people.length,
       });
