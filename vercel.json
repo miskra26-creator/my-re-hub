@@ -4,6 +4,9 @@
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
+  "crons": [
+    { "path": "/api/cron/birthdays", "schedule": "0 12 * * *" }
+  ],
   "headers": [
     {
       "source": "/sw.js",
