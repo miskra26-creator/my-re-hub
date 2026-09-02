@@ -6,6 +6,108 @@
 
 ---
 
+## 2026-09-01 late evening (laptop) — Birthday automation BUILT + WIRED. Blocked on DNS only.
+
+The daily birthday job is finished and proven against live production. The one
+remaining blocker is not code — it's three DNS records she cannot currently add.
+
+**Proven working on the live site tonight:**
+```
+GET /api/cron/birthdays?dryRun=1
+{"sent":false,"reason":"dryRun=1","date":"2026-09-01","timezone":"America/Detroit",
+ "wouldSend":[{"name":"Beth Gerigk","email":"bethgerigk@yahoo.com"}],
+ "deferred":0,"totalOnFile":50}
+
+GET /api/cron/birthdays   -> 401 unauthorized
+```
+It read Supabase with the service key, computed "today" in Detroit time, and
+correctly found the one person with a Sept 1 birthday out of 50. Both safety
+locks intact.
+
+**All five env vars now set in Vercel production:**
+`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_REPLY_TO`,
+`CRON_SECRET`.
+- `MAIL_FROM` = `Monica Iskra <monica@send.teamiskrasells.com>`
+- `MAIL_REPLY_TO` = `monica@teamiskrasells.com` (replies land in her real inbox)
+
+**Data loaded:** `node scripts/push-birthdays.js --write` → 50 birthdays into
+`user_data.birthdays`. 6,046 scanned, 4 duplicate emails collapsed, 0 dropped.
+
+**Supabase gotcha, cost ~20 min:** the new `sb_secret_...` key format works, but
+`user_data` had never granted anything to the `service_role` role, so every read
+returned `42501 permission denied`. Fixed in the SQL editor:
+```sql
+grant usage on schema public to service_role;
+grant all privileges on table public.user_data to service_role;
+```
+If a future server-side job hits `permission denied for table X`, that's the fix.
+
+### The DNS wall (the actual blocker)
+
+Resend won't send to arbitrary recipients until a domain is verified.
+`send.teamiskrasells.com` is added in Resend and its 3 records are generated
+(DKIM TXT, SPF MX, SPF TXT) — but they can't be placed:
+
+- `teamiskrasells.com` is registered at **GoDaddy** (2018-01-17, hers, expires
+  2027-01-17) but nameservers are `apollo/lucy.ns.cloudflare.com`.
+- **The Cloudflare account holding the zone is NOT hers.** Her account
+  (Miskra26@gmail.com) shows "No data available" under Domains. Almost certainly
+  kvCORE / Inside Real Estate owns it — the zone is a wildcard to kvCORE.
+- Resend's "Auto configure" therefore fails silently — it authorizes an empty
+  account. Failed twice. Not her error; don't retry it, it cannot work.
+
+**Complete DNS inventory (the whole zone is 6 records):**
+
+| Name | Type | Value |
+|---|---|---|
+| `teamiskrasells.com` | A/AAAA | Cloudflare-proxied → kvCORE |
+| `*` | CNAME | `customers.kvcore.com` |
+| `teamiskrasells.com` | MX ×5 | Google Workspace (`aspmx.l.google.com` etc.) |
+| `teamiskrasells.com` | TXT | `google-site-verification=2FMTFAacmxIkKX8EZtADZZGAZDLL7GiG8OZMuqZXRzI` |
+| `teamiskrasells.com` | TXT | `v=spf1 include:dc-aa8e722993._spfm.teamiskrasells.com include:sendgrid.net ~all` |
+| `dc-aa8e722993._spfm` | TXT | `v=spf1 include:_spf.google.com ~all` |
+
+Everything else (`www`, `_dmarc`, `google._domainkey`, `em`, ...) is the wildcard
+answering — those are NOT real records. No DMARC, no Google DKIM.
+
+**Her website is currently down — 403 on both root and www.** She let the kvCORE
+$10/mo lapse. She's paying it 2026-09-02 to restore the site.
+
+### Her decision — DO NOT override it
+
+Offered two paths: **A** get kvCORE to add the 3 records (zero risk to email), or
+**B** move the zone into her own Cloudflare + GoDaddy nameserver flip.
+
+**She chose A. Her words: "I just don't want my email all fucked up because
+that's my work email."** Standing constraint, not a one-time answer. Don't
+propose B again unless she raises it. Adding records to a subdomain cannot affect
+her MX — say so plainly if she worries, then stop.
+
+NEVER suggest changing nameservers at GoDaddy as a quick fix. It would take down
+her Google Workspace mail until every record above is rebuilt by hand.
+
+### Next session — start here
+
+1. She pays kvCORE ($10), site returns. Then ask kvCORE (BoldTrail support, or a
+   DNS panel if her account exposes one under Settings → Domains) to add Resend's
+   3 records for `send.teamiskrasells.com`. Ticket draft offered, not yet written.
+2. When verified: hit `?dryRun=1`, then send ONE test to her own address and show
+   her the result.
+3. Only then arm it: `BIRTHDAY_AUTOSEND=on` + re-add the `crons` block to
+   `vercel.json` (`/api/cron/birthdays`, daily). **Get her approval first.**
+4. **HARD DEADLINE: Clifford Taylor, 2026-09-13.** Then Alfred Mumford 09-17,
+   Maya Braden 09-19, Sara Hernandez 09-21.
+5. **Turn off FUB action plan 38 before arming**, or past clients get two birthday
+   emails. Beth Gerigk almost certainly got one from FUB today.
+6. **Rotate the Supabase key.** She pasted `sb_secret_...` into chat despite being
+   asked not to; it's in the transcript on disk. Roll it in Supabase and set the
+   replacement via `vercel env add` piped from a file — never displayed. (The
+   Resend key was handled correctly: clipboard → Vercel, never shown.)
+7. Delete the dead Resend API key named "Onboarding" — its value was never
+   captured, only `my-re-hub` is real.
+
+---
+
 ## ✅ 2026-09-01/02 (home-pc, evening) — FUB import finished. Backup shipped. Scorer fixed.
 
 The 6,042-lead FUB import completed. All work below was held on branch
