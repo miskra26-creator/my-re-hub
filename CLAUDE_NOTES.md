@@ -6,6 +6,96 @@
 
 ---
 
+## ✅ 2026-09-01/02 (home-pc, evening) — FUB import finished. Backup shipped. Scorer fixed.
+
+The 6,042-lead FUB import completed. All work below was held on branch
+`backup-export` for the ~2.5h it ran so auto-sync could not deploy mid-import,
+then merged to `main` once she said it was done.
+
+### Backup / restore is live (commit e04dbf8)
+`idbExportByPrefix()` / `idbImportBackup()` in `src/cloudHooks.js`, wired to
+Download/Restore buttons in `src/FubMigration.jsx`. The FUB history lives ONLY
+in IndexedDB (`idbSet` never syncs to Supabase) and a browser already deleted
+it once in May 2026. She has downloaded a real file:
+`my-re-hub-fub-backup-2026-09-02.json`, **289 MB**, verified by parsing it.
+
+Gotchas baked in — don't "simplify" these:
+- `cursor.continue()` must be called synchronously or the transaction closes
+  and the export truncates silently.
+- The Blob is built from an array of string parts so 289MB spills to disk
+  instead of OOMing the tab.
+- The object URL is revoked after 60s; Firefox cancels large in-flight
+  downloads if you revoke immediately.
+- The backup panel is NOT gated on `idbCount > 0` — a wiped browser is exactly
+  when Restore is needed.
+- 23 tests in `scripts/test-backup.js` (in-memory IndexedDB shim, real
+  functions extracted from source so they can't drift).
+
+### Action plans: one engine instead of four (commit 467acc0)
+New `src/actionPlans.js` + 52 tests in `scripts/test-action-plans.js`. The
+apply-a-plan logic was copy-pasted in 4 places in App.js and all four shared
+`lead.name.split(" ")[0]`, which throws on a nameless lead — common in a FUB
+export. On the inbox auto-enroll path that crash sat inside a bare try/catch,
+so ONE nameless lead silently enrolled NOBODY. Also `MAX_BULK_TASKS = 1000`:
+6,042 leads x 7 steps = 42,294 tasks would blow the ~5MB localStorage cap, and
+a failed write there can take the whole task list with it. Smart Lists now has
+a bulk "Action Plan" button with a live preview.
+
+### ⚠️ FUB REDACTS MESSAGE BODIES — verified against the real backup
+This is the single most important fact in the file. FUB's API returned:
+- **all 32,601 texts** as `* Body is hidden for privacy reasons *`
+- **all 55,899 emails** as `[CONTENT HIDDEN]` — subject too
+
+What DID survive, and is genuinely valuable:
+- **65,877 of 65,890 notes** — Monica's own words, intact
+- **all 44,738 events**, 4,731 with the lead's own words, plus 21,688
+  "Viewed Property" + 5,004 "Property Inquiry" with real addresses/sources
+- **2,172 of 2,794 call notes**
+- text/email metadata (direction, timestamps, delivery status) is real, so
+  reply COUNTS and recency still work — only the wording is gone
+
+Fixed in `summarizeEngagement` (`src/aiDatabaseIntel.js`), commit a574f9a:
+it used to take the latest inbound record regardless, so across 6,042 leads it
+gave the model real client words **2 times** and a placeholder **1,690 times**.
+Now redacted bodies are skipped, `events` are in the timeline, and "last reply"
+vs "last readable reply" are tracked separately. Real quotes: **2 -> 3,751**.
+**If you ever re-import from FUB, expect redaction again** — it's an account
+content-sharing setting on FUB's side, not a bug here.
+
+### Cost picture — corrected, don't repeat my errors
+Her ACTUAL recurring costs: Follow Up Boss $69/mo, Homes.com $200/mo, Realcomp,
+board dues. **Nothing else.** I wrongly put Reminder Media's $500/mo in a table
+as a bill she pays — it's the service she wants to REPLICATE. I also judged
+Homes.com as a lead source and asked if it had produced a closing; it's
+actually **listing media production** (Matterport, aerial, marketing).
+Recommendation flipped to **KEEP** — it produces the legally usable listing
+creative the ad engine needs; break-even is ~5-6 listings/yr.
+**FUB $69/mo is the only clean cut**, and only after lead flow is re-pointed.
+
+### Open questions I asked her and she has not answered yet
+- Is FUB still billing her, or already cancelled?
+- Does she use a FUB phone/text number with clients? (blocks cancelling)
+- Where do new leads land today? (needed to re-point flow to
+  `api/webhook/email.js` via a Gmail filter -> Cloudmailin forward)
+- How many listings in the last 12 months; is Homes.com $200 unlimited/capped?
+
+### Queued next
+- Re-run Database Intelligence "Fresh scan" — real history exists now AND the
+  scorer fix above changes the input materially.
+- Walk her through drip dry-run preview + Smart Lists bulk apply. Both shipped,
+  neither demonstrated. She said "don't send any out yet."
+- Lead Source Scoreboard (proposed, not built).
+- Still open: dismiss "ZZ TEST" lead; BoldTrail Option B; move drip sending
+  server-side (the last real blocker to dropping FUB); confirm Settings ->
+  Profile -> Brokerage reads "Prime + Property Real Estate".
+
+### Note on commit a574f9a
+Auto-sync grabbed the scorer fix before I could commit it myself, so it carries
+a generic "Auto-sync" message. Contents are `src/aiDatabaseIntel.js` +
+`src/FubMigration.jsx` and are correct.
+
+---
+
 ## ✅ 2026-09-01 (laptop, later) — Database Intelligence WORKS. First time ever.
 
 Monica ran a full scan and got real buckets on screen. This feature had never
