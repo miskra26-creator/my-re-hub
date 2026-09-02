@@ -74,39 +74,63 @@ export function summarizeEngagement(lead, blob) {
   const meta = lead?.meta || {};
   const out = {};
 
+  // Events (Property Inquiry, Viewed Property, Registration…) are lead-generated
+  // actions, so they count as inbound and — unlike texts and emails — FUB does
+  // NOT redact them. Verified against the 2026-09-02 backup: all 44,738 events
+  // came through intact, 4,731 carrying the lead's own words.
   const items = blob
-    ? [...(blob.textMessages || []), ...(blob.calls || []), ...(blob.emails || []), ...(blob.notes || [])]
+    ? [...(blob.textMessages || []), ...(blob.calls || []), ...(blob.emails || []),
+       ...(blob.notes || []), ...(blob.events || [])]
     : [];
 
   // FUB records don't share one timestamp field, so try the usual suspects.
   const tsOf = (r) => {
-    const raw = r?.created || r?.sent || r?.occurredAt || r?.updated;
+    const raw = r?.occurred || r?.created || r?.sent || r?.occurredAt || r?.updated;
     const t = raw ? Date.parse(raw) : NaN;
     return Number.isNaN(t) ? null : t;
   };
-  const isInbound = (r) => r?.isIncoming === true || r?.direction === "inbound";
+  const isInbound = (r) =>
+    r?.isIncoming === true || r?.direction === "inbound" || !!r?.occurred;
+
+  // FUB's API returns message bodies as placeholders unless the account has
+  // content sharing switched on. In the 2026-09-02 backup that is ALL 32,601
+  // texts ("* Body is hidden for privacy reasons *") and ALL 55,899 emails
+  // ("[CONTENT HIDDEN]", in the subject too). Quoting one of those to the model
+  // as "their last message" is worse than quoting nothing: it burns 300
+  // characters of a tight token budget and invites the model to score a lead on
+  // a string that says nothing about them. The timestamps and direction on
+  // those same records are real, so replies still COUNT — we just don't pretend
+  // to know what they said.
+  const REDACTED = /^\s*[[*]?\s*(content hidden|body is hidden|hidden for privacy)/i;
+  const isRedacted = (s) => !s || REDACTED.test(s) || /hidden for privacy reasons/i.test(s);
 
   if (items.length) {
-    let lastTs = null, lastInTs = null, lastInBody = "", inCount = 0, outCount = 0;
+    // Two separate "most recent inbound" clocks: one for ANY reply (which is
+    // what daysSinceTheyReplied means) and one for the most recent reply we can
+    // actually read. They differ for nearly every imported lead.
+    let lastTs = null, lastInTs = null, inCount = 0, outCount = 0;
+    let quoteTs = null, quoteBody = "";
     for (const r of items) {
       const t = tsOf(r);
       if (t && (!lastTs || t > lastTs)) lastTs = t;
       if (isInbound(r)) {
         inCount++;
-        if (t && (!lastInTs || t > lastInTs)) {
-          lastInTs = t;
-          lastInBody = String(r.message || r.body || r.snippet || r.subject || r.note || "").trim();
+        if (t && (!lastInTs || t > lastInTs)) lastInTs = t;
+        const body = String(r.message || r.body || r.snippet || r.subject || r.note || "").trim();
+        if (!isRedacted(body) && t && (!quoteTs || t > quoteTs)) {
+          quoteTs = t;
+          quoteBody = body;
         }
       } else outCount++;
     }
     if (lastTs)   out.daysSinceAnyContact = daysAgo(lastTs);
     if (inCount)  out.timesTheyReplied = inCount;
     if (outCount) out.timesYouReachedOut = outCount;
-    if (lastInTs) {
-      out.daysSinceTheyReplied = daysAgo(lastInTs);
-      // Their own words are worth more than any metadata we could compute.
-      if (lastInBody) out.theirLastMessage = lastInBody.replace(/\s+/g, " ").slice(0, 300);
-    }
+    if (lastInTs) out.daysSinceTheyReplied = daysAgo(lastInTs);
+    // Their own words are worth more than any metadata we could compute — but
+    // only if they're really their words. Omitted entirely when everything
+    // readable was redacted, so the prompt is silent rather than misleading.
+    if (quoteBody) out.theirLastMessage = quoteBody.replace(/\s+/g, " ").slice(0, 300);
     // Absence of a reply is itself a signal, but only meaningful once we know
     // outreach actually happened.
     if (!inCount && outCount) out.neverReplied = true;

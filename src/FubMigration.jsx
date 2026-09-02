@@ -214,7 +214,12 @@ export default function FubMigration({ toast }) {
         setBackupBusy(false);
         return;
       }
-      const stamp = new Date().toISOString().slice(0, 10);
+      // LOCAL date, not toISOString(). A backup taken at 8pm in Michigan is
+      // already tomorrow in UTC, so the first file came out stamped 2026-09-02
+      // on the evening of Sept 1 — which makes "is this today's backup?" a
+      // question she can't answer by looking at the filename.
+      const now = new Date();
+      const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
