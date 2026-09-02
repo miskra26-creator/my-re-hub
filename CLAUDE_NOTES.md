@@ -88,6 +88,16 @@ her Google Workspace mail until every record above is rebuilt by hand.
 
 ### Next session — start here
 
+0. **FIRST: set up shared Claude memory via OneDrive.** She is bringing the
+   laptop to the office on 2026-09-02 specifically so both machines are present.
+   She said: *"I don't wanna have two separate conversations going."*
+   Plan: move `C:\Users\miskr\.claude\projects\C--Users-miskr\memory\` into her
+   OneDrive, then on BOTH machines replace the local folder with a junction
+   (`mklink /J`) pointing at the OneDrive copy. Same OneDrive account both sides.
+   Do the machines ONE AT A TIME with only one Claude running, or they overwrite
+   each other. Keep the repo notes bridge too — belt and suspenders.
+   Do NOT sync the `.jsonl` transcripts: they contain pasted secrets.
+
 1. She pays kvCORE ($10), site returns. Then ask kvCORE (BoldTrail support, or a
    DNS panel if her account exposes one under Settings → Domains) to add Resend's
    3 records for `send.teamiskrasells.com`. Ticket draft offered, not yet written.
