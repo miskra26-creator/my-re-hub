@@ -6,6 +6,43 @@
 
 ---
 
+## 2026-08-31 (desktop) — SHARED MEMORY: desktop half DONE. Laptop half pending.
+
+Set up shared Claude memory via OneDrive (the "start here" task below). **Desktop
+side is complete and verified:**
+- `C:\Users\monica\OneDrive\claude-memory\` created, holds the desktop's 8 memory
+  `.md` files (real files, syncs via OneDrive).
+- Desktop local memory path
+  `C:\Users\monica\.claude\projects\C--Users-monica\memory` is now a **junction**
+  → `...\OneDrive\claude-memory`. Read + write-through verified.
+- Old desktop folder preserved as `...\C--Users-monica\memory_pre_junction` and
+  backed up to the desktop scratchpad. Safe to delete once the laptop side works.
+
+**LAPTOP HALF — do this ON THE LAPTOP, with ONLY the laptop's Claude running
+(stop the desktop Claude first so they don't both write):**
+1. Confirm the laptop's OneDrive is the **SAME account** as the desktop
+   (Miskra26@gmail consumer). Wait until `C:\Users\miskr\OneDrive\claude-memory`
+   has synced down and shows the 8 files.
+2. Back up the laptop's current memory folder
+   (`C:\Users\miskr\.claude\projects\C--Users-miskr\memory`) somewhere safe.
+3. **MERGE, don't overwrite:** copy any laptop-ONLY `.md` memory files INTO
+   `C:\Users\miskr\OneDrive\claude-memory`. For `MEMORY.md`, hand-merge the two
+   indexes into one (combine the bullet lists) — do NOT let either machine's
+   MEMORY.md clobber the other.
+4. Rename the laptop's local `memory` folder aside, then create the junction:
+   `New-Item -ItemType Junction -Path "<laptop memory path>" -Target "C:\Users\miskr\OneDrive\claude-memory"`.
+5. Verify: `Get-ChildItem "<laptop memory path>"` shows the full merged set.
+
+After that, both machines read/write the same OneDrive folder = shared memory.
+**Still keep this repo `CLAUDE_NOTES.md` as the bridge** (belt + suspenders), and
+NEVER move the `.jsonl` transcripts (they contain pasted secrets).
+GOLDEN RULE reinforced today: only ONE machine's Claude editing at a time — the
+desktop + laptop both edited aiDatabaseIntel.js / dailyBrief.js / App.js in
+parallel today; git auto-merged cleanly this time (verified compiles), but that
+was luck.
+
+---
+
 ## 2026-09-01 late evening (laptop) — Birthday automation BUILT + WIRED. Blocked on DNS only.
 
 The daily birthday job is finished and proven against live production. The one
