@@ -6,6 +6,70 @@
 
 ---
 
+## 2026-09-10 (desktop) — SECURITY: FUB key was public + API routes were open. Both closed.
+
+Found while auditing at Monica's request ("is this sellable software"). Two
+separate holes exposing the same data. **Both fixed and verified in production.**
+
+### 1. Live FUB API key in the public JS bundle
+Anyone could `curl https://my-re-hub.vercel.app/static/js/main.*.js` with no
+login and read the key → full CRM access (6,046 contacts). Two causes, and the
+second is the non-obvious one:
+- `src/` read `process.env.REACT_APP_FUB_API_KEY` (App.js ×3, FubMigration.jsx).
+  REACT_APP_* is inlined into the browser bundle by design. Removed.
+- **Removing those was NOT enough.** A bundled dep references bare
+  `process.env`, so webpack inlines the ENTIRE env object — the key came back in
+  `931.*.chunk.js` with zero references left in src/. The var must not EXIST at
+  build time. Deleted from `.env.local` AND from Vercel
+  (`vercel env rm REACT_APP_FUB_API_KEY production`). `FUB_API_KEY` (server-side)
+  kept — that's what the proxy uses.
+- `src/setupProxy.js` still reads REACT_APP_* and that is FINE: dev-server Node
+  code, never bundled. Commented so nobody "fixes" it.
+
+### 2. Every browser-facing API route was unauthenticated
+Worse than the key: even without it, `/api/fub/people` returned all 6,046
+contacts (name/email/phone/tags/stage) to an anonymous curl, and
+`/api/claude/messages` answered anonymously (anyone could drain the free Gemini
+quota the DB Intelligence scan needs).
+- New **`api/_lib/requireAuth.js`** — verifies the caller's Supabase access token
+  against `/auth/v1/user`. **Fails closed** (503 if Supabase env missing).
+  Applied to `api/fub/[...path].js`, `api/claude/messages.js`,
+  `api/elevenlabs/index.js`, `api/gemini/image-edit.js`.
+  `api/twilio.js` already had this check — it's the pattern copied.
+- **NOT gated (intentionally):** `api/webhook/*` (external posts, no session) and
+  `api/cron/*` (uses CRON_SECRET). Don't "fix" these.
+- Client: **`src/authFetch.js`** wraps `window.fetch` ONCE and adds the token to
+  same-origin `/api/*` calls, instead of editing ~40 call sites. Imported in
+  `src/index.js` before App. Rules baked in: never cross-origin (would leak the
+  session), never overwrite a caller's Authorization (twilioSms.js sets its own),
+  and it awaits the initial `getSession()` so requests on mount don't race it and
+  401 a signed-in user.
+
+### Verified in production (anonymous, no login)
+```
+/api/fub/people        401   /api/claude/messages   401
+/api/elevenlabs        401   /api/gemini/image-edit 401
+/api/cron/birthdays    401 (CRON_SECRET — correct)  site 200
+14 live JS files scanned: ZERO fka_ keys
+```
+
+### STILL OPEN — Monica's call, she declined
+**The old FUB key was public for months and has NOT been rotated.** She said
+"i dont care i dont feel like deleting my api no one has acces to my account but
+me" — explained once that scanners, not logins, find keys like that; she owns the
+risk. **Do not nag her about it again.** If she ever changes her mind: FUB →
+Admin → API → regenerate, then `vercel env add FUB_API_KEY` (server-side only,
+never REACT_APP_*).
+
+### Audit findings NOT addressed (context for "is this sellable")
+Told her honestly it's a strong personal tool, not a product: single-tenant by
+design (`serverData.js` literally throws "multiple users exist"), 68 npm vulns
+(5 critical / 38 high), App.js 11,790 lines of 38.5k total, 6 test files, no
+Fair Housing guardrails on AI-generated ad copy, and TCPA/DNC exposure on
+auto-texting. She has not asked to act on any of it.
+
+---
+
 ## 2026-09-10 (laptop) — SHARED MEMORY: COMPLETE. Both halves done.
 
 Laptop half finished. **Both machines now junction to one OneDrive folder**
