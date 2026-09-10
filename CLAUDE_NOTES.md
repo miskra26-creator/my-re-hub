@@ -6,6 +6,48 @@
 
 ---
 
+## 2026-09-10 (laptop) — SHARED MEMORY: COMPLETE. Both halves done.
+
+Laptop half finished. **Both machines now junction to one OneDrive folder**
+(`OneDrive\claude-memory`, account `miskra26@gmail.com` Personal — verified on
+the laptop via `HKCU:\Software\Microsoft\OneDrive\Accounts\Personal`).
+
+The folder did NOT sync down at first — it was completely absent, not a
+placeholder. Monica re-signed into OneDrive on the desktop and it appeared. If
+this ever recurs, that's the fix: re-sign-in, then re-check.
+
+**The merge was a real union, not a formality.** The two machines had been
+remembering different things for months:
+- desktop: 8 files (`user_monica`, `project_re_hub`, `project_fub_database`,
+  `reference_fub_api`, `project_re_hub_video_auto`, `project_accountability_tracker`,
+  `feedback_prefers_free`, `MEMORY.md`)
+- laptop: 10 files (`user_profile`, `project_goal`, `project_roadmap`,
+  `lead_engine_priority`, `ad_strategy_metro_detroit`, `voice_clone_setup`,
+  `two_machine_workflow`, `feedback_be_honest_upfront`,
+  `feedback_verify_against_production`, `MEMORY.md`)
+- **Zero filename overlap except `MEMORY.md`.** Overwriting either side would
+  have silently destroyed months of the other machine's context.
+
+Result: **17 files**. `MEMORY.md` was hand-merged — all 16 entries kept, grouped,
+with an explicit "overlaps worth consolidating later" list at the bottom
+(`user_profile` vs `user_monica`, `feedback_be_honest_upfront` vs
+`feedback_prefers_free`, `project_re_hub` vs `project_goal`+`project_roadmap`).
+Read both before ever collapsing those.
+
+Backups before any change: `memory_pre_junction` (laptop, 10 files) and
+`Documents\claude-memory-laptop-backup_2026-09-10_1150`. Desktop has its own
+`memory_pre_junction`. Safe to delete once a few sessions confirm this works.
+
+Also corrected `two_machine_workflow.md`, which still asserted "my memory does
+NOT sync" — now false and actively misleading.
+
+**GOLDEN RULE is now load-bearing, not advisory:** only ONE machine's Claude at a
+time. They share a live folder now; two running Claudes will clobber each other's
+memory. Transcripts (`.jsonl`) deliberately stay unsynced — they contain pasted
+secrets.
+
+---
+
 ## 2026-08-31 (desktop) — SHARED MEMORY: desktop half DONE. Laptop half pending.
 
 Set up shared Claude memory via OneDrive (the "start here" task below). **Desktop
