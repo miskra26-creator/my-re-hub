@@ -2087,8 +2087,13 @@ async function fetchFubLeadDetail(fubId, leadId) {
 
   // FALLBACK PATH: live FUB API call. Pull the FUB key the user pasted
   // into Integrations and forward it as x-fub-key so the proxy can auth.
+  // SECURITY: never read REACT_APP_FUB_API_KEY here. Anything REACT_APP_* is
+  // compiled into the public JS bundle, which is downloadable by anyone without
+  // logging in — that leaked the live FUB key (full CRM access) until 2026-09-10.
+  // The proxy authenticates with the server-side FUB_API_KEY env var; a key is
+  // only forwarded if the user pasted one into Integrations (stays in their own
+  // browser's localStorage, never in the bundle).
   const fubKey = (JSON.parse(localStorage.getItem("integrations")||"{}")?.fub?.apiKey)
-              || (typeof process !== 'undefined' && process.env?.REACT_APP_FUB_API_KEY)
               || "";
   const fetchOpts = fubKey ? { headers: { "x-fub-key": fubKey } } : {};
 
@@ -3619,18 +3624,16 @@ const LeadTracker = ({setPage,toast}) => {
   const syncFUB = async (silent=false) => {
     setSyncing(true);
     try {
-      // Pull the FUB key the user entered on the Integrations page so the
-      // proxy can attach it as the Authorization header. Falls back to the
-      // build-time env var if present.
-      const fubKey = (JSON.parse(localStorage.getItem("integrations")||"{}")?.fub?.apiKey)
-                  || process.env.REACT_APP_FUB_API_KEY
-                  || "";
-      if(!fubKey) {
-        if(!silent) toast.error("No FUB API key — add it in Integrations → Follow Up Boss");
-        setSyncing(false);
-        return;
-      }
-      const fetchOpts = { headers: { "x-fub-key": fubKey } };
+      // SECURITY: never read REACT_APP_FUB_API_KEY here — REACT_APP_* vars are
+      // compiled into the public JS bundle, which anyone can download without
+      // logging in. That leaked the live FUB key (full CRM access) until
+      // 2026-09-10. Only a key the user pasted into Integrations is used, and
+      // that lives in their own browser's localStorage, never in the bundle.
+      const fubKey = (JSON.parse(localStorage.getItem("integrations")||"{}")?.fub?.apiKey) || "";
+      // Having no client key is fine and is now the normal case: /api/fub
+      // authenticates with the server-side FUB_API_KEY. If neither exists, the
+      // proxy replies 500 with a clear hint, surfaced by the !res.ok check below.
+      const fetchOpts = fubKey ? { headers: { "x-fub-key": fubKey } } : {};
       let all = [], next = "/api/fub/people?limit=100";
       while(next) {
         const res = await fetch(next, fetchOpts);
@@ -8036,8 +8039,10 @@ const Integrations = ({setPage,toast}) => {
   const platforms = [
     {key:"fub",icon:"🏡",title:"Follow Up Boss CRM",color:"#1a5aa0",status:"free",statusLabel:"Connected · Your CRM",
      fields:[{id:"apiKey",label:"API Key",type:"password"}],
-     defaultVals:{apiKey: process.env.REACT_APP_FUB_API_KEY || ""},
-     instructions:"FUB key is loaded from .env.local (REACT_APP_FUB_API_KEY). Use the Sync FUB button in Lead Tracker to import your contacts."},
+     // SECURITY: no defaultVals from process.env — a REACT_APP_* value here is
+     // compiled into the public JS bundle and readable by anyone, logged in or
+     // not. The key now lives only in Vercel's server-side FUB_API_KEY.
+     instructions:"The FUB key is stored securely on the server (Vercel env var FUB_API_KEY) and is never sent to your browser. Leave this blank — Sync FUB in Lead Tracker works without it. Only paste a key here if you're running locally without a server key."},
     {key:"meta",icon:"📘",title:"Meta — Facebook + Instagram",color:"#1877f2",status:"free",statusLabel:"Free · Direct API",
      fields:[{id:"accessToken",label:"Page Access Token",type:"password"},{id:"pageId",label:"Facebook Page ID"},{id:"igAccountId",label:"Instagram Business Account ID"}],
      instructions:"Facebook Developer Portal → Graph API Explorer → Select your Page → Generate token with pages_manage_posts + instagram_content_publish + leads_retrieval permissions."},

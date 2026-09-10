@@ -34,12 +34,15 @@ const ENDPOINTS = ['notes', 'events', 'textMessages', 'calls', 'emails'];
 const dataKey = (leadId) => `fub_data_${leadId}`;
 
 // Pull the FUB API key the user stashed on the Integrations page so we can
-// forward it as x-fub-key — same pattern syncFUB uses
+// forward it as x-fub-key — same pattern syncFUB uses.
+// SECURITY: deliberately does NOT fall back to process.env.REACT_APP_FUB_API_KEY.
+// REACT_APP_* values are compiled into the public JS bundle, which is
+// downloadable by anyone without logging in — that leaked the live FUB key until
+// 2026-09-10. Returning '' is fine: /api/fub authenticates with the server-side
+// FUB_API_KEY env var when no x-fub-key header is supplied.
 function getFubKey() {
   try {
-    return (JSON.parse(localStorage.getItem('integrations') || '{}')?.fub?.apiKey)
-        || process.env.REACT_APP_FUB_API_KEY
-        || '';
+    return (JSON.parse(localStorage.getItem('integrations') || '{}')?.fub?.apiKey) || '';
   } catch { return ''; }
 }
 

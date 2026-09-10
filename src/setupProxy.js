@@ -9,6 +9,10 @@ module.exports = function(app) {
       pathRewrite: { '^/api/fub': '' },
       onProxyReq: (proxyReq, req) => {
         // Pull key from env (set in .env.local) or request header. Never hardcode here.
+        // NOTE: this file is LOCAL DEV ONLY — CRA runs it in the dev server (Node),
+        // it is never compiled into the browser bundle. So reading REACT_APP_* here
+        // is safe, unlike in src/ components where it would be published publicly.
+        // Prod uses api/fub/[...path].js with the server-side FUB_API_KEY.
         const apiKey = req.headers['x-fub-key']
                     || process.env.FUB_API_KEY
                     || process.env.REACT_APP_FUB_API_KEY;
