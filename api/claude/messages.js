@@ -12,10 +12,18 @@
  * Anthropic's shape so the client doesn't care which provider answered.
  */
 
+import { requireAuth } from '../_lib/requireAuth.js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: 'Method not allowed' } });
   }
+
+  // GATE: spends Monica's AI quota. Left open, anyone could exhaust the free
+  // Gemini tier (which the Database Intelligence scan depends on) or run up an
+  // Anthropic bill if that key is ever set.
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   const GEMINI_API_KEY    = process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;

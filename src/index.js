@@ -1,6 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+// Side-effect import: wraps window.fetch so our own /api/* routes carry the
+// signed-in user's Supabase token. Must run BEFORE App so the first requests
+// on mount are already authenticated. See src/authFetch.js.
+import './authFetch';
 import App from './App';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

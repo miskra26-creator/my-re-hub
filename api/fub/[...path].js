@@ -7,7 +7,15 @@
  * with the FUB API key injected server-side (never exposed to browser).
  */
 
+import { requireAuth } from '../_lib/requireAuth.js';
+
 export default async function handler(req, res) {
+  // GATE: this route forwards to FUB using Monica's server-side key, so without
+  // a check it hands her whole CRM to anonymous callers — verified in prod on
+  // 2026-09-10 (6,046 contacts returned to an unauthenticated curl).
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
   // Accept either the server-side Vercel env var OR a client-supplied
   // x-fub-key header (same fallback as dev's setupProxy.js). This keeps
   // production working even if FUB_API_KEY isn't set on Vercel — Monica

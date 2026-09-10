@@ -17,6 +17,8 @@
  * Response (success):
  *   { imageBase64, mimeType, textCommentary? }
  */
+
+import { requireAuth } from '../_lib/requireAuth.js';
 export const config = {
   api: {
     bodyParser: { sizeLimit: '8mb' },   // input photos can be a few MB
@@ -28,6 +30,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: 'Method not allowed' } });
   }
+
+  // GATE: spends Monica's Gemini quota, and accepts multi-MB uploads.
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   const API_KEY = process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   if (!API_KEY) {

@@ -13,6 +13,8 @@
  * Client wrappers (autoReelVoice.js, AIStudio.jsx) call these via the
  * action-suffixed paths.
  */
+
+import { requireAuth } from '../_lib/requireAuth.js';
 export const config = {
   api: {
     bodyParser: { sizeLimit: '4mb' },
@@ -21,6 +23,10 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  // GATE: spends Monica's ElevenLabs credits — paid, and metered per character.
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
   const API_KEY = process.env.ELEVENLABS_API_KEY;
   if (!API_KEY) {
     return res.status(400).json({ error: { message: 'ELEVENLABS_API_KEY not configured on the server' } });
